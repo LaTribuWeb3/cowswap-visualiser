@@ -2,23 +2,39 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { fromUnixTime } from 'date-fns';
 
-interface Transaction {
+interface Trade {
   _id: string;
-  decayStartTime: string;
-  inputTokenAddress: string;
-  inputStartAmount: string;
-  outputTokenAddress: string;
-  outputTokenAmountOverride: string;
-  orderHash: string;
+  owner: string;
+  sellToken: string;
+  buyToken: string;
+  sellAmount: number | { low: number; high: number; unsigned: boolean };
+  buyAmount: number | { low: number; high: number; unsigned: boolean };
+  feeAmount: number;
+  orderUid: string;
+  blockNumber: number;
   transactionHash: string;
-  openPrice?: string;
-  closePrice?: string;
-  quoteId?: string;
-  requestId?: string;
+  logIndex: number;
+  timestamp: number;
+  creationDate: number;
+  kind: string;
+  validTo: number;
+  executedBuyAmount: string;
+  executedSellAmount: string;
+  executedFeeAmount: string;
+  executedFee: string;
+  executedFeeToken: string;
+  quote?: {
+    gasAmount: string;
+    gasPrice: string;
+    sellTokenPrice: string;
+    sellAmount: string;
+    buyAmount: string;
+    solver: string;
+  };
 }
 
 interface DataContextType {
-  data: Transaction[];
+  data: Trade[];
   dataRange: { min: Date; max: Date } | null;
   loading: boolean;
   error: string;
@@ -41,7 +57,7 @@ interface DataProviderProps {
 }
 
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
-  const [data, setData] = useState<Transaction[]>([]);
+  const [data, setData] = useState<Trade[]>([]);
   const [dataRange, setDataRange] = useState<{ min: Date; max: Date } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -55,7 +71,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setError('');
       
       // Fetch data from the API endpoint
-      const response = await fetch('https://mm.la-tribu.xyz/api/transactions/indexed');
+      const response = await fetch('https://cowswap.mm.la-tribu.xyz/api/documents/latest?&collection=trades');
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -67,10 +83,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         throw new Error('API returned unsuccessful response');
       }
       
-      const transactions = jsonData.data as Transaction[];
-      const totalCount = jsonData.count || transactions.length;
+      const trades = jsonData.data as Trade[];
+      const totalCount = jsonData.total || trades.length;
       
-      if (transactions.length === 0) {
+      if (trades.length === 0) {
         setError('No data found in API response');
         if (setLoadingState) {
           setLoading(false);
@@ -82,8 +98,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       let minTimestamp = Infinity;
       let maxTimestamp = -Infinity;
       
-      transactions.forEach(transaction => {
-        const timestamp = parseInt(transaction.decayStartTime);
+      trades.forEach(trade => {
+        const timestamp = trade.timestamp;
         if (!isNaN(timestamp)) {
           if (timestamp < minTimestamp) minTimestamp = timestamp;
           if (timestamp > maxTimestamp) maxTimestamp = timestamp;
@@ -101,7 +117,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       const minDate = fromUnixTime(minTimestamp);
       const maxDate = fromUnixTime(maxTimestamp);
       
-      setData(transactions);
+      setData(trades);
       setDataRange({ min: minDate, max: maxDate });
       setCount(totalCount);
       if (setLoadingState) {

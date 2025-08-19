@@ -10,7 +10,7 @@ export const tokens = [
       decimals: 6,
     },
     {
-      address: "0x0000000000000000000000000000000000000000",
+      address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       name: "ETH",
       decimals: 18,
     },

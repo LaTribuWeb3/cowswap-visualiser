@@ -4,45 +4,56 @@ import { format, fromUnixTime, startOfDay, endOfDay, isWithinInterval } from 'da
 import { getTokenName, getTokenDecimals, formatVolume, truncateAddress } from './utils';
 import { useData } from './DataContext';
 
-interface Transaction {
+interface Trade {
   _id: string;
-  decayStartTime: string;
-  inputTokenAddress: string;
-  inputStartAmount: string;
-  outputTokenAddress: string;
-  outputTokenAmountOverride: string;
-  orderHash: string;
+  owner: string;
+  sellToken: string;
+  buyToken: string;
+  sellAmount: number | { low: number; high: number; unsigned: boolean };
+  buyAmount: number | { low: number; high: number; unsigned: boolean };
+  feeAmount: number;
+  orderUid: string;
+  blockNumber: number;
   transactionHash: string;
-  openPrice?: string;
-  closePrice?: string;
-  filler?: string;
-  quoteId?: string;
-  requestId?: string;
+  logIndex: number;
+  timestamp: number;
+  creationDate: number;
+  kind: string;
+  validTo: number;
+  executedBuyAmount: string;
+  executedSellAmount: string;
+  executedFeeAmount: string;
+  executedFee: string;
+  executedFeeToken: string;
+  quote?: {
+    gasAmount: string;
+    gasPrice: string;
+    sellTokenPrice: string;
+    sellAmount: string;
+    buyAmount: string;
+    solver: string;
+  };
 }
 
 interface SortConfig {
-  key: keyof Transaction | 'formattedDate' | 'inputVolume' | 'outputVolume';
+  key: keyof Trade | 'formattedDate' | 'sellVolume' | 'buyVolume';
   direction: 'asc' | 'desc';
 }
 
 const TransactionsTable: React.FC = () => {
   const { data, dataRange, loading, error } = useData();
-  const [filteredData, setFilteredData] = useState<Transaction[]>([]);
+  const [filteredData, setFilteredData] = useState<Trade[]>([]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'decayStartTime', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'timestamp', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(50);
-  const [selectedInputToken, setSelectedInputToken] = useState<string>('all');
-  const [selectedOutputToken, setSelectedOutputToken] = useState<string>('all');
-  const [inputSearchValue, setInputSearchValue] = useState<string>('');
-  const [outputSearchValue, setOutputSearchValue] = useState<string>('');
-  const [showInputSuggestions, setShowInputSuggestions] = useState<boolean>(false);
-  const [showOutputSuggestions, setShowOutputSuggestions] = useState<boolean>(false);
-  const [transactionHashFilter, setTransactionHashFilter] = useState<string>('');
-  const [orderHashFilter, setOrderHashFilter] = useState<string>('');
-  const [fillerFilter, setFillerFilter] = useState<string>('');
-  const [requestIdFilter, setRequestIdFilter] = useState<string>('');
+  const [selectedSellToken, setSelectedSellToken] = useState<string>('all');
+  const [selectedBuyToken, setSelectedBuyToken] = useState<string>('all');
+  const [sellSearchValue, setSellSearchValue] = useState<string>('');
+  const [buySearchValue, setBuySearchValue] = useState<string>('');
+  const [showSellSuggestions, setShowSellSuggestions] = useState<boolean>(false);
+  const [showBuySuggestions, setShowBuySuggestions] = useState<boolean>(false);
 
   // Initialize date range when data is loaded
   useEffect(() => {
@@ -51,43 +62,50 @@ const TransactionsTable: React.FC = () => {
       setEndDate(format(dataRange.max, 'yyyy-MM-dd'));
     }
     
-    // Debug: Log the first transaction to see what fields are available
+    // Debug: Log the first trade to see what fields are available
     if (data.length > 0) {
-      console.log('First transaction fields:', Object.keys(data[0]));
-      console.log('First transaction data:', data[0]);
+      console.log('First trade fields:', Object.keys(data[0]));
+      console.log('First trade data:', data[0]);
     }
   }, [dataRange, data]);
 
-
+  // Helper function to get amount value from trade
+  const getAmountValue = (amount: number | { low: number; high: number; unsigned: boolean }): number => {
+    if (typeof amount === 'number') {
+      return amount;
+    }
+    // For BigInt-like objects, use the high value as approximation
+    return amount.high;
+  };
 
   // Get unique tokens for filtering
   const getUniqueTokens = () => {
-    const inputTokens = new Set<string>();
-    const outputTokens = new Set<string>();
+    const sellTokens = new Set<string>();
+    const buyTokens = new Set<string>();
     
-    data.forEach(transaction => {
-      inputTokens.add(transaction.inputTokenAddress);
-      outputTokens.add(transaction.outputTokenAddress);
+    data.forEach(trade => {
+      sellTokens.add(trade.sellToken);
+      buyTokens.add(trade.buyToken);
     });
     
     return {
-      inputTokens: Array.from(inputTokens).sort(),
-      outputTokens: Array.from(outputTokens).sort()
+      sellTokens: Array.from(sellTokens).sort(),
+      buyTokens: Array.from(buyTokens).sort()
     };
   };
 
   // Get unique transaction counts
   const getUniqueTransactionCounts = () => {
-    const uniqueOrderHashes = new Set<string>();
+    const uniqueOrderUids = new Set<string>();
     const uniqueTransactionHashes = new Set<string>();
     
-    data.forEach(transaction => {
-      uniqueOrderHashes.add(transaction.orderHash);
-      uniqueTransactionHashes.add(transaction.transactionHash);
+    data.forEach(trade => {
+      uniqueOrderUids.add(trade.orderUid);
+      uniqueTransactionHashes.add(trade.transactionHash);
     });
     
     return {
-      uniqueOrders: uniqueOrderHashes.size,
+      uniqueOrders: uniqueOrderUids.size,
       uniqueTransactions: uniqueTransactionHashes.size,
       totalRows: data.length
     };
@@ -95,57 +113,57 @@ const TransactionsTable: React.FC = () => {
 
   // Get unique transaction counts for filtered data
   const getFilteredUniqueTransactionCounts = () => {
-    const uniqueOrderHashes = new Set<string>();
+    const uniqueOrderUids = new Set<string>();
     const uniqueTransactionHashes = new Set<string>();
     
-    filteredData.forEach(transaction => {
-      uniqueOrderHashes.add(transaction.orderHash);
-      uniqueTransactionHashes.add(transaction.transactionHash);
+    filteredData.forEach(trade => {
+      uniqueOrderUids.add(trade.orderUid);
+      uniqueTransactionHashes.add(trade.transactionHash);
     });
     
     return {
-      uniqueOrders: uniqueOrderHashes.size,
-      uniqueTransactions: uniqueTransactionHashes.size,
+      uniqueOrders: uniqueOrderUids.size,
+      uniqueTransactions: uniqueOrderUids.size,
       totalRows: filteredData.length
     };
   };
 
   // Get filtered suggestions for autocomplete
-  const getInputSuggestions = () => {
-    if (!inputSearchValue.trim()) return [];
+  const getSellSuggestions = () => {
+    if (!sellSearchValue.trim()) return [];
     
-    const { inputTokens } = getUniqueTokens();
-    return inputTokens
+    const { sellTokens } = getUniqueTokens();
+    return sellTokens
       .filter(token => 
-        getTokenName(token).toLowerCase().includes(inputSearchValue.toLowerCase()) ||
-        token.toLowerCase().includes(inputSearchValue.toLowerCase())
+        getTokenName(token).toLowerCase().includes(sellSearchValue.toLowerCase()) ||
+        token.toLowerCase().includes(sellSearchValue.toLowerCase())
       )
       .slice(0, 8); // Limit to 8 suggestions
   };
 
-  const getOutputSuggestions = () => {
-    if (!outputSearchValue.trim()) return [];
+  const getBuySuggestions = () => {
+    if (!buySearchValue.trim()) return [];
     
-    const { outputTokens } = getUniqueTokens();
-    return outputTokens
+    const { buyTokens } = getUniqueTokens();
+    return buyTokens
       .filter(token => 
-        getTokenName(token).toLowerCase().includes(outputSearchValue.toLowerCase()) ||
-        token.toLowerCase().includes(outputSearchValue.toLowerCase())
+        getTokenName(token).toLowerCase().includes(buySearchValue.toLowerCase()) ||
+        token.toLowerCase().includes(buySearchValue.toLowerCase())
       )
       .slice(0, 8); // Limit to 8 suggestions
   };
 
   // Handle token selection
-  const handleInputTokenSelect = (tokenAddress: string) => {
-    setSelectedInputToken(tokenAddress);
-    setInputSearchValue(getTokenName(tokenAddress));
-    setShowInputSuggestions(false);
+  const handleSellTokenSelect = (tokenAddress: string) => {
+    setSelectedSellToken(tokenAddress);
+    setSellSearchValue(getTokenName(tokenAddress));
+    setShowSellSuggestions(false);
   };
 
-  const handleOutputTokenSelect = (tokenAddress: string) => {
-    setSelectedOutputToken(tokenAddress);
-    setOutputSearchValue(getTokenName(tokenAddress));
-    setShowOutputSuggestions(false);
+  const handleBuyTokenSelect = (tokenAddress: string) => {
+    setSelectedBuyToken(tokenAddress);
+    setBuySearchValue(getTokenName(tokenAddress));
+    setShowBuySuggestions(false);
   };
 
   // Filter data based on date range and selected tokens
@@ -153,45 +171,17 @@ const TransactionsTable: React.FC = () => {
     if (!data.length || !startDate || !endDate) {
       let filtered = data;
       
-      // Apply input token filter if not "all"
-      if (selectedInputToken !== 'all') {
-        filtered = filtered.filter(transaction => 
-          transaction.inputTokenAddress === selectedInputToken
+      // Apply sell token filter if not "all"
+      if (selectedSellToken !== 'all') {
+        filtered = filtered.filter(trade => 
+          trade.sellToken === selectedSellToken
         );
       }
       
-      // Apply output token filter if not "all"
-      if (selectedOutputToken !== 'all') {
-        filtered = filtered.filter(transaction => 
-          transaction.outputTokenAddress === selectedOutputToken
-        );
-      }
-      
-      // Apply transaction hash filter if provided
-      if (transactionHashFilter.trim()) {
-        filtered = filtered.filter(transaction => 
-          transaction.transactionHash.toLowerCase().includes(transactionHashFilter.toLowerCase())
-        );
-      }
-      
-      // Apply order hash filter if provided
-      if (orderHashFilter.trim()) {
-        filtered = filtered.filter(transaction => 
-          transaction.orderHash.toLowerCase().includes(orderHashFilter.toLowerCase())
-        );
-      }
-
-      // Apply filler filter if provided
-      if (fillerFilter.trim()) {
-        filtered = filtered.filter(transaction => 
-          (transaction as any).filler && (transaction as any).filler.toLowerCase().includes(fillerFilter.toLowerCase())
-        );
-      }
-      
-      // Apply requestId filter if provided
-      if (requestIdFilter.trim()) {
-        filtered = filtered.filter(transaction => 
-          transaction.requestId && transaction.requestId.toLowerCase().includes(requestIdFilter.toLowerCase())
+      // Apply buy token filter if not "all"
+      if (selectedBuyToken !== 'all') {
+        filtered = filtered.filter(trade => 
+          trade.buyToken === selectedBuyToken
         );
       }
       
@@ -203,89 +193,72 @@ const TransactionsTable: React.FC = () => {
     const start = startOfDay(new Date(startDate));
     const end = endOfDay(new Date(endDate));
 
-    let filtered = data.filter(transaction => {
-      const transactionDate = fromUnixTime(parseInt(transaction.decayStartTime));
-      return isWithinInterval(transactionDate, { start, end });
+    let filtered = data.filter(trade => {
+      const tradeDate = fromUnixTime(trade.timestamp);
+      return isWithinInterval(tradeDate, { start, end });
     });
 
-    // Apply input token filter if not "all"
-    if (selectedInputToken !== 'all') {
-      filtered = filtered.filter(transaction => 
-        transaction.inputTokenAddress === selectedInputToken
+    // Apply sell token filter if not "all"
+    if (selectedSellToken !== 'all') {
+      filtered = filtered.filter(trade => 
+        trade.sellToken === selectedSellToken
       );
     }
     
-    // Apply output token filter if not "all"
-    if (selectedOutputToken !== 'all') {
-      filtered = filtered.filter(transaction => 
-        transaction.outputTokenAddress === selectedOutputToken
-      );
-    }
-    
-    // Apply transaction hash filter if provided
-    if (transactionHashFilter.trim()) {
-      filtered = filtered.filter(transaction => 
-        transaction.transactionHash.toLowerCase().includes(transactionHashFilter.toLowerCase())
-      );
-    }
-    
-    // Apply order hash filter if provided
-    if (orderHashFilter.trim()) {
-      filtered = filtered.filter(transaction => 
-        transaction.orderHash.toLowerCase().includes(orderHashFilter.toLowerCase())
-      );
-    }
-
-    // Apply filler filter if provided
-    if (fillerFilter.trim()) {
-      filtered = filtered.filter(transaction => 
-        (transaction as any).filler && (transaction as any).filler.toLowerCase().includes(fillerFilter.toLowerCase())
-      );
-    }
-    
-    // Apply requestId filter if provided
-    if (requestIdFilter.trim()) {
-      filtered = filtered.filter(transaction => 
-        transaction.requestId && transaction.requestId.toLowerCase().includes(requestIdFilter.trim().toLowerCase())
+    // Apply buy token filter if not "all"
+    if (selectedBuyToken !== 'all') {
+      filtered = filtered.filter(trade => 
+        trade.buyToken === selectedBuyToken
       );
     }
 
     setFilteredData(filtered);
     setCurrentPage(1); // Reset to first page when filtering
-  }, [data, startDate, endDate, selectedInputToken, selectedOutputToken, transactionHashFilter, orderHashFilter, fillerFilter, requestIdFilter]);
+  }, [data, startDate, endDate, selectedSellToken, selectedBuyToken]);
 
   // Sorting function
-  const sortData = (data: Transaction[]) => {
+  const sortData = (data: Trade[]) => {
     return [...data].sort((a, b) => {
       let aValue: string | number | Date;
       let bValue: string | number | Date;
 
       switch (sortConfig.key) {
         case 'formattedDate':
-          aValue = fromUnixTime(parseInt(a.decayStartTime));
-          bValue = fromUnixTime(parseInt(b.decayStartTime));
+          aValue = fromUnixTime(a.timestamp);
+          bValue = fromUnixTime(b.timestamp);
           break;
-        case 'inputVolume': {
-          const inputDecimalsA = getTokenDecimals(a.inputTokenAddress);
-          const inputDecimalsB = getTokenDecimals(b.inputTokenAddress);
-          aValue = parseFloat(a.inputStartAmount) / Math.pow(10, inputDecimalsA);
-          bValue = parseFloat(b.inputStartAmount) / Math.pow(10, inputDecimalsB);
+        case 'sellVolume': {
+          const sellDecimalsA = getTokenDecimals(a.sellToken);
+          const sellDecimalsB = getTokenDecimals(b.sellToken);
+          aValue = getAmountValue(a.sellAmount) / Math.pow(10, sellDecimalsA);
+          bValue = getAmountValue(b.sellAmount) / Math.pow(10, sellDecimalsB);
           break;
         }
-        case 'outputVolume': {
-          const outputDecimalsA = getTokenDecimals(a.outputTokenAddress);
-          const outputDecimalsB = getTokenDecimals(b.outputTokenAddress);
-          aValue = parseFloat(a.outputTokenAmountOverride) / Math.pow(10, outputDecimalsA);
-          bValue = parseFloat(b.outputTokenAmountOverride) / Math.pow(10, outputDecimalsB);
+        case 'buyVolume': {
+          const buyDecimalsA = getTokenDecimals(a.buyToken);
+          const buyDecimalsB = getTokenDecimals(b.buyToken);
+          aValue = getAmountValue(a.buyAmount) / Math.pow(10, buyDecimalsA);
+          bValue = getAmountValue(b.buyAmount) / Math.pow(10, buyDecimalsB);
           break;
         }
         default:
-          // Type guard to ensure we only access valid Transaction properties
+          // Type guard to ensure we only access valid Trade properties
           if (sortConfig.key in a && sortConfig.key in b) {
-            const aProp = a[sortConfig.key as keyof Transaction];
-            const bProp = b[sortConfig.key as keyof Transaction];
-            aValue = aProp ?? '';
-            bValue = bProp ?? '';
+            const aProp = a[sortConfig.key as keyof Trade];
+            const bProp = b[sortConfig.key as keyof Trade];
+            
+            // Handle complex types by converting them to strings
+            if (typeof aProp === 'object' && aProp !== null) {
+              aValue = JSON.stringify(aProp);
+            } else {
+              aValue = (aProp as string | number) ?? '';
+            }
+            
+            if (typeof bProp === 'object' && bProp !== null) {
+              bValue = JSON.stringify(bProp);
+            } else {
+              bValue = (bProp as string | number) ?? '';
+            }
           } else {
             // Fallback for invalid keys
             aValue = '';
@@ -320,13 +293,13 @@ const TransactionsTable: React.FC = () => {
     }
   };
 
-  // Calculate total input volume for filtered transactions
-  const getTotalInputVolume = () => {
-    if (selectedInputToken === 'all') return null;
+  // Calculate total sell volume for filtered trades
+  const getTotalSellVolume = () => {
+    if (selectedSellToken === 'all') return null;
     
-    const volumes = filteredData.map(transaction => {
-      const inputDecimals = getTokenDecimals(transaction.inputTokenAddress);
-      return parseFloat(transaction.inputStartAmount) / Math.pow(10, inputDecimals);
+    const volumes = filteredData.map(trade => {
+      const sellDecimals = getTokenDecimals(trade.sellToken);
+      return getAmountValue(trade.sellAmount) / Math.pow(10, sellDecimals);
     });
     
     const totalVolume = volumes.reduce((total, volume) => total + volume, 0);
@@ -352,18 +325,18 @@ const TransactionsTable: React.FC = () => {
       median: medianVolume,
       medianDisplay: medianVolumeInfo.display,
       medianFull: medianVolumeInfo.full,
-      tokenName: getTokenName(selectedInputToken),
+      tokenName: getTokenName(selectedSellToken),
       count: volumes.length
     };
   };
 
-  // Calculate total input volume for current page only
-  const getCurrentPageInputVolume = () => {
-    if (selectedInputToken === 'all') return null;
+  // Calculate total sell volume for current page only
+  const getCurrentPageSellVolume = () => {
+    if (selectedSellToken === 'all') return null;
     
-    const currentPageVolumes = paginatedData.map(transaction => {
-      const inputDecimals = getTokenDecimals(transaction.inputTokenAddress);
-      return parseFloat(transaction.inputStartAmount) / Math.pow(10, inputDecimals);
+    const currentPageVolumes = paginatedData.map(trade => {
+      const sellDecimals = getTokenDecimals(trade.sellToken);
+      return getAmountValue(trade.sellAmount) / Math.pow(10, sellDecimals);
     });
     
     const totalVolume = currentPageVolumes.reduce((total, volume) => total + volume, 0);
@@ -373,7 +346,7 @@ const TransactionsTable: React.FC = () => {
       volume: totalVolume,
       display: volumeInfo.display,
       full: volumeInfo.full,
-      tokenName: getTokenName(selectedInputToken)
+      tokenName: getTokenName(selectedSellToken)
     };
   };
 
@@ -403,7 +376,7 @@ const TransactionsTable: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-none mx-auto px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">Transactions Table</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">CowSwap Trades Table</h1>
         
         {/* Date Range Selector */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -484,7 +457,7 @@ const TransactionsTable: React.FC = () => {
                 return (
                   <div>
                     <div>
-                      Showing {filteredCounts.totalRows.toLocaleString()} of {totalCounts.totalRows.toLocaleString()} transaction rows
+                      Showing {filteredCounts.totalRows.toLocaleString()} of {totalCounts.totalRows.toLocaleString()} trade rows
                       {hasDuplicates && (
                         <span className="text-orange-600 font-semibold ml-2">
                           ({filteredCounts.uniqueOrders.toLocaleString()} unique orders)
@@ -497,7 +470,7 @@ const TransactionsTable: React.FC = () => {
                       </div>
                     )}
                     {(() => {
-                      const totalVolume = getTotalInputVolume();
+                      const totalVolume = getTotalSellVolume();
                       if (totalVolume) {
                         return (
                           <div className="mt-1 text-blue-600 font-semibold">
@@ -537,25 +510,25 @@ const TransactionsTable: React.FC = () => {
                 <label className="block text-xs text-gray-600 mb-1">Input Token</label>
                 <input
                   type="text"
-                  value={inputSearchValue}
+                  value={sellSearchValue}
                   onChange={(e) => {
-                    setInputSearchValue(e.target.value);
-                    setShowInputSuggestions(true);
+                    setSellSearchValue(e.target.value);
+                    setShowSellSuggestions(true);
                     if (e.target.value === '') {
-                      setSelectedInputToken('all');
+                      setSelectedSellToken('all');
                     }
                   }}
-                  onFocus={() => setShowInputSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowInputSuggestions(false), 200)}
+                  onFocus={() => setShowSellSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSellSuggestions(false), 200)}
                   placeholder="Search input token..."
                   className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
                 />
-                {showInputSuggestions && getInputSuggestions().length > 0 && (
+                {showSellSuggestions && getSellSuggestions().length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                    {getInputSuggestions().map((token) => (
+                    {getSellSuggestions().map((token) => (
                       <div
                         key={token}
-                        onClick={() => handleInputTokenSelect(token)}
+                        onClick={() => handleSellTokenSelect(token)}
                         className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                       >
                         <div className="font-medium">{getTokenName(token)}</div>
@@ -570,25 +543,25 @@ const TransactionsTable: React.FC = () => {
                 <label className="block text-xs text-gray-600 mb-1">Output Token</label>
                 <input
                   type="text"
-                  value={outputSearchValue}
+                  value={buySearchValue}
                   onChange={(e) => {
-                    setOutputSearchValue(e.target.value);
-                    setShowOutputSuggestions(true);
+                    setBuySearchValue(e.target.value);
+                    setShowBuySuggestions(true);
                     if (e.target.value === '') {
-                      setSelectedOutputToken('all');
+                      setSelectedBuyToken('all');
                     }
                   }}
-                  onFocus={() => setShowOutputSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowOutputSuggestions(false), 200)}
+                  onFocus={() => setShowBuySuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowBuySuggestions(false), 200)}
                   placeholder="Search output token..."
                   className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
                 />
-                {showOutputSuggestions && getOutputSuggestions().length > 0 && (
+                {showBuySuggestions && getBuySuggestions().length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                    {getOutputSuggestions().map((token) => (
+                    {getBuySuggestions().map((token) => (
                       <div
                         key={token}
-                        onClick={() => handleOutputTokenSelect(token)}
+                        onClick={() => handleBuyTokenSelect(token)}
                         className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                       >
                         <div className="font-medium">{getTokenName(token)}</div>
@@ -602,74 +575,14 @@ const TransactionsTable: React.FC = () => {
             <div className="text-center mt-2">
               <button
                 onClick={() => {
-                  setSelectedInputToken('all');
-                  setSelectedOutputToken('all');
-                  setInputSearchValue('');
-                  setOutputSearchValue('');
+                  setSelectedSellToken('all');
+                  setSelectedBuyToken('all');
+                  setSellSearchValue('');
+                  setBuySearchValue('');
                 }}
                 className="text-sm text-blue-600 hover:text-blue-800 underline"
               >
                 Clear Token Filters
-              </button>
-            </div>
-          </div>
-
-          {/* Hash Filters */}
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2 text-center">Filter by Hash, Filler & Request ID</label>
-            <div className="flex justify-center items-center gap-4">
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Transaction Hash</label>
-                <input
-                  type="text"
-                  value={transactionHashFilter}
-                  onChange={(e) => setTransactionHashFilter(e.target.value)}
-                  placeholder="Enter transaction hash..."
-                  className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[300px]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Order Hash</label>
-                <input
-                  type="text"
-                  value={orderHashFilter}
-                  onChange={(e) => setOrderHashFilter(e.target.value)}
-                  placeholder="Enter order hash..."
-                  className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[300px]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-xs text-gray-600 mb-1">Filler</label>
-                <input
-                  type="text"
-                  value={fillerFilter}
-                  onChange={(e) => setFillerFilter(e.target.value)}
-                  placeholder="Enter filler value..."
-                  className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Request ID</label>
-                <input
-                  type="text"
-                  value={requestIdFilter}
-                  onChange={(e) => setRequestIdFilter(e.target.value)}
-                  placeholder="Enter request ID..."
-                  className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
-                />
-              </div>
-            </div>
-            <div className="text-center mt-2">
-              <button
-                onClick={() => {
-                  setTransactionHashFilter('');
-                  setOrderHashFilter('');
-                  setFillerFilter('');
-                  setRequestIdFilter('');
-                }}
-                className="text-sm text-blue-600 hover:text-blue-800 underline"
-              >
-                Clear Hash & Filler Filters
               </button>
             </div>
           </div>
@@ -682,14 +595,10 @@ const TransactionsTable: React.FC = () => {
                   setStartDate(format(dataRange.min, 'yyyy-MM-dd'));
                   setEndDate(format(dataRange.max, 'yyyy-MM-dd'));
                 }
-                setSelectedInputToken('all');
-                setSelectedOutputToken('all');
-                setInputSearchValue('');
-                setOutputSearchValue('');
-                setTransactionHashFilter('');
-                setOrderHashFilter('');
-                setFillerFilter('');
-                setRequestIdFilter('');
+                setSelectedSellToken('all');
+                setSelectedBuyToken('all');
+                setSellSearchValue('');
+                setBuySearchValue('');
               }}
               className="px-4 py-2 bg-red-100 text-red-700 font-semibold rounded-md hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors border border-red-300"
             >
@@ -729,7 +638,7 @@ const TransactionsTable: React.FC = () => {
           </div>
         </div>
 
-        {/* Transactions Table */}
+        {/* Trades Table */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -746,208 +655,124 @@ const TransactionsTable: React.FC = () => {
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('inputTokenAddress')}
+                    onClick={() => handleSort('sellToken')}
                   >
                     Input Token
-                    {sortConfig.key === 'inputTokenAddress' && (
+                    {sortConfig.key === 'sellToken' && (
                       <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('inputVolume')}
+                    onClick={() => handleSort('sellVolume')}
                   >
                     Input Amount
-                    {sortConfig.key === 'inputVolume' && (
+                    {sortConfig.key === 'sellVolume' && (
                       <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('outputTokenAddress')}
+                    onClick={() => handleSort('buyToken')}
                   >
                     Output Token
-                    {sortConfig.key === 'outputTokenAddress' && (
+                    {sortConfig.key === 'buyToken' && (
                       <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </th>
                   <th 
                     className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('outputVolume')}
+                    onClick={() => handleSort('buyVolume')}
                   >
                     Output Amount
-                    {sortConfig.key === 'outputVolume' && (
-                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider"
-                    title="1 tokenIn = x tokenOut"
-                  >
-                    Price
-                  </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('filler')}
-                  >
-                    Filler
-                    {sortConfig.key === 'filler' && (
+                    {sortConfig.key === 'buyVolume' && (
                       <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Order Hash
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Transaction Hash
-                  </th>
-                  <th 
-                    className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => handleSort('requestId')}
-                  >
-                    Request ID
-                    {sortConfig.key === 'requestId' && (
-                      <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                    )}
+                    Order ID
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedData.map((transaction, index) => {
-                  const inputDecimals = getTokenDecimals(transaction.inputTokenAddress);
-                  const outputDecimals = getTokenDecimals(transaction.outputTokenAddress);
-                  const inputVolume = parseFloat(transaction.inputStartAmount) / Math.pow(10, inputDecimals);
-                  const outputVolume = parseFloat(transaction.outputTokenAmountOverride) / Math.pow(10, outputDecimals);
-                  const inputVolumeInfo = formatVolume(inputVolume);
-                  const outputVolumeInfo = formatVolume(outputVolume);
-                  const transactionDate = fromUnixTime(parseInt(transaction.decayStartTime));
+                {paginatedData.map((trade, index) => {
+                  const sellDecimals = getTokenDecimals(trade.sellToken);
+                  const buyDecimals = getTokenDecimals(trade.buyToken);
+                  const sellVolume = getAmountValue(trade.sellAmount) / Math.pow(10, sellDecimals);
+                  const buyVolume = getAmountValue(trade.buyAmount) / Math.pow(10, buyDecimals);
+                  const sellVolumeInfo = formatVolume(sellVolume);
+                  const buyVolumeInfo = formatVolume(buyVolume);
+                  const tradeDate = fromUnixTime(trade.timestamp);
 
                   return (
-                    <tr key={`${transaction.orderHash}-${index}`} className="hover:bg-gray-50">
+                    <tr key={`${trade.orderUid}-${index}`} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {(() => {
                           const now = new Date();
-                          const diffInMinutes = Math.floor((now.getTime() - transactionDate.getTime()) / (1000 * 60));
+                          const diffInMinutes = Math.floor((now.getTime() - tradeDate.getTime()) / (1000 * 60));
                           
                           if (diffInMinutes < 60) {
                             return (
                               <span 
                                 className="text-blue-600 font-medium cursor-help" 
-                                title={format(transactionDate, 'MMM dd, yyyy HH:mm:ss')}
+                                title={format(tradeDate, 'MMM dd, yyyy HH:mm:ss')}
                               >
                                 {diffInMinutes === 0 ? 'Just now' : `${diffInMinutes} minute${diffInMinutes === 1 ? '' : 's'} ago`}
                               </span>
                             );
                           } else {
-                            return format(transactionDate, 'MMM dd, yyyy HH:mm:ss');
+                            return format(tradeDate, 'MMM dd, yyyy HH:mm:ss');
                           }
                         })()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        <div className="font-semibold">{getTokenName(transaction.inputTokenAddress)}</div>
+                        <div className="font-semibold">{getTokenName(trade.sellToken)}</div>
                         <div className="text-xs text-gray-500 font-mono">
                           <button
-                            onClick={() => copyToClipboard(transaction.inputTokenAddress)}
+                            onClick={() => copyToClipboard(trade.sellToken)}
                             className="hover:text-blue-600 hover:underline cursor-pointer transition-colors"
                             title="Click to copy full address"
                           >
-                            {truncateAddress(transaction.inputTokenAddress)}
+                            {truncateAddress(trade.sellToken)}
                           </button>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         <span 
                           className="cursor-help" 
-                          title={inputVolumeInfo.full}
+                          title={sellVolumeInfo.full}
                         >
-                          {inputVolumeInfo.display} {getTokenName(transaction.inputTokenAddress)}
+                          {sellVolumeInfo.display} {getTokenName(trade.sellToken)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        <div className="font-semibold">{getTokenName(transaction.outputTokenAddress)}</div>
+                        <div className="font-semibold">{getTokenName(trade.buyToken)}</div>
                         <div className="text-xs text-gray-500 font-mono">
                           <button
-                            onClick={() => copyToClipboard(transaction.outputTokenAddress)}
+                            onClick={() => copyToClipboard(trade.buyToken)}
                             className="hover:text-blue-600 hover:underline cursor-pointer transition-colors"
                             title="Click to copy full address"
                           >
-                            {truncateAddress(transaction.outputTokenAddress)}
+                            {truncateAddress(trade.buyToken)}
                           </button>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                         <span 
                           className="cursor-help" 
-                          title={outputVolumeInfo.full}
+                          title={buyVolumeInfo.display}
                         >
-                          {outputVolumeInfo.display} {getTokenName(transaction.outputTokenAddress)}
+                          {buyVolumeInfo.display} {getTokenName(trade.buyToken)}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {transaction.openPrice ? (
-                          <span 
-                            className="font-medium text-gray-900 cursor-help" 
-                            title={`1 ${getTokenName(transaction.inputTokenAddress)} = ${parseFloat(transaction.openPrice).toFixed(6)} ${getTokenName(transaction.outputTokenAddress)}`}
-                          >
-                            {parseFloat(transaction.openPrice).toFixed(3)}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 italic">N/A</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {(transaction as any).filler ? (
-                          <button
-                            onClick={() => (transaction as any).filler && copyToClipboard((transaction as any).filler)}
-                            className="hover:text-blue-600 hover:underline cursor-pointer transition-colors text-left w-full"
-                            title="Click to copy full filler value"
-                          >
-                            <span className="font-medium text-gray-900">
-                              {(transaction as any).filler.length > 20 
-                                ? `${(transaction as any).filler.substring(0, 20)}...` 
-                                : (transaction as any).filler}
-                            </span>
-                          </button>
-                        ) : (
-                          <span className="text-gray-400 italic">N/A</span>
-                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
                         <button
-                          onClick={() => copyToClipboard(transaction.orderHash)}
+                          onClick={() => copyToClipboard(trade._id)}
                           className="hover:text-blue-600 hover:underline cursor-pointer transition-colors"
-                          title="Click to copy full order hash"
+                          title="Click to copy full order ID"
                         >
-                          {transaction.orderHash.substring(0, 10)}...
+                          {trade._id.substring(0, 10)}...
                         </button>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                        <a
-                          href={`https://etherscan.io/tx/${transaction.transactionHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-blue-600 hover:underline cursor-pointer transition-colors"
-                          title="Click to view on Etherscan"
-                        >
-                          {transaction.transactionHash.substring(0, 10)}...
-                        </a>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        {transaction.requestId ? (
-                          <button
-                            onClick={() => transaction.requestId && copyToClipboard(transaction.requestId)}
-                            className="hover:text-blue-600 hover:underline cursor-pointer transition-colors text-left w-full"
-                            title="Click to copy full request ID"
-                          >
-                            <span className="font-medium text-gray-900">
-                              {transaction.requestId.length > 20 
-                                ? `${transaction.requestId.substring(0, 20)}...` 
-                                : transaction.requestId}
-                            </span>
-                          </button>
-                        ) : (
-                          <span className="text-gray-400 italic">N/A</span>
-                        )}
                       </td>
                     </tr>
                   );
@@ -984,7 +809,7 @@ const TransactionsTable: React.FC = () => {
                     </span>{' '}
                     of <span className="font-medium">{sortedData.length}</span> results
                     {(() => {
-                      const currentPageVolume = getCurrentPageInputVolume();
+                      const currentPageVolume = getCurrentPageSellVolume();
                       if (currentPageVolume) {
                         return (
                           <span className="ml-2 text-blue-600 font-semibold">

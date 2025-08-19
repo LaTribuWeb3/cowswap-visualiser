@@ -4,23 +4,40 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import { format, fromUnixTime, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
 import { getTokenName, getTokenDecimals, formatVolume } from './utils';
 import TransactionsTable from './TransactionsTable';
-import QuotesTable from './QuotesTable';
 
 import { DataProvider, useData } from './DataContext';
 import './App.css';
 
-interface Transaction {
+interface Trade {
   _id: string;
-  decayStartTime: string;
-  inputTokenAddress: string;
-  inputStartAmount: string;
-  outputTokenAddress: string;
-  outputTokenAmountOverride: string;
-  orderHash: string;
+  owner: string;
+  sellToken: string;
+  buyToken: string;
+  sellAmount: number | { low: number; high: number; unsigned: boolean };
+  buyAmount: number | { low: number; high: number; unsigned: boolean };
+  feeAmount: number;
+  orderUid: string;
+  blockNumber: number;
   transactionHash: string;
+  logIndex: number;
+  timestamp: number;
+  creationDate: number;
+  kind: string;
+  validTo: number;
+  executedBuyAmount: string;
+  executedSellAmount: string;
+  executedFeeAmount: string;
+  executedFee: string;
+  executedFeeToken: string;
+  quote?: {
+    gasAmount: string;
+    gasPrice: string;
+    sellTokenPrice: string;
+    sellAmount: string;
+    buyAmount: string;
+    solver: string;
+  };
 }
-
-
 
 interface TokenStats {
   token: string;
@@ -30,10 +47,10 @@ interface TokenStats {
 
 interface PairStats {
   pair: string;
-  inputToken: string;
-  outputToken: string;
+  sellToken: string;
+  buyToken: string;
   count: number;
-  totalOutputVolume: number;
+  totalSellVolume: number;
 }
 
 // Navigation component
@@ -46,10 +63,10 @@ const Navigation: React.FC = () => {
       <div className="max-w-none mx-auto px-4">
         <div className="flex justify-between items-center py-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Uni-X Visualizer</h1>
+            <h1 className="text-2xl font-bold text-gray-900">CowSwap Visualizer</h1>
             {count > 0 && (
               <p className="text-sm text-gray-600 mt-1">
-                {count.toLocaleString()} transactions loaded
+                {count.toLocaleString()} trades loaded
               </p>
             )}
           </div>
@@ -72,18 +89,7 @@ const Navigation: React.FC = () => {
                   : 'bg-gray-200 text-black border-gray-400 hover:bg-gray-300'
               }`}
             >
-              Transactions Table
-            </Link>
-            <div className="w-px h-8 bg-gray-300"></div>
-            <Link
-              to="/quotes"
-              className={`px-4 py-2 rounded-md font-medium transition-colors border ${
-                location.pathname === '/quotes'
-                  ? 'bg-gray-400 text-black border-gray-500'
-                  : 'bg-gray-200 text-black border-gray-400 hover:bg-gray-300'
-              }`}
-            >
-              Quotes
+              Trades Table
             </Link>
           </div>
         </div>
@@ -92,13 +98,21 @@ const Navigation: React.FC = () => {
   );
 };
 
+// Helper function to get amount value from trade
+const getAmountValue = (amount: number | { low: number; high: number; unsigned: boolean }): number => {
+  if (typeof amount === 'number') {
+    return amount;
+  }
+  // For BigInt-like objects, use the high value as approximation
+  return amount.high;
+};
+
 // Dashboard component (existing App logic)
 const Dashboard: React.FC = () => {
   const { data, dataRange, loading, error } = useData();
-  const [filteredData, setFilteredData] = useState<Transaction[]>([]);
+  const [filteredData, setFilteredData] = useState<Trade[]>([]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-
 
   // Initialize date range when data is loaded
   useEffect(() => {
@@ -118,51 +132,49 @@ const Dashboard: React.FC = () => {
     const start = startOfDay(new Date(startDate));
     const end = endOfDay(new Date(endDate));
 
-    const filtered = data.filter(transaction => {
-      const transactionDate = fromUnixTime(parseInt(transaction.decayStartTime));
-      return isWithinInterval(transactionDate, { start, end });
+    const filtered = data.filter(trade => {
+      const tradeDate = fromUnixTime(trade.timestamp);
+      return isWithinInterval(tradeDate, { start, end });
     });
 
     setFilteredData(filtered);
   }, [data, startDate, endDate]);
 
-
-
   // Calculate token popularity
   const getTokenStats = (): TokenStats[] => {
     const tokenMap = new Map<string, { token: string; count: number; totalVolume: number }>();
 
-    filteredData.forEach(transaction => {
-      const inputToken = transaction.inputTokenAddress;
-      const outputToken = transaction.outputTokenAddress;
+    filteredData.forEach(trade => {
+      const sellToken = trade.sellToken;
+      const buyToken = trade.buyToken;
       
       // Use correct decimal places for each token
-      const outputDecimals = getTokenDecimals(outputToken);
-      const outputVolume = parseFloat(transaction.outputTokenAmountOverride) / Math.pow(10, outputDecimals);
+      const sellDecimals = getTokenDecimals(sellToken);
+      const sellVolume = getAmountValue(trade.sellAmount) / Math.pow(10, sellDecimals);
 
-      // Count input tokens (but don't add their volume)
-      if (tokenMap.has(inputToken)) {
-        const existing = tokenMap.get(inputToken)!;
+      // Count sell tokens and add their volume
+      if (tokenMap.has(sellToken)) {
+        const existing = tokenMap.get(sellToken)!;
         existing.count++;
-        // Don't add input volume to totalVolume
+        existing.totalVolume += sellVolume;
       } else {
-        tokenMap.set(inputToken, {
-          token: inputToken,
+        tokenMap.set(sellToken, {
+          token: sellToken,
           count: 1,
-          totalVolume: 0 // Input tokens start with 0 volume
+          totalVolume: sellVolume
         });
       }
 
-      // Count output tokens and add their volume
-      if (tokenMap.has(outputToken)) {
-        const existing = tokenMap.get(outputToken)!;
+      // Count buy tokens (but don't add their volume)
+      if (tokenMap.has(buyToken)) {
+        const existing = tokenMap.get(buyToken)!;
         existing.count++;
-        existing.totalVolume += outputVolume;
+        // Don't add buy volume to totalVolume
       } else {
-        tokenMap.set(outputToken, {
-          token: outputToken,
+        tokenMap.set(buyToken, {
+          token: buyToken,
           count: 1,
-          totalVolume: outputVolume
+          totalVolume: 0 // Buy tokens start with 0 volume
         });
       }
     });
@@ -176,32 +188,32 @@ const Dashboard: React.FC = () => {
   const getPairStats = (): PairStats[] => {
     const pairMap = new Map<string, { 
       pair: string; 
-      inputToken: string; 
-      outputToken: string; 
+      sellToken: string; 
+      buyToken: string; 
       count: number; 
-      totalOutputVolume: number 
+      totalSellVolume: number 
     }>();
 
-    filteredData.forEach(transaction => {
-      const inputToken = transaction.inputTokenAddress;
-      const outputToken = transaction.outputTokenAddress;
-      const pair = `${inputToken} → ${outputToken}`;
+    filteredData.forEach(trade => {
+      const sellToken = trade.sellToken;
+      const buyToken = trade.buyToken;
+      const pair = `${sellToken} → ${buyToken}`;
       
-      // Use correct decimal places for output token
-      const outputDecimals = getTokenDecimals(outputToken);
-      const outputVolume = parseFloat(transaction.outputTokenAmountOverride) / Math.pow(10, outputDecimals);
+      // Use correct decimal places for sell token
+      const sellDecimals = getTokenDecimals(sellToken);
+      const sellVolume = getAmountValue(trade.sellAmount) / Math.pow(10, sellDecimals);
 
       if (pairMap.has(pair)) {
         const existing = pairMap.get(pair)!;
         existing.count++;
-        existing.totalOutputVolume += outputVolume;
+        existing.totalSellVolume += sellVolume;
       } else {
         pairMap.set(pair, {
           pair,
-          inputToken,
-          outputToken,
+          sellToken,
+          buyToken,
           count: 1,
-          totalOutputVolume: outputVolume
+          totalSellVolume: sellVolume
         });
       }
     });
@@ -213,47 +225,47 @@ const Dashboard: React.FC = () => {
 
   // Get summary statistics
   const getSummaryStats = () => {
-    const totalTransactions = filteredData.length;
-    const uniqueTransactions = new Set(filteredData.map(t => t.orderHash)).size;
+    const totalTrades = filteredData.length;
+    const uniqueTrades = new Set(filteredData.map(t => t.orderUid)).size;
     
-    // Count input tokens
-    const inputTokenCounts = new Map<string, number>();
-    filteredData.forEach(transaction => {
-      const inputToken = transaction.inputTokenAddress;
-      inputTokenCounts.set(inputToken, (inputTokenCounts.get(inputToken) || 0) + 1);
+    // Count sell tokens
+    const sellTokenCounts = new Map<string, number>();
+    filteredData.forEach(trade => {
+      const sellToken = trade.sellToken;
+      sellTokenCounts.set(sellToken, (sellTokenCounts.get(sellToken) || 0) + 1);
     });
     
-    // Count output tokens
-    const outputTokenCounts = new Map<string, number>();
-    filteredData.forEach(transaction => {
-      const outputToken = transaction.outputTokenAddress;
-      outputTokenCounts.set(outputToken, (outputTokenCounts.get(outputToken) || 0) + 1);
+    // Count buy tokens
+    const buyTokenCounts = new Map<string, number>();
+    filteredData.forEach(trade => {
+      const buyToken = trade.buyToken;
+      buyTokenCounts.set(buyToken, (buyTokenCounts.get(buyToken) || 0) + 1);
     });
     
     // Count token pairs
     const pairCounts = new Map<string, number>();
-    filteredData.forEach(transaction => {
-      const inputSymbol = getTokenName(transaction.inputTokenAddress);
-      const outputSymbol = getTokenName(transaction.outputTokenAddress);
-      const pair = `${inputSymbol} → ${outputSymbol}`;
+    filteredData.forEach(trade => {
+      const sellSymbol = getTokenName(trade.sellToken);
+      const buySymbol = getTokenName(trade.buyToken);
+      const pair = `${sellSymbol} → ${buySymbol}`;
       pairCounts.set(pair, (pairCounts.get(pair) || 0) + 1);
     });
     
     // Find most frequent
-    const mostSeenInputToken = Array.from(inputTokenCounts.entries())
+    const mostSeenSellToken = Array.from(sellTokenCounts.entries())
       .sort((a, b) => b[1] - a[1])[0] || ['None', 0];
     
-    const mostSeenOutputToken = Array.from(outputTokenCounts.entries())
+    const mostSeenBuyToken = Array.from(buyTokenCounts.entries())
       .sort((a, b) => b[1] - a[1])[0] || ['None', 0];
     
     const mostSeenPair = Array.from(pairCounts.entries())
       .sort((a, b) => b[1] - a[1])[0] || ['None', 0];
 
     return {
-      totalTransactions,
-      uniqueTransactions,
-      mostSeenInputToken: { token: mostSeenInputToken[0], count: mostSeenInputToken[1] },
-      mostSeenOutputToken: { token: mostSeenOutputToken[0], count: mostSeenOutputToken[1] },
+      totalTrades,
+      uniqueTrades,
+      mostSeenSellToken: { token: mostSeenSellToken[0], count: mostSeenSellToken[1] },
+      mostSeenBuyToken: { token: mostSeenBuyToken[0], count: mostSeenBuyToken[1] },
       mostSeenPair: { pair: mostSeenPair[0], count: mostSeenPair[1] }
     };
   };
@@ -362,22 +374,22 @@ const Dashboard: React.FC = () => {
         {/* Summary Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Total Orders</h3>
-            <p className="text-3xl font-bold text-blue-600">{summaryStats.totalTransactions.toLocaleString()}</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Total Trades</h3>
+            <p className="text-3xl font-bold text-blue-600">{summaryStats.totalTrades.toLocaleString()}</p>
           </div>
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Unique Orders</h3>
-            <p className="text-3xl font-bold text-green-600">{summaryStats.uniqueTransactions.toLocaleString()}</p>
+            <p className="text-3xl font-bold text-green-600">{summaryStats.uniqueTrades.toLocaleString()}</p>
           </div>
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Most Seen Input Token</h3>
-            <p className="text-lg font-bold text-purple-600">{getTokenName(summaryStats.mostSeenInputToken.token)}</p>
-            <p className="text-sm text-gray-500">{summaryStats.mostSeenInputToken.count} times</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Most Seen Sell Token</h3>
+            <p className="text-lg font-bold text-purple-600">{getTokenName(summaryStats.mostSeenSellToken.token)}</p>
+            <p className="text-sm text-gray-500">{summaryStats.mostSeenSellToken.count} times</p>
           </div>
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Most Seen Output Token</h3>
-            <p className="text-lg font-bold text-orange-600">{getTokenName(summaryStats.mostSeenOutputToken.token)}</p>
-            <p className="text-sm text-gray-500">{summaryStats.mostSeenOutputToken.count} times</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Most Seen Buy Token</h3>
+            <p className="text-lg font-bold text-orange-600">{getTokenName(summaryStats.mostSeenBuyToken.token)}</p>
+            <p className="text-sm text-gray-500">{summaryStats.mostSeenBuyToken.count} times</p>
           </div>
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Most Seen Pair</h3>
@@ -385,8 +397,6 @@ const Dashboard: React.FC = () => {
             <p className="text-sm text-gray-500">{summaryStats.mostSeenPair.count} times</p>
           </div>
         </div>
-
-
 
         {/* Token Popularity */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -397,8 +407,8 @@ const Dashboard: React.FC = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Rank</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Token Address</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Transaction Count</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Output Volume</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Trade Count</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Sell Volume</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -437,21 +447,21 @@ const Dashboard: React.FC = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Rank</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Token Pair</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Transaction Count</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Output Token Volume</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Trade Count</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Sell Token Volume</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {pairStats.map((pair, index) => {
-                  const volumeInfo = formatVolume(pair.totalOutputVolume);
-                  const inputSymbol = getTokenName(pair.inputToken);
-                  const outputSymbol = getTokenName(pair.outputToken);
+                  const volumeInfo = formatVolume(pair.totalSellVolume);
+                  const sellSymbol = getTokenName(pair.sellToken);
+                  const buySymbol = getTokenName(pair.buyToken);
                   return (
                     <tr key={pair.pair}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{index + 1}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                        <div className="font-semibold">{inputSymbol} → {outputSymbol}</div>
-                        <div className="text-xs text-gray-500 font-mono">{pair.inputToken} → {pair.outputToken}</div>
+                        <div className="font-semibold">{sellSymbol} → {buySymbol}</div>
+                        <div className="text-xs text-gray-500 font-mono">{pair.sellToken} → {pair.buyToken}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium">{pair.count}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -459,7 +469,7 @@ const Dashboard: React.FC = () => {
                           className="cursor-help" 
                           title={volumeInfo.full}
                         >
-                          {volumeInfo.display} {outputSymbol}
+                          {volumeInfo.display} {sellSymbol}
                         </span>
                       </td>
                     </tr>
@@ -482,8 +492,6 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/transactions" element={<TransactionsTable />} />
-          <Route path="/quotes" element={<QuotesTable />} />
-
         </Routes>
       </Router>
     </DataProvider>
