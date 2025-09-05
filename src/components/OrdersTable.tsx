@@ -1,47 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-
-interface TokenInfo {
-  name: string;
-  type: string;
-  symbol: string;
-  decimals: number;
-  website?: string;
-  description?: string;
-  explorer?: string;
-  status: string;
-  id: string;
-  tags?: string[];
-}
-
-interface Order {
-  _id: string;
-  auctionId: string;
-  timestamp: Date;
-  sellToken: string;
-  buyToken: string;
-  sellAmount: string;
-  buyAmount: string;
-  kind: 'sell' | 'buy';
-  owner: string;
-  livePrice: number;
-  markup: number;
-  ourOffer: {
-    sellAmount: string;
-    buyAmount: string;
-    wasIncluded: boolean;
-  };
-  sellTokenInfo?: TokenInfo;
-  buyTokenInfo?: TokenInfo;
-  metadata?: {
-    gasEstimate?: number;
-    profitability?: number;
-    priceDeviation?: number;
-  };
-}
+import type { OrderWithMetadata, OrdersResponse } from '../types/OrderTypes';
+import { getTokenDisplaySymbol } from '../utils/tokenMapping';
 
 const OrdersTable: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<OrderWithMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -73,7 +36,7 @@ const OrdersTable: React.FC = () => {
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to fetch orders');
       }
-      const data = await response.json();
+      const data: OrdersResponse = await response.json();
       setOrders(data.orders);
       setTotalPages(data.totalPages);
     } catch (err) {
@@ -92,11 +55,11 @@ const OrdersTable: React.FC = () => {
     }
   };
 
-  const formatTokenAmount = (amount: string, tokenInfo?: TokenInfo) => {
+  const formatTokenAmount = (amount: string, tokenInfo?: any) => {
     const num = parseFloat(amount);
     if (isNaN(num)) return amount;
 
-    const decimals = tokenInfo?.decimals || 6;
+    const decimals = tokenInfo?.decimals || 18; // Default to 18 decimals for most ERC20 tokens
     const divisor = Math.pow(10, decimals);
     const formatted = num / divisor;
 
@@ -111,11 +74,8 @@ const OrdersTable: React.FC = () => {
     }
   };
 
-  const getTokenSymbol = (tokenAddress: string, tokenInfo?: TokenInfo) => {
-    if (tokenInfo?.symbol) {
-      return tokenInfo.symbol;
-    }
-    return tokenAddress.slice(0, 6).toUpperCase();
+  const getTokenSymbol = (tokenAddress: string, tokenInfo?: any) => {
+    return getTokenDisplaySymbol(tokenAddress, tokenInfo);
   };
 
   const formatAddress = (address: string) => {

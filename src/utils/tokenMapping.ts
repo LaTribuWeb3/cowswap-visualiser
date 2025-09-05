@@ -1,10 +1,14 @@
 export interface TokenInfo {
-  symbol: string;
   name: string;
   type: string;
+  symbol: string;
   decimals: number;
+  website?: string;
+  description?: string;
+  explorer?: string;
   status: string;
   id: string;
+  tags?: string[];
 }
 
 // Common tokens on Arbitrum with their metadata

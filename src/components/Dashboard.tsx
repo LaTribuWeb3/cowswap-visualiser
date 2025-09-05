@@ -1,29 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { getTokenMetadata, getTokenDisplaySymbol, getTokenDisplayName } from '../utils/tokenMapping';
-
-interface TokenInfo {
-  name: string;
-  type: string;
-  symbol: string;
-  decimals: number;
-  website?: string;
-  description?: string;
-  explorer?: string;
-  status: string;
-  id: string;
-  tags?: string[];
-}
-
-interface OrderStats {
-  totalOrders: number;
-  totalVolume: number;
-  averageMarkup: number;
-  inclusionRate: number;
-  recentOrders: number;
-  topTokens: Array<{ token: string; count: number; tokenInfo?: TokenInfo }>;
-  ordersByHour: Array<{ hour: number; count: number }>;
-}
+import type { OrderStats, TokenInfo } from '../types/OrderTypes';
 
 // Order interface removed as it's not used in this component
 
