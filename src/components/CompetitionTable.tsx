@@ -29,7 +29,8 @@ const CompetitionTable: React.FC = () => {
         sortOrder,
         withMetadata: 'true',
         // Only fetch orders where we have ranking data (competition data)
-        hasRanking: 'true'
+        hasRanking: 'true',
+        included: 'true'
       });
 
       const response = await fetch(`https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders?${params}`);
