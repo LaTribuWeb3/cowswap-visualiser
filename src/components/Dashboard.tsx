@@ -218,24 +218,29 @@ const Dashboard: React.FC = () => {
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Orders by Hour (Last 24h)</h3>
               <div className="space-y-2">
-                {stats.ordersByHour.map((hourData) => (
-                  <div key={hourData.hour} className="flex items-center">
-                    <div className="w-12 text-sm text-gray-500">
-                      {hourData.hour.toString().padStart(2, '0')}:00
-                    </div>
-                    <div className="flex-1 ml-4">
-                      <div className="bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-blue-500 h-2 rounded-full"
-                          style={{ width: `${(hourData.count / 25) * 100}%` }}
-                        ></div>
+                {stats.ordersByHour.map((hourData) => {
+                  const maxCount = Math.max(...stats.ordersByHour.map(h => h.count));
+                  const percentage = maxCount > 0 ? (hourData.count / maxCount) * 100 : 0;
+                  
+                  return (
+                    <div key={hourData.hour} className="flex items-center">
+                      <div className="w-12 text-sm text-gray-500">
+                        {hourData.hour.toString().padStart(2, '0')}:00
+                      </div>
+                      <div className="flex-1 ml-4">
+                        <div className="bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-500 h-2 rounded-full"
+                            style={{ width: `${Math.min(percentage, 100)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      <div className="w-8 text-sm text-gray-500 text-right">
+                        {hourData.count}
                       </div>
                     </div>
-                    <div className="w-8 text-sm text-gray-500 text-right">
-                      {hourData.count}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
