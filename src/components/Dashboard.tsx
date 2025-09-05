@@ -54,8 +54,8 @@ const Dashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
+        <div className="py-6">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -74,8 +74,8 @@ const Dashboard: React.FC = () => {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
+        <div className="py-6">
           <div className="bg-red-50 border border-red-200 rounded-md p-4">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -105,8 +105,8 @@ const Dashboard: React.FC = () => {
   if (!stats) return null;
 
   return (
-    <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 py-6 sm:px-0">
+    <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
+      <div className="py-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard Overview</h1>
         
         {/* Key Metrics */}

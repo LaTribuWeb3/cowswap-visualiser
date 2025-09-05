@@ -123,8 +123,8 @@ const OrdersTable: React.FC = () => {
 
   if (loading && orders.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
+        <div className="py-6">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
             <div className="bg-white shadow overflow-hidden sm:rounded-md">
@@ -144,8 +144,8 @@ const OrdersTable: React.FC = () => {
 
   if (error && orders.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
+        <div className="py-6">
           <div className="bg-red-50 border border-red-200 rounded-md p-4">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -173,8 +173,8 @@ const OrdersTable: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 py-6 sm:px-0">
+    <div className="w-full py-6 px-4 sm:px-6 lg:px-8">
+      <div className="py-6">
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
             <h1 className="text-3xl font-bold text-gray-900">Orders Table</h1>
@@ -206,9 +206,9 @@ const OrdersTable: React.FC = () => {
 
         {/* Table */}
         <div className="mt-8 flex flex-col">
-          <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-            <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+          <div className="overflow-x-auto">
+            <div className="inline-block min-w-full py-2 align-middle">
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
                 <table className="min-w-full divide-y divide-gray-300">
                   <thead className="bg-gray-50">
                     <tr>
@@ -271,13 +271,20 @@ const OrdersTable: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {orders.map((order) => (
                       <tr key={order._id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-48">
                           {format(new Date(order.timestamp), 'MMM dd, yyyy HH:mm:ss')}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                          {formatAddress(order._id)}
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900 w-32">
+                          <a
+                            href={`https://explorer.cow.fi/arb1/orders/${order._id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {formatAddress(order._id)}
+                          </a>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-48">
                           <div className="flex items-center">
                             <div className="flex flex-col">
                               <span className="font-medium text-gray-900">
@@ -298,7 +305,7 @@ const OrdersTable: React.FC = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-40">
                           <div>
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">Sell:</span>
@@ -320,7 +327,7 @@ const OrdersTable: React.FC = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap w-20">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                             order.kind === 'sell' 
                               ? 'bg-red-100 text-red-800' 
@@ -329,13 +336,13 @@ const OrdersTable: React.FC = () => {
                             {order.kind.toUpperCase()}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-24">
                           ${order.livePrice.toFixed(2)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-20">
                           {order.markup.toFixed(1)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap w-24">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                             order.ourOffer.wasIncluded 
                               ? 'bg-green-100 text-green-800' 
@@ -344,8 +351,15 @@ const OrdersTable: React.FC = () => {
                             {order.ourOffer.wasIncluded ? 'Included' : 'Excluded'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
-                          {formatAddress(order.owner)}
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500 w-32">
+                          <a
+                            href={`https://arbiscan.io/address/${order.owner}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {formatAddress(order.owner)}
+                          </a>
                         </td>
                       </tr>
                     ))}
