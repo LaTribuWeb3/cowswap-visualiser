@@ -328,7 +328,7 @@ const Dashboard: React.FC = () => {
                   <div className="space-y-3">
                     <div>
                       <dt className="text-sm font-medium text-gray-500">Current Margin</dt>
-                      <dd className={`text-sm font-semibold ${marginConfig.basisPoints < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <dd className={`text-sm font-semibold ${marginConfig.basisPoints >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {marginConfig.basisPoints} bps ({marginConfig.percentage}%)
                       </dd>
                     </div>
