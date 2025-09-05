@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { getTokenMetadata, getTokenDisplaySymbol, getTokenDisplayName } from '../utils/tokenMapping';
 
 interface TokenInfo {
   name: string;
@@ -30,10 +31,43 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<OrderStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tokenMetadata, setTokenMetadata] = useState<Map<string, TokenInfo>>(new Map());
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    if (stats?.topTokens) {
+      fetchTokenMetadata();
+    }
+  }, [stats?.topTokens]);
+
+  const fetchTokenMetadata = async () => {
+    if (!stats?.topTokens) return;
+
+    try {
+      // Extract unique token addresses that don't have metadata
+      const tokensNeedingMetadata = stats.topTokens
+        .filter(token => !token.tokenInfo?.symbol)
+        .map(token => token.token);
+
+      if (tokensNeedingMetadata.length === 0) return;
+
+      const newMetadata = new Map<string, TokenInfo>();
+      
+      tokensNeedingMetadata.forEach(tokenAddress => {
+        const tokenInfo = getTokenMetadata(tokenAddress);
+        if (tokenInfo) {
+          newMetadata.set(tokenAddress.toLowerCase(), tokenInfo);
+        }
+      });
+
+      setTokenMetadata(prev => new Map([...prev, ...newMetadata]));
+    } catch (error) {
+      console.warn('Failed to fetch token metadata:', error);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -191,24 +225,34 @@ const Dashboard: React.FC = () => {
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Top Trading Tokens</h3>
               <div className="space-y-3">
-                {stats.topTokens.map((token, index) => (
-                  <div key={token.token} className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-medium text-gray-600">{index + 1}</span>
+                {stats.topTokens.map((token, index) => {
+                  const metadata = token.tokenInfo || tokenMetadata.get(token.token.toLowerCase());
+                  const displaySymbol = getTokenDisplaySymbol(token.token, metadata);
+                  const displayName = getTokenDisplayName(token.token, metadata);
+                  const hasSymbol = metadata?.symbol || getTokenMetadata(token.token)?.symbol;
+                  
+                  return (
+                    <div key={token.token} className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-gray-600">{index + 1}</span>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-900">
+                            {displaySymbol}
+                          </p>
+                          {displayName && displayName !== displaySymbol && (
+                            <p className="text-xs text-gray-500">{displayName}</p>
+                          )}
+                          {!hasSymbol && (
+                            <p className="text-xs text-gray-400">{token.token.slice(0, 6)}...{token.token.slice(-4)}</p>
+                          )}
+                        </div>
                       </div>
-                      <div className="ml-3">
-                        <p className="text-sm font-medium text-gray-900">
-                          {token.tokenInfo?.symbol || token.token}
-                        </p>
-                        {token.tokenInfo?.name && token.tokenInfo.name !== token.tokenInfo.symbol && (
-                          <p className="text-xs text-gray-500">{token.tokenInfo.name}</p>
-                        )}
-                      </div>
+                      <div className="text-sm text-gray-500">{token.count} orders</div>
                     </div>
-                    <div className="text-sm text-gray-500">{token.count} orders</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
