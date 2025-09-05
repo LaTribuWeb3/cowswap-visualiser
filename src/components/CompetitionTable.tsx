@@ -11,6 +11,7 @@ const CompetitionTable: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [sortBy, setSortBy] = useState<'timestamp' | 'markup' | 'livePrice' | 'auctionRanking'>('timestamp');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const itemsPerPage = 20;
 
@@ -27,8 +28,8 @@ const CompetitionTable: React.FC = () => {
         sortBy,
         sortOrder,
         withMetadata: 'true',
-        // Only fetch orders where we submitted a solution (included orders)
-        included: 'true'
+        // Only fetch orders where we have ranking data (competition data)
+        hasRanking: 'true'
       });
 
       const response = await fetch(`https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders?${params}`);
@@ -90,6 +91,84 @@ const CompetitionTable: React.FC = () => {
     } else {
       return { text: 'Unknown', className: 'bg-gray-100 text-gray-800' };
     }
+  };
+
+  const handleRowClick = (orderId: string) => {
+    setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
+  };
+
+  const getCompetitorsData = (order: OrderWithMetadata) => {
+    const competitors = [];
+    
+    // Add our offer first
+    competitors.push({
+      solverName: 'Our Solver',
+      sellAmount: order.ourOffer.sellAmount,
+      buyAmount: order.ourOffer.buyAmount,
+      timestamp: order.timestamp,
+      isOurs: true
+    });
+    
+    // Add other competitors if they exist
+    if (order.competitors) {
+      Object.entries(order.competitors).forEach(([solverName, data]) => {
+        competitors.push({
+          solverName,
+          sellAmount: data.sellAmount || '0',
+          buyAmount: data.buyAmount || '0',
+          timestamp: data.timestamp,
+          isOurs: false
+        });
+      });
+    }
+    
+    // Sort by buy amount (best offer first) - higher buy amount is better for the user
+    const sortedCompetitors = competitors.sort((a, b) => {
+      const aBuyAmount = parseFloat(a.buyAmount);
+      const bBuyAmount = parseFloat(b.buyAmount);
+      return bBuyAmount - aBuyAmount;
+    });
+
+    // Calculate deltas for each competitor
+    const winningBuyAmount = parseFloat(sortedCompetitors[0]?.buyAmount || '0');
+    const livePrice = order.livePrice; // This is in dollars
+    
+    return sortedCompetitors.map((competitor, index) => {
+      const competitorBuyAmount = parseFloat(competitor.buyAmount);
+      const competitorSellAmount = parseFloat(competitor.sellAmount);
+      const isWinner = index === 0;
+      
+      // Convert token amounts to their actual values using decimals
+      const sellTokenDecimals = order.sellTokenInfo?.decimals || 18;
+      const buyTokenDecimals = order.buyTokenInfo?.decimals || 18;
+      
+      const actualSellAmount = competitorSellAmount / Math.pow(10, sellTokenDecimals);
+      const actualBuyAmount = competitorBuyAmount / Math.pow(10, buyTokenDecimals);
+      const actualWinningBuyAmount = winningBuyAmount / Math.pow(10, buyTokenDecimals);
+      
+      // Delta vs winning bid (in actual token units)
+      const deltaVsWinning = actualBuyAmount - actualWinningBuyAmount;
+      const deltaVsWinningPercent = actualWinningBuyAmount > 0 ? (deltaVsWinning / actualWinningBuyAmount) * 100 : 0;
+      
+      // Delta vs live price (in dollars)
+      // For a sell order: compare the actual value received vs what we should get at live price
+      // If selling USDC for WETH: actualWETHValue = actualBuyAmount * livePrice
+      // Delta = actualWETHValue - actualSellAmount (USDC)
+      const actualWETHValue = actualBuyAmount * livePrice; // Value of WETH received in USD
+      const deltaVsLivePrice = actualWETHValue - actualSellAmount; // Profit/loss in USD
+      const deltaVsLivePricePercent = actualSellAmount > 0 ? (deltaVsLivePrice / actualSellAmount) * 100 : 0;
+      
+      return {
+        ...competitor,
+        isWinner,
+        deltaVsWinning,
+        deltaVsWinningPercent,
+        deltaVsLivePrice,
+        deltaVsLivePricePercent,
+        actualSellAmount,
+        actualBuyAmount
+      };
+    });
   };
 
 
@@ -232,9 +311,15 @@ const CompetitionTable: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {orders.map((order) => {
                       const winStatus = getWinStatus(order);
+                      const isExpanded = expandedOrderId === order._id;
+                      const competitors = getCompetitorsData(order);
                       
                       return (
-                        <tr key={order._id} className="hover:bg-gray-50">
+                        <React.Fragment key={order._id}>
+                          <tr 
+                            className="hover:bg-gray-50 cursor-pointer"
+                            onClick={() => handleRowClick(order._id)}
+                          >
                           <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-48">
                             {format(new Date(order.timestamp), 'MMM dd, yyyy HH:mm:ss')}
                           </td>
@@ -322,6 +407,118 @@ const CompetitionTable: React.FC = () => {
                             </a>
                           </td>
                         </tr>
+                        
+                        {/* Expandable competitors section */}
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={9} className="px-4 py-4 bg-gray-50">
+                              <div className="bg-white rounded-lg shadow-sm border">
+                                <div className="px-4 py-3 border-b border-gray-200">
+                                  <h3 className="text-lg font-medium text-gray-900">
+                                    Competition Analysis
+                                  </h3>
+                                  <p className="text-sm text-gray-500">
+                                    Order ID: {order._id}
+                                  </p>
+                                </div>
+                                
+                                {competitors.length > 0 ? (
+                                  <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                      <thead className="bg-gray-50">
+                                        <tr>
+                                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Solver
+                                          </th>
+                                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Sell Amount
+                                          </th>
+                                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Buy Amount
+                                          </th>
+                                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            vs Winning Bid
+                                          </th>
+                                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            vs Live Price
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="bg-white divide-y divide-gray-200">
+                                        {competitors.map((competitor, index) => (
+                                          <tr 
+                                            key={`${competitor.solverName}-${index}`}
+                                            className={competitor.isOurs ? 'bg-blue-50 border-l-4 border-blue-500' : ''}
+                                          >
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                                              <div className="flex items-center">
+                                                {competitor.isOurs && (
+                                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">
+                                                    OURS
+                                                  </span>
+                                                )}
+                                                <span className={competitor.isOurs ? 'text-blue-900 font-semibold' : 'text-gray-900'}>
+                                                  {competitor.solverName}
+                                                </span>
+                                              </div>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                              <span className={competitor.isOurs ? 'text-blue-900 font-semibold' : 'text-gray-900'}>
+                                                {formatTokenAmount(competitor.sellAmount, order.sellTokenInfo)}
+                                                <span className="text-xs text-gray-500 ml-1">
+                                                  {getTokenSymbol(order.sellToken, order.sellTokenInfo)}
+                                                </span>
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                              <span className={competitor.isOurs ? 'text-blue-900 font-semibold' : 'text-gray-900'}>
+                                                {formatTokenAmount(competitor.buyAmount, order.buyTokenInfo)}
+                                                <span className="text-xs text-gray-500 ml-1">
+                                                  {getTokenSymbol(order.buyToken, order.buyTokenInfo)}
+                                                </span>
+                                              </span>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                              <div className={competitor.isOurs ? 'text-blue-900 font-semibold' : 'text-gray-900'}>
+                                                {competitor.isWinner ? (
+                                                  <span className="text-green-600 font-medium">Winner</span>
+                                                ) : (
+                                                  <div>
+                                                    <div className={competitor.deltaVsWinning >= 0 ? 'text-red-600' : 'text-green-600'}>
+                                                      {competitor.deltaVsWinning >= 0 ? '+' : ''}{competitor.deltaVsWinning.toFixed(6)} {getTokenSymbol(order.buyToken, order.buyTokenInfo)}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                      {competitor.deltaVsWinningPercent >= 0 ? '+' : ''}{competitor.deltaVsWinningPercent.toFixed(2)}%
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                              <div className={competitor.isOurs ? 'text-blue-900 font-semibold' : 'text-gray-900'}>
+                                                <div className={competitor.deltaVsLivePrice >= 0 ? 'text-red-600' : 'text-green-600'}>
+                                                  {competitor.deltaVsLivePrice >= 0 ? '+' : ''}${competitor.deltaVsLivePrice.toFixed(4)}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                  {competitor.deltaVsLivePricePercent >= 0 ? '+' : ''}{competitor.deltaVsLivePricePercent.toFixed(2)}%
+                                                </div>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <div className="px-4 py-6 text-center text-gray-500">
+                                    <p>No competition data available for this order.</p>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                       );
                     })}
                   </tbody>

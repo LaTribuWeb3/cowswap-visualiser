@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { getTokenMetadata, getTokenDisplaySymbol, getTokenDisplayName } from '../utils/tokenMapping';
 import type { OrderStats, TokenInfo } from '../types/OrderTypes';
+import { configService, type SolverConfig, type MarginConfig, type PricingConfig } from '../services/configService';
 
 // Order interface removed as it's not used in this component
 
@@ -10,9 +11,13 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tokenMetadata, setTokenMetadata] = useState<Map<string, TokenInfo>>(new Map());
+  const [solverConfig, setSolverConfig] = useState<SolverConfig | null>(null);
+  const [marginConfig, setMarginConfig] = useState<MarginConfig | null>(null);
+  const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
+    fetchConfigData();
   }, []);
 
   useEffect(() => {
@@ -61,6 +66,23 @@ const Dashboard: React.FC = () => {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchConfigData = async () => {
+    try {
+      const [solver, margin, pricing] = await Promise.all([
+        configService.getSolverInfo(),
+        configService.getMarginInfo(),
+        configService.getPricingInfo()
+      ]);
+      
+      setSolverConfig(solver);
+      setMarginConfig(margin);
+      setPricingConfig(pricing);
+    } catch (err) {
+      console.warn('Failed to fetch config data:', err);
+      // Don't set error state for config, it's not critical
     }
   };
 
@@ -267,6 +289,95 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Solver Configuration */}
+        {(solverConfig || marginConfig || pricingConfig) && (
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Solver Info */}
+            {solverConfig && (
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Solver Configuration</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Name</dt>
+                      <dd className="text-sm text-gray-900">{solverConfig.name}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Version</dt>
+                      <dd className="text-sm text-gray-900">{solverConfig.version}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Timeout</dt>
+                      <dd className="text-sm text-gray-900">{solverConfig.timeout}ms</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Max Gas Price</dt>
+                      <dd className="text-sm text-gray-900">{parseInt(solverConfig.maxGasPrice) / 1e9} Gwei</dd>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Margin Configuration */}
+            {marginConfig && (
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Margin Settings</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Current Margin</dt>
+                      <dd className={`text-sm font-semibold ${marginConfig.basisPoints < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {marginConfig.basisPoints} bps ({marginConfig.percentage}%)
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Minimum Margin</dt>
+                      <dd className="text-sm text-gray-900">{marginConfig.minimumBasisPoints} bps</dd>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-2">
+                      {marginConfig.description.basisPoints}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Pricing Information */}
+            {pricingConfig && (
+              <div className="bg-white shadow rounded-lg">
+                <div className="px-4 py-5 sm:p-6">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Pricing Status</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Connection</dt>
+                      <dd className={`text-sm font-semibold ${pricingConfig.connected ? 'text-green-600' : 'text-red-600'}`}>
+                        {pricingConfig.connected ? 'Connected' : 'Disconnected'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Current Price</dt>
+                      <dd className="text-sm text-gray-900">${pricingConfig.currentPrice.toFixed(2)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Price Age</dt>
+                      <dd className={`text-sm ${pricingConfig.isPriceFresh ? 'text-green-600' : 'text-yellow-600'}`}>
+                        {pricingConfig.priceAge}ms {pricingConfig.isPriceFresh ? '(Fresh)' : '(Stale)'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Last Update</dt>
+                      <dd className="text-sm text-gray-900">
+                        {format(new Date(pricingConfig.lastUpdate), 'HH:mm:ss')}
+                      </dd>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Recent Activity */}
         <div className="mt-8 bg-white shadow rounded-lg">
