@@ -45,24 +45,27 @@ export interface IOrderDocument {
     wasIncluded: boolean;    // Whether this order was included in our solution
   };
   
-  // Future fields for competitive analysis (can be added later)
+  // Competitive analysis data
   competitors?: {
-    [solverName: string]: {
+    [solverAddress: string]: {
       sellAmount?: TokenAmount;
       buyAmount?: TokenAmount;
+      score?: string;
+      ranking?: number;
+      isWinner?: boolean;
       timestamp: Date;
     };
   };
   
-  // Additional metadata that might be useful
+  // Additional metadata
   metadata?: {
     gasEstimate?: number;
     profitability?: number;
     priceDeviation?: number;
-    // Competition data
-    isWinner?: boolean; // Whether our solver won this auction
-    auctionRanking?: number; // Our ranking in the competition (1 = winner)
-    auctionScore?: string; // Our score in the competition
+    // Competition data (order-specific)
+    isWinner?: boolean; // Whether our solver won this specific order
+    ranking?: number; // Our ranking for this specific order (1 = winner, 0 = filtered out)
+    totalCompetitors?: number; // Total number of solvers who competed for this order
     competitionEnrichedAt?: Date; // When competition data was last enriched
     [key: string]: any;
   };

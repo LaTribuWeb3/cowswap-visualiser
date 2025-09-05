@@ -4,6 +4,7 @@ import type { OrderWithMetadata, OrdersResponse } from '../types/OrderTypes';
 import { getTokenDisplaySymbol } from '../utils/tokenMapping';
 
 const OrdersTable: React.FC = () => {
+  const [allOrders, setAllOrders] = useState<OrderWithMetadata[]>([]);
   const [orders, setOrders] = useState<OrderWithMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -12,24 +13,36 @@ const OrdersTable: React.FC = () => {
   const [sortBy, setSortBy] = useState<'timestamp' | 'markup' | 'livePrice'>('timestamp');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterIncluded, setFilterIncluded] = useState<boolean | null>(null);
+  const [filterValidSolutions, setFilterValidSolutions] = useState<boolean>(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const itemsPerPage = 20;
 
+  // Fetch data from API once when component loads
   useEffect(() => {
     fetchOrders();
-  }, [page, sortBy, sortOrder, filterIncluded]);
+  }, []);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filterIncluded, filterValidSolutions, sortBy, sortOrder]);
+
+  // Apply client-side filtering and pagination (when filters or page change)
+  useEffect(() => {
+    applyFiltersAndPagination();
+  }, [allOrders, page, sortBy, sortOrder, filterIncluded, filterValidSolutions]);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      // Start with first page to show data immediately
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: itemsPerPage.toString(),
-        sortBy,
-        sortOrder,
-        withMetadata: 'true',
-        ...(filterIncluded !== null && { included: filterIncluded.toString() })
+        page: '1',
+        limit: '100',
+        withMetadata: 'true'
       });
 
       const response = await fetch(`https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders?${params}`);
@@ -37,14 +50,107 @@ const OrdersTable: React.FC = () => {
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to fetch orders');
       }
+      
       const data: OrdersResponse = await response.json();
-      setOrders(data.orders);
-      setTotalPages(data.totalPages);
+      setAllOrders(data.orders);
+      setLoading(false); // Show first page immediately
+      
+      // Continue fetching remaining pages in background
+      if (data.totalPages > 1) {
+        fetchRemainingPages(data.totalPages);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
       setLoading(false);
     }
+  };
+
+  const fetchRemainingPages = async (totalPages: number) => {
+    try {
+      let accumulatedOrders: OrderWithMetadata[] = [];
+      
+      for (let currentPage = 2; currentPage <= totalPages; currentPage++) {
+        const params = new URLSearchParams({
+          page: currentPage.toString(),
+          limit: '100',
+          withMetadata: 'true'
+        });
+
+        const response = await fetch(`https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders?${params}`);
+        if (!response.ok) {
+          console.warn(`Failed to fetch page ${currentPage}`);
+          continue; // Continue with other pages even if one fails
+        }
+        
+        const data: OrdersResponse = await response.json();
+        accumulatedOrders = [...accumulatedOrders, ...data.orders];
+        
+        // Update state with all accumulated orders so far
+        setAllOrders(prevOrders => [...prevOrders, ...data.orders]);
+        
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    } catch (err) {
+      console.warn('Error fetching remaining pages:', err);
+    }
+  };
+
+  const applyFiltersAndPagination = () => {
+    let filteredOrders = [...allOrders];
+
+    // Apply client-side filtering for included orders
+    if (filterIncluded !== null) {
+      filteredOrders = filteredOrders.filter(order => 
+        order.ourOffer && order.ourOffer.wasIncluded === filterIncluded
+      );
+    }
+
+    // Apply client-side filtering for valid solutions
+    if (filterValidSolutions) {
+      filteredOrders = filteredOrders.filter(order => 
+        order.metadata && order.metadata.ranking && order.metadata.ranking > 0
+      );
+    }
+
+
+    // Apply sorting
+    filteredOrders.sort((a, b) => {
+      let aValue: any, bValue: any;
+      
+      switch (sortBy) {
+        case 'timestamp':
+          aValue = new Date(a.timestamp).getTime();
+          bValue = new Date(b.timestamp).getTime();
+          break;
+        case 'markup':
+          aValue = a.markup;
+          bValue = b.markup;
+          break;
+        case 'livePrice':
+          aValue = a.livePrice;
+          bValue = b.livePrice;
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortOrder === 'asc') {
+        return aValue - bValue;
+      } else {
+        return bValue - aValue;
+      }
+    });
+
+    // Apply pagination
+    const totalFilteredOrders = filteredOrders.length;
+    const totalPages = Math.ceil(totalFilteredOrders / itemsPerPage);
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+
+    setOrders(paginatedOrders);
+    setTotalPages(totalPages);
   };
 
   const handleSort = (field: 'timestamp' | 'markup' | 'livePrice') => {
@@ -54,6 +160,7 @@ const OrdersTable: React.FC = () => {
       setSortBy(field);
       setSortOrder('desc');
     }
+    setPage(1); // Reset to first page when sorting
   };
 
   const formatTokenAmount = (amount: string, tokenInfo?: any) => {
@@ -246,20 +353,30 @@ const OrdersTable: React.FC = () => {
 
         {/* Filters */}
         <div className="mt-6 bg-white shadow rounded-lg p-4">
-          <div className="flex flex-wrap gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Filter by inclusion
+          <div className="flex flex-wrap gap-6">
+            <div className="flex items-center">
+              <input
+                id="filter-included"
+                type="checkbox"
+                checked={filterIncluded === true}
+                onChange={(e) => setFilterIncluded(e.target.checked ? true : null)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="filter-included" className="ml-2 block text-sm font-medium text-gray-700">
+                Only orders with solution
               </label>
-              <select
-                value={filterIncluded === null ? '' : filterIncluded.toString()}
-                onChange={(e) => setFilterIncluded(e.target.value === '' ? null : e.target.value === 'true')}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              >
-                <option value="">All orders</option>
-                <option value="true">Included only</option>
-                <option value="false">Excluded only</option>
-              </select>
+            </div>
+            <div className="flex items-center">
+              <input
+                id="filter-valid-solutions"
+                type="checkbox"
+                checked={filterValidSolutions}
+                onChange={(e) => setFilterValidSolutions(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="filter-valid-solutions" className="ml-2 block text-sm font-medium text-gray-700">
+                Only valid solutions
+              </label>
             </div>
           </div>
         </div>
