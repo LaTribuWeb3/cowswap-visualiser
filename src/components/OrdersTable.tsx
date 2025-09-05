@@ -64,10 +64,11 @@ const OrdersTable: React.FC = () => {
         limit: itemsPerPage.toString(),
         sortBy,
         sortOrder,
+        withMetadata: 'true',
         ...(filterIncluded !== null && { included: filterIncluded.toString() })
       });
 
-      const response = await fetch(`/api/orders?${params}`);
+      const response = await fetch(`https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders?${params}`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to fetch orders');
@@ -154,13 +155,13 @@ const OrdersTable: React.FC = () => {
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Database Connection Error</h3>
+                <h3 className="text-sm font-medium text-red-800">API Connection Error</h3>
                 <div className="mt-2 text-sm text-red-700">
-                  <p className="font-medium">Unable to load orders from MongoDB:</p>
+                  <p className="font-medium">Unable to load orders from the API server:</p>
                   <p className="mt-1">{error}</p>
                   <div className="mt-3">
                     <p className="text-xs text-red-600">
-                      Please check your MongoDB connection string in the .env file and ensure MongoDB is running.
+                      Please check your internet connection and ensure the API server is running.
                     </p>
                   </div>
                 </div>

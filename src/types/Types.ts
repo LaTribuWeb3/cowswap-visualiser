@@ -374,14 +374,6 @@ export interface SolverConfig {
     showTradeSummary?: boolean;
   };
 
-  // MongoDB configuration
-  mongodb?: {
-    connectionString: string;
-    dbName: string;
-    collections?: {
-      orders?: string;
-    };
-  };
 }
 
 // milkbank types
