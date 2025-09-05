@@ -85,12 +85,20 @@ const OrdersTable: React.FC = () => {
         const data: OrdersResponse = await response.json();
         accumulatedOrders = [...accumulatedOrders, ...data.orders];
         
-        // Update state with all accumulated orders so far
-        setAllOrders(prevOrders => [...prevOrders, ...data.orders]);
-        
         // Small delay to avoid overwhelming the API
         await new Promise(resolve => setTimeout(resolve, 50));
       }
+      
+      // Update state with all accumulated orders at once, removing duplicates
+      setAllOrders(prevOrders => {
+        const allOrders = [...prevOrders, ...accumulatedOrders];
+        // Remove duplicates based on order ID
+        const uniqueOrders = allOrders.filter((order, index, self) => 
+          index === self.findIndex(o => o._id === order._id)
+        );
+        console.log(`Deduplication: ${allOrders.length} total orders, ${uniqueOrders.length} unique orders`);
+        return uniqueOrders;
+      });
     } catch (err) {
       console.warn('Error fetching remaining pages:', err);
     }
@@ -108,9 +116,25 @@ const OrdersTable: React.FC = () => {
 
     // Apply client-side filtering for valid solutions
     if (filterValidSolutions) {
-      filteredOrders = filteredOrders.filter(order => 
-        order.metadata && order.metadata.ranking && order.metadata.ranking > 0
-      );
+      filteredOrders = filteredOrders.filter(order => {
+        const hasValidRanking = order.metadata && 
+          order.metadata.ranking !== undefined && 
+          order.metadata.ranking !== null && 
+          order.metadata.ranking > 0;
+        
+        // Debug logging
+        if (!hasValidRanking) {
+          console.log('Filtering out order:', {
+            orderId: order._id,
+            metadata: order.metadata,
+            ranking: order.metadata?.ranking,
+            hasMetadata: !!order.metadata,
+            rankingType: typeof order.metadata?.ranking
+          });
+        }
+        
+        return hasValidRanking;
+      });
     }
 
 
@@ -149,6 +173,18 @@ const OrdersTable: React.FC = () => {
     const endIndex = startIndex + itemsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
 
+    // Debug logging for valid solutions filter
+    if (filterValidSolutions) {
+      console.log('Valid solutions filter active. Showing orders:', paginatedOrders.map(order => ({
+        orderId: order._id,
+        ranking: order.metadata?.ranking,
+        hasMetadata: !!order.metadata
+      })));
+      console.log('Total filtered orders:', totalFilteredOrders);
+      console.log('Paginated orders count:', paginatedOrders.length);
+    }
+    
+    console.log('Setting orders state with', paginatedOrders.length, 'orders');
     setOrders(paginatedOrders);
     setTotalPages(totalPages);
   };
@@ -438,6 +474,9 @@ const OrdersTable: React.FC = () => {
                         </div>
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Rank
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -446,7 +485,12 @@ const OrdersTable: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {orders.map((order) => {
+                    {(() => {
+                      console.log('Rendering orders:', orders.length, 'orders');
+                      if (filterValidSolutions) {
+                        console.log('Rendering with valid solutions filter. Orders have rankings:', orders.map(o => ({ id: o._id, ranking: o.metadata?.ranking })));
+                      }
+                      return orders.map((order) => {
                       const isExpanded = expandedOrderId === order._id;
                       const competitors = order.ourOffer.wasIncluded ? getCompetitorsData(order) : [];
                       
@@ -526,6 +570,21 @@ const OrdersTable: React.FC = () => {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-20">
                           {order.markup.toFixed(1)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-16">
+                          {order.metadata?.ranking ? (
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                              order.metadata.ranking === 1
+                                ? 'bg-yellow-100 text-yellow-800' // Winner
+                                : order.metadata.ranking <= 3
+                                ? 'bg-green-100 text-green-800' // Top 3
+                                : 'bg-gray-100 text-gray-800' // Other ranks
+                            }`}>
+                              {order.metadata.ranking === 1 ? '1st' : `#${order.metadata.ranking}`}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap w-24">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -660,7 +719,8 @@ const OrdersTable: React.FC = () => {
                       )}
                     </React.Fragment>
                     );
-                    })}
+                    });
+                    })()}
                   </tbody>
                 </table>
               </div>
