@@ -1,69 +1,115 @@
-# React + TypeScript + Vite
+# CowSwap Orders Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A comprehensive dashboard for visualizing and analyzing CowSwap orders from a MongoDB collection. This application provides:
 
-Currently, two official plugins are available:
+- **Dashboard Overview**: Key statistics, metrics, and charts about your orders
+- **Orders Table**: Detailed chronological view of all orders with filtering and sorting
+- **Real-time Data**: Live connection to your MongoDB orders collection
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## Expanding the ESLint configuration
+- 📊 Interactive dashboard with key metrics
+- 📋 Sortable and filterable orders table
+- 🔍 Search and pagination
+- 📈 Visual charts and statistics
+- 🎨 Modern UI with Tailwind CSS
+- ⚡ Fast performance with React and TypeScript
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Quick Start
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Prerequisites
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+- Node.js 18+ 
+- MongoDB (local or Atlas)
+- npm or yarn
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Installation
+
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+2. **Set up environment variables**:
+   Create a `.env` file in the root directory:
+   ```env
+   MONGODB_URI=mongodb://localhost:27017/cowswap-orders
+   DB_NAME=cowswap-orders
+   PORT=3001
+   ```
+
+3. **Start the development servers**:
+   ```bash
+   # Start both frontend and backend
+   npm run dev:full
+   
+   # Or start them separately:
+   npm run dev:server  # Backend only (port 3001)
+   npm run dev         # Frontend only (port 5173)
+   ```
+
+4. **Open your browser**:
+   Navigate to `http://localhost:5173` to view the dashboard.
+
+## Project Structure
+
+```
+src/
+├── components/          # React components
+│   ├── Dashboard.tsx    # Main dashboard with statistics
+│   └── OrdersTable.tsx  # Orders table with filtering
+├── services/           # Backend services
+│   └── mongodb.ts      # MongoDB connection and queries
+├── types/              # TypeScript type definitions
+│   ├── OrderModel.ts   # Mongoose order schema
+│   └── Types.ts        # General type definitions
+├── App.tsx             # Main app with routing
+├── main.tsx           # React entry point
+└── server.ts          # Express server
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Configuration
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### MongoDB Setup
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+The application expects a MongoDB collection named `orders` with documents matching the `IOrderDocument` interface. Key fields include:
+
+- `_id`: Order UID (string)
+- `timestamp`: Order creation time
+- `sellToken`/`buyToken`: Trading pair tokens
+- `sellAmount`/`buyAmount`: Order amounts
+- `livePrice`: Market price at time of order
+- `markup`: Applied markup in basis points
+- `ourOffer.wasIncluded`: Whether order was included in solution
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017/cowswap-orders` |
+| `DB_NAME` | Database name | `cowswap-orders` |
+| `PORT` | Backend server port | `3001` |
+
+## API Endpoints
+
+- `GET /api/health` - Health check
+- `GET /api/dashboard-stats` - Dashboard statistics
+- `GET /api/orders` - Paginated orders with filtering
+
+## Development
+
+### Available Scripts
+
+- `npm run dev` - Start frontend development server
+- `npm run dev:server` - Start backend server
+- `npm run dev:full` - Start both frontend and backend
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
+
+### Adding New Features
+
+1. **New Dashboard Metrics**: Add aggregation queries in `src/services/mongodb.ts`
+2. **New Table Columns**: Update `src/components/OrdersTable.tsx`
+3. **New API Endpoints**: Add routes in `src/server.ts`
+4. **New Types**: Add to `src/types/Types.ts` or `src/types/OrderModel.ts`

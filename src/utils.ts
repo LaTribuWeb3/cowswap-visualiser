@@ -1,13 +1,3 @@
-import { tokens } from "./tokens";
-
-export const getTokenName = (tokenAddress: string) => {
-  return tokens.find((token) => token.address.toLowerCase() === tokenAddress.toLowerCase())?.name || tokenAddress;
-};
-
-export const getTokenDecimals = (tokenAddress: string) => {
-  return tokens.find((token) => token.address === tokenAddress)?.decimals || 18;
-};
-
 export const formatVolume = (value: number): { display: string; full: string } => {
   if (value === 0) return { display: '0', full: '0' };
   
