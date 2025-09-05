@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 
+interface TokenInfo {
+  name: string;
+  type: string;
+  symbol: string;
+  decimals: number;
+  website?: string;
+  description?: string;
+  explorer?: string;
+  status: string;
+  id: string;
+  tags?: string[];
+}
+
 interface Order {
   _id: string;
   auctionId: string;
@@ -18,6 +31,8 @@ interface Order {
     buyAmount: string;
     wasIncluded: boolean;
   };
+  sellTokenInfo?: TokenInfo;
+  buyTokenInfo?: TokenInfo;
   metadata?: {
     gasEstimate?: number;
     profitability?: number;
@@ -76,14 +91,30 @@ const OrdersTable: React.FC = () => {
     }
   };
 
-  const formatTokenAmount = (amount: string, decimals: number = 6) => {
+  const formatTokenAmount = (amount: string, tokenInfo?: TokenInfo) => {
     const num = parseFloat(amount);
-    if (num >= 1000000) {
-      return `${(num / 1000000).toFixed(1)}M`;
-    } else if (num >= 1000) {
-      return `${(num / 1000).toFixed(1)}K`;
+    if (isNaN(num)) return amount;
+
+    const decimals = tokenInfo?.decimals || 6;
+    const divisor = Math.pow(10, decimals);
+    const formatted = num / divisor;
+
+    if (formatted >= 1000000) {
+      return `${(formatted / 1000000).toFixed(1)}M`;
+    } else if (formatted >= 1000) {
+      return `${(formatted / 1000).toFixed(1)}K`;
+    } else if (formatted >= 1) {
+      return formatted.toFixed(2);
+    } else {
+      return formatted.toFixed(6);
     }
-    return num.toFixed(decimals);
+  };
+
+  const getTokenSymbol = (tokenAddress: string, tokenInfo?: TokenInfo) => {
+    if (tokenInfo?.symbol) {
+      return tokenInfo.symbol;
+    }
+    return tokenAddress.slice(0, 6).toUpperCase();
   };
 
   const formatAddress = (address: string) => {
@@ -248,15 +279,45 @@ const OrdersTable: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <div className="flex items-center">
-                            <span className="font-medium">{order.sellToken}</span>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-900">
+                                {getTokenSymbol(order.sellToken, order.sellTokenInfo)}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {formatAddress(order.sellToken)}
+                              </span>
+                            </div>
                             <span className="mx-2 text-gray-400">→</span>
-                            <span className="font-medium">{order.buyToken}</span>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-900">
+                                {getTokenSymbol(order.buyToken, order.buyTokenInfo)}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {formatAddress(order.buyToken)}
+                              </span>
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <div>
-                            <div>Sell: {formatTokenAmount(order.sellAmount)}</div>
-                            <div>Buy: {formatTokenAmount(order.buyAmount)}</div>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">Sell:</span>
+                              <span className="font-medium">
+                                {formatTokenAmount(order.sellAmount, order.sellTokenInfo)}
+                              </span>
+                              <span className="text-xs text-gray-500 ml-1">
+                                {getTokenSymbol(order.sellToken, order.sellTokenInfo)}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <span className="text-gray-500 text-xs mr-1">Buy:</span>
+                              <span className="font-medium">
+                                {formatTokenAmount(order.buyAmount, order.buyTokenInfo)}
+                              </span>
+                              <span className="text-xs text-gray-500 ml-1">
+                                {getTokenSymbol(order.buyToken, order.buyTokenInfo)}
+                              </span>
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">

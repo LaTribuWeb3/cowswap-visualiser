@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { getDashboardStats, getOrders } from './services/mongodb';
+import { getDashboardStats, getOrders, getOrdersWithMetadata } from './services/mongodb';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,7 +37,8 @@ app.get('/api/orders', async (req, res) => {
       limit = '20',
       sortBy = 'timestamp',
       sortOrder = 'desc',
-      included
+      included,
+      withMetadata = 'true'
     } = req.query;
 
     const options = {
@@ -48,7 +49,11 @@ app.get('/api/orders', async (req, res) => {
       included: included ? included === 'true' : undefined
     };
 
-    const result = await getOrders(options);
+    // Use metadata-enhanced endpoint by default
+    const result = withMetadata === 'true' 
+      ? await getOrdersWithMetadata(options)
+      : await getOrders(options);
+    
     res.json(result);
   } catch (error) {
     console.error('Error fetching orders:', error);

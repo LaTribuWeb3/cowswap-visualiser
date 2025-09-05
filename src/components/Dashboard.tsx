@@ -1,13 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 
+interface TokenInfo {
+  name: string;
+  type: string;
+  symbol: string;
+  decimals: number;
+  website?: string;
+  description?: string;
+  explorer?: string;
+  status: string;
+  id: string;
+  tags?: string[];
+}
+
 interface OrderStats {
   totalOrders: number;
   totalVolume: number;
   averageMarkup: number;
   inclusionRate: number;
   recentOrders: number;
-  topTokens: Array<{ token: string; count: number }>;
+  topTokens: Array<{ token: string; count: number; tokenInfo?: TokenInfo }>;
   ordersByHour: Array<{ hour: number; count: number }>;
 }
 
@@ -185,7 +198,12 @@ const Dashboard: React.FC = () => {
                         <span className="text-sm font-medium text-gray-600">{index + 1}</span>
                       </div>
                       <div className="ml-3">
-                        <p className="text-sm font-medium text-gray-900">{token.token}</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {token.tokenInfo?.symbol || token.token}
+                        </p>
+                        {token.tokenInfo?.name && token.tokenInfo.name !== token.tokenInfo.symbol && (
+                          <p className="text-xs text-gray-500">{token.tokenInfo.name}</p>
+                        )}
                       </div>
                     </div>
                     <div className="text-sm text-gray-500">{token.count} orders</div>

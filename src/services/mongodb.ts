@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { OrderModel, type IOrderDocument } from '../types/OrderModel';
+import { tokenMetadataService, type TokenInfo } from './tokenMetadata';
 
 
 
@@ -221,4 +222,83 @@ export const getOrdersByTokenPair = async (
     .sort({ timestamp: -1 })
     .limit(limit)
     .lean();
+};
+
+// Enhanced order interface with token metadata
+export interface OrderWithMetadata extends IOrderDocument {
+  sellTokenInfo?: TokenInfo;
+  buyTokenInfo?: TokenInfo;
+}
+
+// Get orders with token metadata
+export const getOrdersWithMetadata = async (options: {
+  page: number;
+  limit: number;
+  sortBy: 'timestamp' | 'markup' | 'livePrice';
+  sortOrder: 'asc' | 'desc';
+  included?: boolean;
+}): Promise<{
+  orders: OrderWithMetadata[];
+  totalPages: number;
+  currentPage: number;
+  totalCount: number;
+}> => {
+  await connectToDatabase();
+
+  const { page, limit, sortBy, sortOrder, included } = options;
+  const skip = (page - 1) * limit;
+
+  // Build filter
+  const filter: any = {};
+  if (included !== undefined) {
+    filter['ourOffer.wasIncluded'] = included;
+  }
+
+  // Build sort
+  const sort: any = {};
+  if (sortBy === 'timestamp') {
+    sort.timestamp = sortOrder === 'asc' ? 1 : -1;
+  } else if (sortBy === 'markup') {
+    sort.markup = sortOrder === 'asc' ? 1 : -1;
+  } else if (sortBy === 'livePrice') {
+    sort.livePrice = sortOrder === 'asc' ? 1 : -1;
+  }
+
+  // Get total count for pagination
+  const totalCount = await OrderModel.countDocuments(filter);
+  const totalPages = Math.ceil(totalCount / limit);
+
+  // Get orders
+  const orders = await OrderModel.find(filter)
+    .sort(sort)
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  // Extract unique token addresses
+  const tokenAddresses = new Set<string>();
+  orders.forEach(order => {
+    tokenAddresses.add(order.sellToken);
+    tokenAddresses.add(order.buyToken);
+  });
+
+  console.log(`Found ${orders.length} orders with ${tokenAddresses.size} unique tokens:`, Array.from(tokenAddresses));
+
+  // Fetch token metadata for all unique tokens
+  const tokenMetadata = await tokenMetadataService.getMultipleTokenInfos(Array.from(tokenAddresses));
+  console.log(`Fetched metadata for ${tokenMetadata.size} tokens`);
+
+  // Enhance orders with token metadata
+  const ordersWithMetadata: OrderWithMetadata[] = orders.map(order => ({
+    ...order,
+    sellTokenInfo: tokenMetadata.get(order.sellToken.toLowerCase()),
+    buyTokenInfo: tokenMetadata.get(order.buyToken.toLowerCase())
+  }));
+
+  return {
+    orders: ordersWithMetadata,
+    totalPages,
+    currentPage: page,
+    totalCount
+  };
 };
