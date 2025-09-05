@@ -152,12 +152,29 @@ const CompetitionTable: React.FC = () => {
       const deltaVsWinningPercent = actualWinningBuyAmount > 0 ? (deltaVsWinning / actualWinningBuyAmount) * 100 : 0;
       
       // Delta vs live price (in dollars)
-      // For a sell order: compare the actual value received vs what we should get at live price
-      // If selling USDC for WETH: actualWETHValue = actualBuyAmount * livePrice
-      // Delta = actualWETHValue - actualSellAmount (USDC)
-      const actualWETHValue = actualBuyAmount * livePrice; // Value of WETH received in USD
-      const deltaVsLivePrice = actualWETHValue - actualSellAmount; // Profit/loss in USD
-      const deltaVsLivePricePercent = actualSellAmount > 0 ? (deltaVsLivePrice / actualSellAmount) * 100 : 0;
+      // Determine order direction based on token addresses
+      const isWETHToUSDC = order.sellToken === '0x82af49447d8a07e3bd95bd0d56f35241523fbab1'; // WETH on Arbitrum
+      const isUSDCToWETH = order.buyToken === '0x82af49447d8a07e3bd95bd0d56f35241523fbab1'; // WETH on Arbitrum
+      
+      let deltaVsLivePrice: number;
+      let deltaVsLivePricePercent: number;
+      
+      if (isWETHToUSDC) {
+        // WETH → USDC: compare actual USDC received vs what we should get at live price
+        const expectedUSDC = actualSellAmount * livePrice; // Expected USDC at live price
+        deltaVsLivePrice = actualBuyAmount - expectedUSDC; // Profit/loss in USDC
+        deltaVsLivePricePercent = expectedUSDC > 0 ? (deltaVsLivePrice / expectedUSDC) * 100 : 0;
+      } else if (isUSDCToWETH) {
+        // USDC → WETH: compare actual WETH received vs what we should get at live price
+        const expectedWETH = actualSellAmount / livePrice; // Expected WETH at live price
+        deltaVsLivePrice = actualBuyAmount - expectedWETH; // Profit/loss in WETH
+        deltaVsLivePricePercent = expectedWETH > 0 ? (deltaVsLivePrice / expectedWETH) * 100 : 0;
+      } else {
+        // Fallback: assume WETH → USDC
+        const expectedUSDC = actualSellAmount * livePrice;
+        deltaVsLivePrice = actualBuyAmount - expectedUSDC;
+        deltaVsLivePricePercent = expectedUSDC > 0 ? (deltaVsLivePrice / expectedUSDC) * 100 : 0;
+      }
       
       return {
         ...competitor,
