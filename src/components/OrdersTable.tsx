@@ -286,29 +286,36 @@ const OrdersTable: React.FC = () => {
       const deltaVsWinning = actualBuyAmount - actualWinningBuyAmount;
       const deltaVsWinningPercent = actualWinningBuyAmount > 0 ? (deltaVsWinning / actualWinningBuyAmount) * 100 : 0;
       
-      // Delta vs live price (in dollars)
+      // Delta vs live price
       // Determine order direction based on token addresses
-      const isWETHToUSDC = order.sellToken === '0x82af49447d8a07e3bd95bd0d56f35241523fbab1'; // WETH on Arbitrum
-      const isUSDCToWETH = order.buyToken === '0x82af49447d8a07e3bd95bd0d56f35241523fbab1'; // WETH on Arbitrum
+      const WETH_ADDRESS = '0x82af49447d8a07e3bd95bd0d56f35241523fbab1'; // WETH on Arbitrum
+      const USDC_ADDRESS = '0xaf88d065e77c8cc2239327c5edb3a432268e5831'; // USDC on Arbitrum
+      
+      const isWETHToUSDC = order.sellToken === WETH_ADDRESS && order.buyToken === USDC_ADDRESS;
+      const isUSDCToWETH = order.sellToken === USDC_ADDRESS && order.buyToken === WETH_ADDRESS;
       
       let deltaVsLivePrice: number;
       let deltaVsLivePricePercent: number;
+      let deltaVsLivePriceUnit: string; // Unit for display (USDC or WETH)
       
       if (isWETHToUSDC) {
         // WETH → USDC: compare actual USDC received vs what we should get at live price
         const expectedUSDC = actualSellAmount * livePrice; // Expected USDC at live price
         deltaVsLivePrice = actualBuyAmount - expectedUSDC; // Profit/loss in USDC
         deltaVsLivePricePercent = expectedUSDC > 0 ? (deltaVsLivePrice / expectedUSDC) * 100 : 0;
+        deltaVsLivePriceUnit = 'USDC';
       } else if (isUSDCToWETH) {
         // USDC → WETH: compare actual WETH received vs what we should get at live price
         const expectedWETH = actualSellAmount / livePrice; // Expected WETH at live price
         deltaVsLivePrice = actualBuyAmount - expectedWETH; // Profit/loss in WETH
         deltaVsLivePricePercent = expectedWETH > 0 ? (deltaVsLivePrice / expectedWETH) * 100 : 0;
+        deltaVsLivePriceUnit = 'WETH';
       } else {
         // Fallback: assume WETH → USDC
         const expectedUSDC = actualSellAmount * livePrice;
         deltaVsLivePrice = actualBuyAmount - expectedUSDC;
         deltaVsLivePricePercent = expectedUSDC > 0 ? (deltaVsLivePrice / expectedUSDC) * 100 : 0;
+        deltaVsLivePriceUnit = 'USDC';
       }
       
       return {
@@ -318,6 +325,7 @@ const OrdersTable: React.FC = () => {
         deltaVsWinningPercent,
         deltaVsLivePrice,
         deltaVsLivePricePercent,
+        deltaVsLivePriceUnit,
         actualSellAmount,
         actualBuyAmount
       };
@@ -696,7 +704,7 @@ const OrdersTable: React.FC = () => {
                                           <td className="px-4 py-3 whitespace-nowrap text-sm">
                                             <div className={competitor.isOurs ? 'text-blue-900 font-semibold' : 'text-gray-900'}>
                                               <div className={competitor.deltaVsLivePrice >= 0 ? 'text-red-600' : 'text-green-600'}>
-                                                {competitor.deltaVsLivePrice >= 0 ? '+' : ''}${competitor.deltaVsLivePrice.toFixed(4)}
+                                                {competitor.deltaVsLivePrice >= 0 ? '+' : ''}{competitor.deltaVsLivePrice.toFixed(6)} {competitor.deltaVsLivePriceUnit}
                                               </div>
                                               <div className="text-xs text-gray-500">
                                                 {competitor.deltaVsLivePricePercent >= 0 ? '+' : ''}{competitor.deltaVsLivePricePercent.toFixed(2)}%
