@@ -434,13 +434,13 @@ app.get('/api/config', (req, res) => {
 
 // Serve static files from the dist directory (for production)
 if (NODE_ENV === 'production') {
-  app.use(express.static('ui'));
+  app.use(express.static(__dirname));
 }
 
 // Serve the main page (for production)
 if (NODE_ENV === 'production') {
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'ui', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
   });
 }
 
