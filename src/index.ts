@@ -37,7 +37,10 @@ console.log('🔍 Environment variables after dotenv:');
 console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
 console.log('🔍 RPC_URL:', process.env.RPC_URL);
 console.log('🔍 PAIR_API_TOKEN:', process.env.PAIR_API_TOKEN ? 'SET' : 'NOT SET');
-console.log('🔍 PAIR_API_TOKEN value:', process.env.PAIR_API_TOKEN || 'NOT SET');
+if(!process.env.PAIR_API_TOKEN) {
+  console.error('❌ PAIR_API_TOKEN is not set');
+  process.exit(1);
+}
 
 // Load configuration based on environment
 const NODE_ENV = process.env.NODE_ENV || 'development';
@@ -424,7 +427,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     success: true,
     data: {
-      pairApiToken: configFile.PAIR_API_TOKEN
+      pairApiTokenAvailable: !!configFile.PAIR_API_TOKEN
     }
   });
 });
