@@ -4,8 +4,8 @@
   "description": "A TypeScript project to fetch and store CoW Protocol data",
   "main": "dist/index.js",
   "scripts": {
+    "build": "tsc -b && vite build",
     "dev": "vite",
-    "build:frontend": "tsc -b && vite build",
     "start:frontend": "vite",
     "start:backend": "node server.js",
     "sync:historical": "ts-node src/scripts/sync-historical-trades.ts --method blockchain",
