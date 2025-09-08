@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import type { OrderWithMetadata, OrdersResponse } from '../types/OrderTypes';
 import { getTokenDisplaySymbol, getTokenMetadata } from '../utils/tokenMapping';
+import { getSolverName } from '../utils/solversMapping';
 
 const OrdersTable: React.FC = () => {
   const [allOrders, setAllOrders] = useState<OrderWithMetadata[]>([]);
@@ -207,9 +208,9 @@ const OrdersTable: React.FC = () => {
     
     // Add other competitors if they exist
     if (order.competitors) {
-      Object.entries(order.competitors).forEach(([solverName, data]) => {
+      Object.entries(order.competitors).forEach(([solverAddress, data]) => {
         competitors.push({
-          solverName,
+          solverName: getSolverName(solverAddress),
           sellAmount: data.sellAmount || '0',
           buyAmount: data.buyAmount || '0',
           timestamp: data.timestamp,
