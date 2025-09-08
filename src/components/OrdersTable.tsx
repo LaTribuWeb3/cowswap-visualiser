@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import type { OrderWithMetadata, OrdersResponse } from '../types/OrderTypes';
-import { getTokenDisplaySymbol } from '../utils/tokenMapping';
+import { getTokenDisplaySymbol, getTokenMetadata } from '../utils/tokenMapping';
 
 const OrdersTable: React.FC = () => {
   const [allOrders, setAllOrders] = useState<OrderWithMetadata[]>([]);
@@ -41,8 +41,7 @@ const OrdersTable: React.FC = () => {
       // Start with first page to show data immediately
       const params = new URLSearchParams({
         page: '1',
-        limit: '100',
-        withMetadata: 'true'
+        limit: '100'
       });
 
       const response = await fetch(`https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders?${params}`);
@@ -72,8 +71,7 @@ const OrdersTable: React.FC = () => {
       for (let currentPage = 2; currentPage <= totalPages; currentPage++) {
         const params = new URLSearchParams({
           page: currentPage.toString(),
-          limit: '500',
-          withMetadata: 'true'
+          limit: '500'
         });
 
         const response = await fetch(`https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders?${params}`);
@@ -199,11 +197,21 @@ const OrdersTable: React.FC = () => {
     setPage(1); // Reset to first page when sorting
   };
 
-  const formatTokenAmount = (amount: string, tokenInfo?: any) => {
+  const formatTokenAmount = (amount: string, tokenInfo?: any, tokenAddress?: string) => {
     const num = parseFloat(amount);
     if (isNaN(num)) return amount;
 
-    const decimals = tokenInfo?.decimals || 18; // Default to 18 decimals for most ERC20 tokens
+    // Try to get decimals from tokenInfo first, then from local metadata, then default to 18
+    let decimals = 18;
+    if (tokenInfo?.decimals) {
+      decimals = tokenInfo.decimals;
+    } else if (tokenAddress) {
+      const localTokenInfo = getTokenMetadata(tokenAddress);
+      if (localTokenInfo?.decimals) {
+        decimals = localTokenInfo.decimals;
+      }
+    }
+
     const divisor = Math.pow(10, decimals);
     const formatted = num / divisor;
 
@@ -275,8 +283,26 @@ const OrdersTable: React.FC = () => {
       const isWinner = index === 0;
       
       // Convert token amounts to their actual values using decimals
-      const sellTokenDecimals = order.sellTokenInfo?.decimals || 18;
-      const buyTokenDecimals = order.buyTokenInfo?.decimals || 18;
+      // Try to get decimals from order metadata first, then from local metadata, then default to 18
+      let sellTokenDecimals = 18;
+      if (order.sellTokenInfo?.decimals) {
+        sellTokenDecimals = order.sellTokenInfo.decimals;
+      } else {
+        const sellTokenMetadata = getTokenMetadata(order.sellToken);
+        if (sellTokenMetadata?.decimals) {
+          sellTokenDecimals = sellTokenMetadata.decimals;
+        }
+      }
+
+      let buyTokenDecimals = 18;
+      if (order.buyTokenInfo?.decimals) {
+        buyTokenDecimals = order.buyTokenInfo.decimals;
+      } else {
+        const buyTokenMetadata = getTokenMetadata(order.buyToken);
+        if (buyTokenMetadata?.decimals) {
+          buyTokenDecimals = buyTokenMetadata.decimals;
+        }
+      }
       
       const actualSellAmount = competitorSellAmount / Math.pow(10, sellTokenDecimals);
       const actualBuyAmount = competitorBuyAmount / Math.pow(10, buyTokenDecimals);
@@ -547,7 +573,7 @@ const OrdersTable: React.FC = () => {
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">Sell:</span>
                               <span className="font-medium">
-                                {formatTokenAmount(order.sellAmount, order.sellTokenInfo)}
+                                {formatTokenAmount(order.sellAmount, order.sellTokenInfo, order.sellToken)}
                               </span>
                               <span className="text-xs text-gray-500 ml-1">
                                 {getTokenSymbol(order.sellToken, order.sellTokenInfo)}
@@ -556,7 +582,7 @@ const OrdersTable: React.FC = () => {
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">Buy:</span>
                               <span className="font-medium">
-                                {formatTokenAmount(order.buyAmount, order.buyTokenInfo)}
+                                {formatTokenAmount(order.buyAmount, order.buyTokenInfo, order.buyToken)}
                               </span>
                               <span className="text-xs text-gray-500 ml-1">
                                 {getTokenSymbol(order.buyToken, order.buyTokenInfo)}
@@ -671,7 +697,7 @@ const OrdersTable: React.FC = () => {
                                           </td>
                                           <td className="px-4 py-3 whitespace-nowrap text-sm">
                                             <span className={competitor.isOurs ? 'text-blue-900 font-semibold' : 'text-gray-900'}>
-                                              {formatTokenAmount(competitor.sellAmount, order.sellTokenInfo)}
+                                              {formatTokenAmount(competitor.sellAmount, order.sellTokenInfo, order.sellToken)}
                                               <span className="text-xs text-gray-500 ml-1">
                                                 {getTokenSymbol(order.sellToken, order.sellTokenInfo)}
                                               </span>
@@ -679,7 +705,7 @@ const OrdersTable: React.FC = () => {
                                           </td>
                                           <td className="px-4 py-3 whitespace-nowrap text-sm">
                                             <span className={competitor.isOurs ? 'text-blue-900 font-semibold' : 'text-gray-900'}>
-                                              {formatTokenAmount(competitor.buyAmount, order.buyTokenInfo)}
+                                              {formatTokenAmount(competitor.buyAmount, order.buyTokenInfo, order.buyToken)}
                                               <span className="text-xs text-gray-500 ml-1">
                                                 {getTokenSymbol(order.buyToken, order.buyTokenInfo)}
                                               </span>
