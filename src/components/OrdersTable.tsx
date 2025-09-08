@@ -38,13 +38,7 @@ const OrdersTable: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Start with first page to show data immediately
-      const params = new URLSearchParams({
-        page: '1',
-        limit: '100'
-      });
-
-      const response = await fetch(`https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders?${params}`);
+      const response = await fetch('https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders-bulk?limit=20000&withMetadata=false');
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to fetch orders');
@@ -52,55 +46,13 @@ const OrdersTable: React.FC = () => {
       
       const data: OrdersResponse = await response.json();
       setAllOrders(data.orders);
-      setLoading(false); // Show first page immediately
-      
-      // Continue fetching remaining pages in background
-      if (data.totalPages > 1) {
-        fetchRemainingPages(data.totalPages);
-      }
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       setLoading(false);
     }
   };
 
-  const fetchRemainingPages = async (totalPages: number) => {
-    try {
-      let accumulatedOrders: OrderWithMetadata[] = [];
-      
-      for (let currentPage = 2; currentPage <= totalPages; currentPage++) {
-        const params = new URLSearchParams({
-          page: currentPage.toString(),
-          limit: '500'
-        });
-
-        const response = await fetch(`https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders?${params}`);
-        if (!response.ok) {
-          console.warn(`Failed to fetch page ${currentPage}`);
-          continue; // Continue with other pages even if one fails
-        }
-        
-        const data: OrdersResponse = await response.json();
-        accumulatedOrders = [...accumulatedOrders, ...data.orders];
-        
-        // Small delay to avoid overwhelming the API
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-      
-      // Update state with all accumulated orders at once, removing duplicates
-      setAllOrders(prevOrders => {
-        const allOrders = [...prevOrders, ...accumulatedOrders];
-        // Remove duplicates based on order ID
-        const uniqueOrders = allOrders.filter((order, index, self) => 
-          index === self.findIndex(o => o._id === order._id)
-        );
-        console.log(`Deduplication: ${allOrders.length} total orders, ${uniqueOrders.length} unique orders`);
-        return uniqueOrders;
-      });
-    } catch (err) {
-      console.warn('Error fetching remaining pages:', err);
-    }
-  };
 
   const applyFiltersAndPagination = () => {
     let filteredOrders = [...allOrders];
