@@ -513,52 +513,128 @@ export class EthereumService {
       );
 
       const latestBlock = await this.getLatestBlockNumber();
-      const fromBlock = latestBlock - 50n; // Look back 50 blocks
+      const fromBlock = latestBlock - 10n; // Look back 10 blocks (free tier limit)
+      
+      console.log(`📦 Block range: ${fromBlock} to ${latestBlock} (${Number(latestBlock - fromBlock)} blocks)`);
 
-      const [orderPlacements, orderCancellations, orderFulfillments] =
-        await Promise.all([
-          this.client.getLogs({
-            address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-            event: {
-              type: "event",
-              name: "OrderPlacement",
-              inputs: [
-                { type: "bytes", name: "orderUid", indexed: true },
-                { type: "address", name: "owner", indexed: true },
-                { type: "address", name: "sender", indexed: true },
-              ],
-            },
-            fromBlock,
-            toBlock: latestBlock,
-          }),
-          this.client.getLogs({
-            address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-            event: {
-              type: "event",
-              name: "OrderCancellation",
-              inputs: [
-                { type: "bytes", name: "orderUid", indexed: true },
-                { type: "address", name: "owner", indexed: true },
-              ],
-            },
-            fromBlock,
-            toBlock: latestBlock,
-          }),
-          this.client.getLogs({
-            address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-            event: {
-              type: "event",
-              name: "OrderFulfillment",
-              inputs: [
-                { type: "bytes", name: "orderUid", indexed: true },
-                { type: "address", name: "owner", indexed: true },
-                { type: "address", name: "sender", indexed: true },
-              ],
-            },
-            fromBlock,
-            toBlock: latestBlock,
-          }),
-        ]);
+      let orderPlacements: any[] = [];
+      let orderCancellations: any[] = [];
+      let orderFulfillments: any[] = [];
+
+      try {
+        [orderPlacements, orderCancellations, orderFulfillments] =
+          await Promise.all([
+            this.client.getLogs({
+              address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+              event: {
+                type: "event",
+                name: "OrderPlacement",
+                inputs: [
+                  { type: "bytes", name: "orderUid", indexed: true },
+                  { type: "address", name: "owner", indexed: true },
+                  { type: "address", name: "sender", indexed: true },
+                ],
+              },
+              fromBlock,
+              toBlock: latestBlock,
+            }),
+            this.client.getLogs({
+              address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+              event: {
+                type: "event",
+                name: "OrderCancellation",
+                inputs: [
+                  { type: "bytes", name: "orderUid", indexed: true },
+                  { type: "address", name: "owner", indexed: true },
+                ],
+              },
+              fromBlock,
+              toBlock: latestBlock,
+            }),
+            this.client.getLogs({
+              address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+              event: {
+                type: "event",
+                name: "OrderFulfillment",
+                inputs: [
+                  { type: "bytes", name: "orderUid", indexed: true },
+                  { type: "address", name: "owner", indexed: true },
+                  { type: "address", name: "sender", indexed: true },
+                ],
+              },
+              fromBlock,
+              toBlock: latestBlock,
+            }),
+          ]);
+      } catch (error: any) {
+        console.warn("⚠️ RPC provider limitation detected:", error.message);
+        
+        // If the error mentions block range, try with a smaller range
+        if (error.message && error.message.includes("block range")) {
+          console.log("🔄 Retrying with smaller block range (5 blocks)...");
+          const smallerFromBlock = latestBlock - 5n;
+          
+          try {
+            [orderPlacements, orderCancellations, orderFulfillments] =
+              await Promise.all([
+                this.client.getLogs({
+                  address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                  event: {
+                    type: "event",
+                    name: "OrderPlacement",
+                    inputs: [
+                      { type: "bytes", name: "orderUid", indexed: true },
+                      { type: "address", name: "owner", indexed: true },
+                      { type: "address", name: "sender", indexed: true },
+                    ],
+                  },
+                  fromBlock: smallerFromBlock,
+                  toBlock: latestBlock,
+                }),
+                this.client.getLogs({
+                  address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                  event: {
+                    type: "event",
+                    name: "OrderCancellation",
+                    inputs: [
+                      { type: "bytes", name: "orderUid", indexed: true },
+                      { type: "address", name: "owner", indexed: true },
+                    ],
+                  },
+                  fromBlock: smallerFromBlock,
+                  toBlock: latestBlock,
+                }),
+                this.client.getLogs({
+                  address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                  event: {
+                    type: "event",
+                    name: "OrderFulfillment",
+                    inputs: [
+                      { type: "bytes", name: "orderUid", indexed: true },
+                      { type: "address", name: "owner", indexed: true },
+                      { type: "address", name: "sender", indexed: true },
+                    ],
+                  },
+                  fromBlock: smallerFromBlock,
+                  toBlock: latestBlock,
+                }),
+              ]);
+            console.log("✅ Successfully fetched events with smaller block range");
+          } catch (retryError) {
+            console.error("❌ Failed even with smaller block range:", retryError);
+            // Return empty arrays to continue execution
+            orderPlacements = [];
+            orderCancellations = [];
+            orderFulfillments = [];
+          }
+        } else {
+          console.error("❌ Unexpected error fetching events:", error);
+          // Return empty arrays to continue execution
+          orderPlacements = [];
+          orderCancellations = [];
+          orderFulfillments = [];
+        }
+      }
 
       // Combine and sort events by block number
       const allEvents = [

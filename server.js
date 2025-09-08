@@ -443,8 +443,10 @@ if (NODE_ENV === 'production') {
 }
 
 // Start the server
-const server = app.listen(PORT, async () => {
-  console.log(`🚀 CoW Protocol Trade Visualizer server running on http://localhost:${PORT}`);
+const server = app.listen(PORT, '0.0.0.0', async () => {
+  console.log(`🚀 CoW Protocol Trade Visualizer server running on:`);
+  console.log(`   - Local: http://localhost:${PORT}`);
+  console.log(`   - Network: http://0.0.0.0:${PORT}`);
   console.log(`🌍 Environment: ${NODE_ENV}`);
   console.log(`🔒 CORS: ${configFile.CORS_ALLOW_ALL_ORIGINS ? 'Development mode (all origins allowed)' : 'Production mode (restricted origins)'}`);
   
