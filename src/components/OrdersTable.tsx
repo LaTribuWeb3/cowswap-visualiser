@@ -72,7 +72,7 @@ const OrdersTable: React.FC = () => {
       for (let currentPage = 2; currentPage <= totalPages; currentPage++) {
         const params = new URLSearchParams({
           page: currentPage.toString(),
-          limit: '100',
+          limit: '500',
           withMetadata: 'true'
         });
 
