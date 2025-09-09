@@ -121,6 +121,21 @@ class ConfigService {
     const config = await this.getConfig();
     return config.tradingPairs;
   }
+
+  async getWethUsdcOrders(): Promise<unknown[]> {
+    try {
+      const response = await fetch('https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders-weth-usdc?limit=5000');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch WETH/USDC orders: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      return data.orders || data; // Handle both array and object with orders property
+    } catch (error) {
+      console.error('Error fetching WETH/USDC orders:', error);
+      throw error;
+    }
+  }
 }
 
 export const configService = new ConfigService();

@@ -40,6 +40,9 @@ export interface IOrderDocument {
   livePrice: number;        // The live market price we based our quote on
   markup: number;           // The markup we applied (in basis points)
   ourOffer: {
+    clearingPrices? : {
+      [token: string]: string;
+    }
     sellAmount: TokenAmount; // How much we offered to sell
     buyAmount: TokenAmount;  // How much we offered to buy
     wasIncluded: boolean;    // Whether this order was included in our solution
@@ -50,10 +53,11 @@ export interface IOrderDocument {
     [solverAddress: string]: {
       sellAmount?: TokenAmount;
       buyAmount?: TokenAmount;
-      score?: string;
+      clearingPrices? : {
+        [token: string]: string;
+      }
       ranking?: number;
       isWinner?: boolean;
-      timestamp: Date;
     };
   };
   
