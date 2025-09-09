@@ -5,9 +5,6 @@ import {
   decodeFunctionData,
   formatEther,
   formatUnits,
-  ContractFunctionName,
-  Abi,
-  ContractFunctionArgs,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
@@ -61,103 +58,71 @@ export class EthereumService {
   }
 
   async fetchTokenSymbol(tokenAddress: `0x${string}`): Promise<string> {
-    return await this.retryFunctionOnAddress<string, Abi | readonly unknown[]>(
-      tokenAddress,
-      "symbol",
-      [
-        {
-          constant: true,
-          inputs: [],
-          outputs: [{ name: "", type: "string" }],
-          payable: false,
-          stateMutability: "view",
-          type: "function",
-        },
-      ],
-      [],
-      async () => this.generateFallbackSymbol(tokenAddress)
-    );
-  }
+    try {
+      console.log(`🔍 Fetching symbol for token: ${tokenAddress}`);
 
-  async retryFunctionOnAddress<T, V extends Abi | readonly unknown[]>(
-    tokenAddress: `0x${string}`,
-    functionName: ContractFunctionName<V, "pure" | "view">,
-    abi: V,
-    args: ContractFunctionArgs<
-      V,
-      "pure" | "view",
-      ContractFunctionName<V, "pure" | "view">
-    > = [] as ContractFunctionArgs<
-      V,
-      "pure" | "view",
-      ContractFunctionName<V, "pure" | "view">
-    >,
-    fallbackCallBack: () => Promise<T>
-  ): Promise<T> {
-    console.log(`🔍 Fetching token symbol for ${tokenAddress}...`);
+      // Known token symbols for common tokens
+      const knownTokens: Record<string, string> = {
+        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": "USDC",
+        "0xdAC17F958D2ee523a2206206994597C13D831ec7": "USDT",
+        "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c": "EURe",
+        "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": "WETH",
+        "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599": "WBTC",
+        "0x6B175474E89094C44Da98b954EedeAC495271d0F": "DAI",
+        "0x4Fabb145d64652a948d72533023f6E7A623C7C53": "BUSD",
+        "0x514910771AF9Ca656af840dff83E8264EcF986CA": "LINK",
+        "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984": "UNI",
+        "0x7D1AfA7B718fb893dB30A3aBc0Cfc608aCafEBB": "MATIC",
+        "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE": "SHIB",
+        "0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39": "HEX",
+        "0x4d224452801ACEd8B2F0aebE155379bb5D594381": "APE",
+        "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9": "AAVE",
+        "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2": "MKR",
+        "0xc770EEfAd204B5180dF6a14Ee197D99d808ee52d": "FOX",
+        "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE": "ETH", // ETH placeholder
+      };
 
-    const maxRetries = 3;
-    const timeoutMs = 10000; // 10 seconds timeout
-    let lastError: any;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
+      // Check if we know this token
+      if (knownTokens[tokenAddress]) {
         console.log(
-          `🔄 Attempt ${attempt}/${maxRetries} to fetch ${functionName} for ${tokenAddress}`
+          `✅ Using known symbol for ${tokenAddress}: ${knownTokens[tokenAddress]}`
         );
-
-        // Create a timeout promise
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
-        });
-
-        // Create the contract call promise
-        const contractCallPromise = this.client.readContract({
-          address: tokenAddress,
-          abi: abi.map((item) => {
-            if(typeof item === "object" && item !== null) {
-              (item as any)["name"] = functionName as string;
-            }
-            return item;
-          }),
-          functionName: functionName,
-          args: args as readonly unknown[],
-        });
-
-        // Race between timeout and contract call
-        const foundSymbol = (await Promise.race([
-          contractCallPromise,
-          timeoutPromise,
-        ])) as T;
-
-        console.log(
-          `✅ Found ${functionName}: ${foundSymbol} for ${tokenAddress} on attempt ${attempt}`
-        );
-        return foundSymbol;
-      } catch (error) {
-        lastError = error;
-        console.warn(
-          `⚠️ Attempt ${attempt}/${maxRetries} failed for ${tokenAddress}:`,
-          error
-        );
-
-        if (attempt < maxRetries) {
-          // Wait before retrying (exponential backoff)
-          const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-          console.log(`⏳ Waiting ${delayMs}ms before retry...`);
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
+        return knownTokens[tokenAddress];
       }
+
+      console.log(
+        `🔍 Token ${tokenAddress} not in known list, fetching from blockchain...`
+      );
+
+      // Try to fetch from contract
+      console.log(`🔍 Calling readContract for ${tokenAddress}...`);
+      const result = await this.client.readContract({
+        address: tokenAddress,
+        abi: [
+          {
+            constant: true,
+            inputs: [],
+            name: "symbol",
+            outputs: [{ name: "", type: "string" }],
+            payable: false,
+            stateMutability: "view",
+            type: "function",
+          },
+        ],
+        functionName: "symbol",
+      });
+
+      console.log(`🔍 readContract result:`, result);
+      const symbol = String(result);
+      console.log(`✅ Fetched symbol for ${tokenAddress}: ${symbol}`);
+      return symbol;
+    } catch (error) {
+      console.error(`❌ Error fetching symbol for ${tokenAddress}:`, error);
+      // Fallback to generated symbol
+      return this.generateFallbackSymbol(tokenAddress);
     }
-
-    // All retries failed
-    console.error(
-      `❌ All ${maxRetries} attempts failed to fetch ${functionName} for ${tokenAddress}. Last error:`,
-      lastError
-    );
-
-    return fallbackCallBack();
   }
+
 
   /**
    * Generate a fallback symbol when token symbol fetching fails
@@ -704,10 +669,20 @@ export class EthereumService {
       const knownDecimals: Record<string, number> = {
         "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": 6, // USDC
         "0xdAC17F958D2ee523a2206206994597C13D831ec7": 6, // USDT
-        "0x1aBaEA1f7C830bD89Acc67eC4d5169aAEb4F05d0": 6, // EURe
+        "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c": 6, // EURe
         "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": 18, // WETH
         "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599": 8, // WBTC
         "0x6B175474E89094C44Da98b954EedeAC495271d0F": 18, // DAI
+        "0x4Fabb145d64652a948d72533023f6E7A623C7C53": 18, // BUSD
+        "0x514910771AF9Ca656af840dff83E8264EcF986CA": 18, // LINK
+        "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984": 18, // UNI
+        "0x7D1AfA7B718fb893dB30A3aBc0Cfc608aCafEBB": 18, // MATIC
+        "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE": 18, // SHIB
+        "0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39": 8, // HEX
+        "0x4d224452801ACEd8B2F0aebE155379bb5D594381": 18, // APE
+        "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9": 18, // AAVE
+        "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2": 18, // MKR
+        "0xc770EEfAd204B5180dF6a14Ee197D99d808ee52d": 18, // FOX
         "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE": 18, // ETH (placeholder)
       };
 
