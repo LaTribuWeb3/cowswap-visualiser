@@ -5,9 +5,13 @@ import {
   decodeFunctionData,
   formatEther,
   formatUnits,
+  ContractFunctionName,
+  Abi,
+  ContractFunctionArgs,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
+import { ERC20_ABI } from "../abi/ERC20ABI";
 
 // CoW Protocol contract address
 const COW_PROTOCOL_ADDRESS = "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
@@ -58,6 +62,22 @@ export class EthereumService {
   }
 
   async fetchTokenSymbol(tokenAddress: `0x${string}`): Promise<string> {
+    return await this.retryFunctionOnAddress<string, Abi | readonly unknown[]>(
+      tokenAddress,
+      "symbol",
+      ERC20_ABI,
+      [],
+      async () => this.generateFallbackSymbol(tokenAddress)
+    );
+  }
+
+  async retryFunctionOnAddress<T, V extends Abi | readonly unknown[]>(
+    tokenAddress: `0x${string}`,
+    functionName: ContractFunctionName<V, "pure" | "view">,
+    abi: V,
+    args: ContractFunctionArgs<V, "pure" | "view", ContractFunctionName<V, "pure" | "view">> = [] as ContractFunctionArgs<V, "pure" | "view", ContractFunctionName<V, "pure" | "view">>,
+    fallbackCallBack: () => Promise<T>
+  ): Promise<T> {
     console.log(`🔍 Fetching token symbol for ${tokenAddress}...`);
 
     const maxRetries = 3;
@@ -67,7 +87,7 @@ export class EthereumService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(
-          `🔄 Attempt ${attempt}/${maxRetries} to fetch symbol for ${tokenAddress}`
+          `🔄 Attempt ${attempt}/${maxRetries} to fetch ${functionName} for ${tokenAddress}`
         );
 
         // Create a timeout promise
@@ -78,26 +98,19 @@ export class EthereumService {
         // Create the contract call promise
         const contractCallPromise = this.client.readContract({
           address: tokenAddress,
-          abi: [
-            {
-              type: "function",
-              name: "symbol",
-              inputs: [],
-              outputs: [{ type: "string" }],
-              stateMutability: "view",
-            },
-          ],
-          functionName: "symbol",
+          abi: abi,
+          functionName: functionName,
+          args: args,
         });
 
         // Race between timeout and contract call
         const foundSymbol = (await Promise.race([
           contractCallPromise,
           timeoutPromise,
-        ])) as string;
+        ])) as T;
 
         console.log(
-          `✅ Found symbol: ${foundSymbol} for ${tokenAddress} on attempt ${attempt}`
+          `✅ Found ${functionName}: ${foundSymbol} for ${tokenAddress} on attempt ${attempt}`
         );
         return foundSymbol;
       } catch (error) {
@@ -118,17 +131,11 @@ export class EthereumService {
 
     // All retries failed
     console.error(
-      `❌ All ${maxRetries} attempts failed to fetch symbol for ${tokenAddress}. Last error:`,
+      `❌ All ${maxRetries} attempts failed to fetch ${functionName} for ${tokenAddress}. Last error:`,
       lastError
     );
 
-    // Return a fallback symbol based on the address
-    const fallbackSymbol = this.generateFallbackSymbol(tokenAddress);
-    console.log(
-      `🔄 Using fallback symbol: ${fallbackSymbol} for ${tokenAddress}`
-    );
-
-    return fallbackSymbol;
+    return fallbackCallBack();
   }
 
   /**
@@ -514,8 +521,12 @@ export class EthereumService {
 
       const latestBlock = await this.getLatestBlockNumber();
       const fromBlock = latestBlock - 10n; // Look back 10 blocks (free tier limit)
-      
-      console.log(`📦 Block range: ${fromBlock} to ${latestBlock} (${Number(latestBlock - fromBlock)} blocks)`);
+
+      console.log(
+        `📦 Block range: ${fromBlock} to ${latestBlock} (${Number(
+          latestBlock - fromBlock
+        )} blocks)`
+      );
 
       let orderPlacements: any[] = [];
       let orderCancellations: any[] = [];
@@ -568,12 +579,12 @@ export class EthereumService {
           ]);
       } catch (error: any) {
         console.warn("⚠️ RPC provider limitation detected:", error.message);
-        
+
         // If the error mentions block range, try with a smaller range
         if (error.message && error.message.includes("block range")) {
           console.log("🔄 Retrying with smaller block range (5 blocks)...");
           const smallerFromBlock = latestBlock - 5n;
-          
+
           try {
             [orderPlacements, orderCancellations, orderFulfillments] =
               await Promise.all([
@@ -619,9 +630,14 @@ export class EthereumService {
                   toBlock: latestBlock,
                 }),
               ]);
-            console.log("✅ Successfully fetched events with smaller block range");
+            console.log(
+              "✅ Successfully fetched events with smaller block range"
+            );
           } catch (retryError) {
-            console.error("❌ Failed even with smaller block range:", retryError);
+            console.error(
+              "❌ Failed even with smaller block range:",
+              retryError
+            );
             // Return empty arrays to continue execution
             orderPlacements = [];
             orderCancellations = [];

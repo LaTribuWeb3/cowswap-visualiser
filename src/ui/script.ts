@@ -1,3 +1,5 @@
+import { EthereumService } from "../services/ethereum";
+
 // TypeScript interfaces for the script
 interface TokenInfo {
   symbol: string;
@@ -253,63 +255,7 @@ const ERC20_ABI: ERC20ABI[] = [
 // Global variables
 let currentTradeData: TradeData | null = null;
 
-// Function to fetch token decimals from smart contract
-async function getTokenDecimals(tokenAddress: string): Promise<number> {
-  // Check cache first
-  if (tokenDecimalsCache.has(tokenAddress)) {
-    return tokenDecimalsCache.get(tokenAddress)!;
-  }
-  
-  try {
-    // Use ethers.js or web3 to call the contract
-    // For now, we'll use a simple fetch to an Ethereum RPC
-    const response = await fetch(process.env.RPC_URL || 'https://eth-mainnet.g.alchemy.com/v2/demo', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'eth_call',
-        params: [{
-          to: tokenAddress,
-          data: '0x313ce567' // decimals() function selector
-        }, 'latest'],
-        id: 1
-      })
-    });
-    
-    const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error.message);
-    }
-    
-    // Parse the hex result to decimal
-    const decimals = parseInt(data.result, 16);
-    
-    // Cache the result
-    tokenDecimalsCache.set(tokenAddress, decimals);
-    
-    return decimals;
-  } catch (error) {
-    console.error(`Error fetching decimals for ${tokenAddress}:`, error);
-    
-    // Fallback to known decimals
-    const fallbackDecimals: Record<string, number> = {
-      "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": 6, // USDC
-      "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c": 6, // EURe
-      "0xdAC17F958D2ee523a2206206994597C13D831ec7": 6, // USDT
-      "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": 18, // WETH
-      "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599": 8, // WBTC
-      "0x6B175474E89094C44Da98b954EedeAC495271d0F": 18  // DAI
-    };
-    
-    const fallback = fallbackDecimals[tokenAddress] || 18;
-    tokenDecimalsCache.set(tokenAddress, fallback);
-    return fallback;
-  }
-}
+const ethereumService = new EthereumService();
 
 // Enhanced utility functions for better formatting
 function formatNumber(num: number): string {
@@ -744,8 +690,8 @@ async function populateConversionRates(trade: Trade, sellToken: TokenInfo, buyTo
   const buyTokenClearingPrice = parseFloat(clearingPrices[trade.buyTokenIndex]);
   
   // Fetch token decimals if not already cached
-  const sellTokenDecimals = await getTokenDecimals(trade.sellToken);
-  const buyTokenDecimals = await getTokenDecimals(trade.buyToken);
+  const sellTokenDecimals = await ethereumService.getTokenDecimals(trade.sellToken);
+  const buyTokenDecimals = await ethereumService.getTokenDecimals(trade.buyToken);
   
   // Calculate amounts in human-readable format using actual decimals
   const sellAmount = parseFloat(trade.sellAmount) / Math.pow(10, sellTokenDecimals);
