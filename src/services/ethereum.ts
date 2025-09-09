@@ -115,8 +115,8 @@ export class EthereumService {
         const contractCallPromise = this.client.readContract({
           address: tokenAddress,
           abi: abi.map((item) => {
-            if(typeof item === "object" && item !== null && "name" in item) {
-              item["name"] = functionName as string;
+            if(typeof item === "object" && item !== null) {
+              (item as any)["name"] = functionName as string;
             }
             return item;
           }),
