@@ -1,4 +1,5 @@
 import "./styles.css";
+import "./script";
 import {
   Transaction,
   Trade,
