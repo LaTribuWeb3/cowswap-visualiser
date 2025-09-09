@@ -114,9 +114,14 @@ export class EthereumService {
         // Create the contract call promise
         const contractCallPromise = this.client.readContract({
           address: tokenAddress,
-          abi: { ...abi, name: functionName } as V,
+          abi: abi.map((item) => {
+            if(typeof item === "object" && item !== null && "name" in item) {
+              item["name"] = functionName as string;
+            }
+            return item;
+          }),
           functionName: functionName,
-          args: args,
+          args: args as readonly unknown[],
         });
 
         // Race between timeout and contract call
