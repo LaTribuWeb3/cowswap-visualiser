@@ -427,6 +427,40 @@ app.get('/api/token/:address/symbol', async (req, res) => {
   }
 });
 
+// New endpoint to fetch block timestamp
+app.get('/api/block-timestamp/:blockNumber', async (req, res) => {
+  try {
+    const { blockNumber } = req.params;
+    const blockNum = parseInt(blockNumber);
+    
+    if (isNaN(blockNum)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid block number'
+      });
+    }
+    
+    console.log(`📡 Fetching timestamp for block: ${blockNum}`);
+    
+    const ethereumService = new EthereumService();
+    const timestamp = await ethereumService.getBlockTimestamp(blockNum);
+    
+    res.json({
+      success: true,
+      data: {
+        blockNumber: blockNum,
+        timestamp: timestamp
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error fetching block timestamp:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch block timestamp'
+    });
+  }
+});
+
 // Configuration endpoint to expose API tokens to frontend
 app.get('/api/config', (req, res) => {
   res.json({

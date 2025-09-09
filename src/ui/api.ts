@@ -230,17 +230,18 @@ function getFallbackDecimals(tokenAddress: string): number {
  */
 export async function getBlockTimestamp(blockNumber: number): Promise<number> {
   try {
-    // For now, we'll use a simple calculation based on block number
-    // In a real implementation, this would call the backend API
-    // This is a rough approximation: Ethereum blocks are ~12 seconds apart
-    const currentBlock = 19000000; // Approximate current block
-    const blockDifference = currentBlock - blockNumber;
-    const secondsAgo = blockDifference * 12;
-    const currentTimestamp = Math.floor(Date.now() / 1000);
-    return currentTimestamp - secondsAgo;
+    const response = await fetch(`${API_BASE_URL}/api/block-timestamp/${blockNumber}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.timestamp;
   } catch (error) {
     console.error('Error getting block timestamp:', error);
-    return Math.floor(Date.now() / 1000); // Fallback to current time
+    // Fallback to current time if API call fails
+    return Math.floor(Date.now() / 1000);
   }
 }
 
