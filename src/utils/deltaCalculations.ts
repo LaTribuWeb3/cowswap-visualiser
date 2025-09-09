@@ -67,28 +67,6 @@ const getActualPriceFromClearingPrices = (
 };
 
 /**
- * Calculate the effective buy amount from clearing prices using BigInt
- * This represents what would actually be received at the clearing price
- */
-const getEffectiveBuyAmountFromClearingPrices = (
-  sellAmount: string,
-  sellToken: string,
-  buyToken: string,
-  clearingPrices?: { [token: string]: string }
-): bigint | null => {
-  const actualPrice = getActualPriceFromClearingPrices(sellToken, buyToken, clearingPrices);
-  if (!actualPrice) {
-    return null;
-  }
-  
-  const sellAmountBigInt = BigInt(sellAmount);
-  
-  // Effective buy amount = sellAmount * actualPrice / PRECISION_FACTOR
-  return (sellAmountBigInt * actualPrice) / PRECISION_FACTOR;
-};
-
-
-/**
  * Get the winning bid price from competitors using BigInt
  * Prioritizes clearing prices when available, falls back to buy/sell amounts
  */
@@ -283,7 +261,7 @@ export const calculateCompetitorDeltas = (order: OrderWithMetadata): CompetitorD
         deltaVsWinning,
         deltaVsWinningPercent
       };
-    }4358953378
+    }
     
     // Try to get the offered price from clearing prices first
     if (competitor.clearingPrices && competitor.clearingPrices[WETH_ADDRESS] && competitor.clearingPrices[USDC_ADDRESS]) {
