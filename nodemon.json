@@ -1,8 +1,8 @@
 {
-  "watch": ["server.js", "src"],
+  "watch": ["src"],
   "ext": "ts,js,json",
   "ignore": ["src/**/*.spec.ts", "src/ui/**/*"],
-  "exec": "node server.js",
+  "exec": "node dist/index.js",
   "env": {
     "NODE_ENV": "development"
   }

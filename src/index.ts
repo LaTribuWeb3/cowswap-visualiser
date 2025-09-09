@@ -437,17 +437,7 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// Serve static files from the dist directory (for production)
-if (NODE_ENV === 'production') {
-  app.use(express.static(__dirname));
-}
-
-// Serve the main page (for production)
-if (NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-  });
-}
+// Static file serving removed - using Cloudflare for frontend deployment
 
 // Start the server
 const server = app.listen(PORT, '0.0.0.0', async () => {
@@ -470,7 +460,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🔧 Backend API: ${configFile.API_BASE_URL}/api/trades`);
     console.log(`🔗 Real Data: Connected to Ethereum mainnet and CoW Protocol API`);
   } else {
-    console.log(`📊 Production build served from: http://localhost:${PORT}`);
+    console.log(`📊 Frontend: Deployed via Cloudflare`);
+    console.log(`🔧 Backend API: ${configFile.API_BASE_URL}/api/trades`);
   }
 });
 

@@ -9,7 +9,7 @@ module.exports = {
     env: {
       // Production Environment Configuration
       NODE_ENV: 'production',
-      PORT: 5001,
+      PORT: 8080,
       API_BASE_URL: 'https://yourdomain.com',
       FRONTEND_URL: 'https://yourdomain.com',
       
