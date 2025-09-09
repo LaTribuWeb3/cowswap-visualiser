@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import type { OrderWithMetadata, OrdersResponse } from '../types/OrderTypes';
 import { getTokenDisplaySymbol, getTokenMetadata } from '../utils/tokenMapping';
 import { getSolverName } from '../utils/solversMapping';
+import { calculateCompetitorDeltas } from '../utils/deltaCalculations';
 
 const OrdersTable: React.FC = () => {
   const [allOrders, setAllOrders] = useState<OrderWithMetadata[]>([]);
@@ -195,118 +196,21 @@ const OrdersTable: React.FC = () => {
   };
 
   const getCompetitorsData = (order: OrderWithMetadata) => {
-    const competitors = [];
+    const competitors = calculateCompetitorDeltas(order);
     
-    // Add our offer first (always available for included orders)
-    competitors.push({
-      solverName: 'Our Solver',
-      sellAmount: order.ourOffer.sellAmount,
-      buyAmount: order.ourOffer.buyAmount,
-      timestamp: order.timestamp,
-      isOurs: true
-    });
-    
-    // Add other competitors if they exist
-    if (order.competitors) {
-      Object.entries(order.competitors).forEach(([solverAddress, data]) => {
-        competitors.push({
-          solverName: getSolverName(solverAddress),
-          sellAmount: data.sellAmount || '0',
-          buyAmount: data.buyAmount || '0',
-          timestamp: data.timestamp,
-          isOurs: false
-        });
-      });
-    }
-    
-    // Sort by buy amount (best offer first) - higher buy amount is better for the user
-    const sortedCompetitors = competitors.sort((a, b) => {
-      const aBuyAmount = parseFloat(a.buyAmount);
-      const bBuyAmount = parseFloat(b.buyAmount);
-      return bBuyAmount - aBuyAmount;
-    });
-
-    // Calculate deltas for each competitor
-    const winningBuyAmount = parseFloat(sortedCompetitors[0]?.buyAmount || '0');
-    const livePrice = order.livePrice; // This is in dollars
-    
-    return sortedCompetitors.map((competitor, index) => {
-      const competitorBuyAmount = parseFloat(competitor.buyAmount);
-      const competitorSellAmount = parseFloat(competitor.sellAmount);
-      const isWinner = index === 0;
-      
-      // Convert token amounts to their actual values using decimals
-      // Try to get decimals from order metadata first, then from local metadata, then default to 18
-      let sellTokenDecimals = 18;
-      if (order.sellTokenInfo?.decimals) {
-        sellTokenDecimals = order.sellTokenInfo.decimals;
-      } else {
-        const sellTokenMetadata = getTokenMetadata(order.sellToken);
-        if (sellTokenMetadata?.decimals) {
-          sellTokenDecimals = sellTokenMetadata.decimals;
-        }
-      }
-
-      let buyTokenDecimals = 18;
-      if (order.buyTokenInfo?.decimals) {
-        buyTokenDecimals = order.buyTokenInfo.decimals;
-      } else {
-        const buyTokenMetadata = getTokenMetadata(order.buyToken);
-        if (buyTokenMetadata?.decimals) {
-          buyTokenDecimals = buyTokenMetadata.decimals;
-        }
-      }
-      
-      const actualSellAmount = competitorSellAmount / Math.pow(10, sellTokenDecimals);
-      const actualBuyAmount = competitorBuyAmount / Math.pow(10, buyTokenDecimals);
-      const actualWinningBuyAmount = winningBuyAmount / Math.pow(10, buyTokenDecimals);
-      
-      // Delta vs winning bid (in actual token units)
-      const deltaVsWinning = actualBuyAmount - actualWinningBuyAmount;
-      const deltaVsWinningPercent = actualWinningBuyAmount > 0 ? (deltaVsWinning / actualWinningBuyAmount) * 100 : 0;
-      
-      // Delta vs live price
-      // Determine order direction based on token addresses
-      const WETH_ADDRESS = '0x82af49447d8a07e3bd95bd0d56f35241523fbab1'; // WETH on Arbitrum
-      const USDC_ADDRESS = '0xaf88d065e77c8cc2239327c5edb3a432268e5831'; // USDC on Arbitrum
-      
-      const isWETHToUSDC = order.sellToken === WETH_ADDRESS && order.buyToken === USDC_ADDRESS;
-      const isUSDCToWETH = order.sellToken === USDC_ADDRESS && order.buyToken === WETH_ADDRESS;
-      
-      let deltaVsLivePrice: number;
-      let deltaVsLivePricePercent: number;
-      let deltaVsLivePriceUnit: string; // Unit for display (USDC or WETH)
-      
-      if (isWETHToUSDC) {
-        // WETH → USDC: compare actual USDC received vs what we should get at live price
-        const expectedUSDC = actualSellAmount * livePrice; // Expected USDC at live price
-        deltaVsLivePrice = actualBuyAmount - expectedUSDC; // Profit/loss in USDC
-        deltaVsLivePricePercent = expectedUSDC > 0 ? (deltaVsLivePrice / expectedUSDC) * 100 : 0;
-        deltaVsLivePriceUnit = 'USDC';
-      } else if (isUSDCToWETH) {
-        // USDC → WETH: compare actual WETH received vs what we should get at live price
-        const expectedWETH = actualSellAmount / livePrice; // Expected WETH at live price
-        deltaVsLivePrice = actualBuyAmount - expectedWETH; // Profit/loss in WETH
-        deltaVsLivePricePercent = expectedWETH > 0 ? (deltaVsLivePrice / expectedWETH) * 100 : 0;
-        deltaVsLivePriceUnit = 'WETH';
-      } else {
-        // Fallback: assume WETH → USDC
-        const expectedUSDC = actualSellAmount * livePrice;
-        deltaVsLivePrice = actualBuyAmount - expectedUSDC;
-        deltaVsLivePricePercent = expectedUSDC > 0 ? (deltaVsLivePrice / expectedUSDC) * 100 : 0;
-        deltaVsLivePriceUnit = 'USDC';
-      }
+    // Map solver addresses to readable names and add our solver info
+    return competitors.map((competitor) => {
+      const isOurs = competitor.isOurs;
+      const solverName = isOurs ? 'Our Solver' : getSolverName(competitor.solverName);
       
       return {
         ...competitor,
-        isWinner,
-        deltaVsWinning,
-        deltaVsWinningPercent,
-        deltaVsLivePrice,
-        deltaVsLivePricePercent,
-        deltaVsLivePriceUnit,
-        actualSellAmount,
-        actualBuyAmount
+        solverName,
+        isOurs,
+        // Rename for backward compatibility
+        deltaVsLivePrice: competitor.deltaAbsolute,
+        deltaVsLivePricePercent: competitor.deltaPercent,
+        deltaVsLivePriceUnit: competitor.deltaUnit
       };
     });
   };
