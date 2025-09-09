@@ -11,7 +11,6 @@ import {
 } from "viem";
 import { mainnet } from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
-import { ERC20_ABI } from "../abi/ERC20ABI";
 
 // CoW Protocol contract address
 const COW_PROTOCOL_ADDRESS = "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
@@ -65,7 +64,16 @@ export class EthereumService {
     return await this.retryFunctionOnAddress<string, Abi | readonly unknown[]>(
       tokenAddress,
       "symbol",
-      ERC20_ABI,
+      [
+        {
+          constant: true,
+          inputs: [],
+          outputs: [{ name: "", type: "string" }],
+          payable: false,
+          stateMutability: "view",
+          type: "function",
+        },
+      ],
       [],
       async () => this.generateFallbackSymbol(tokenAddress)
     );
@@ -75,7 +83,15 @@ export class EthereumService {
     tokenAddress: `0x${string}`,
     functionName: ContractFunctionName<V, "pure" | "view">,
     abi: V,
-    args: ContractFunctionArgs<V, "pure" | "view", ContractFunctionName<V, "pure" | "view">> = [] as ContractFunctionArgs<V, "pure" | "view", ContractFunctionName<V, "pure" | "view">>,
+    args: ContractFunctionArgs<
+      V,
+      "pure" | "view",
+      ContractFunctionName<V, "pure" | "view">
+    > = [] as ContractFunctionArgs<
+      V,
+      "pure" | "view",
+      ContractFunctionName<V, "pure" | "view">
+    >,
     fallbackCallBack: () => Promise<T>
   ): Promise<T> {
     console.log(`🔍 Fetching token symbol for ${tokenAddress}...`);
@@ -98,7 +114,7 @@ export class EthereumService {
         // Create the contract call promise
         const contractCallPromise = this.client.readContract({
           address: tokenAddress,
-          abi: abi,
+          abi: { ...abi, name: functionName } as V,
           functionName: functionName,
           args: args,
         });
