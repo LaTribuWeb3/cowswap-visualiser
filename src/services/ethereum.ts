@@ -629,7 +629,7 @@ export class EthereumService {
   /**
    * Get token decimals from the blockchain
    */
-  async getTokenDecimals(tokenAddress: string): Promise<number> {
+  async getTokenDecimals(tokenAddress: `0x${string}`): Promise<number> {
     try {
       console.log(`🔍 Fetching decimals for token: ${tokenAddress}`);
 
@@ -652,7 +652,7 @@ export class EthereumService {
       // Try to fetch from contract
       console.log(`🔍 Calling readContract for ${tokenAddress}...`);
       const result = await this.client.readContract({
-        address: tokenAddress as `0x${string}`,
+        address: tokenAddress,
         abi: [
           {
             constant: true,

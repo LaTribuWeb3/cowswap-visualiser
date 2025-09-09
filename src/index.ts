@@ -381,7 +381,7 @@ app.get('/api/token/:address/decimals', async (req, res) => {
     console.log(`✅ EthereumService imported successfully`);
     
     console.log(`🔍 Calling ethereumService.getTokenDecimals(${address})`);
-    const decimals = await ethereumService.getTokenDecimals(address);
+    const decimals = await ethereumService.getTokenDecimals(address as `0x${string}`);
     
     console.log(`✅ Token ${address} has ${decimals} decimals`);
     

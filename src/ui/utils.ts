@@ -3,12 +3,12 @@ import { fetchTokenDecimals } from './api';
 import { EthereumService } from '../services/ethereum';
 
 // Token information cache
-const tokenDecimalsCache: Record<string, number> = {};
-const tokenSymbolsCache: Record<string, string> = {};
-const tokenInfoCache: Record<string, TokenInfo> = {};
+const tokenDecimalsCache: Record<`0x${string}`, number> = {};
+const tokenSymbolsCache: Record<`0x${string}`, string> = {};
+const tokenInfoCache: Record<`0x${string}`, TokenInfo> = {};
 
 // Known token information
-const KNOWN_TOKENS: Record<string, TokenInfo> = {
+const KNOWN_TOKENS: Record<`0x${string}`, TokenInfo> = {
   '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': {
     symbol: 'USDC',
     name: 'USD Coin',
@@ -188,7 +188,7 @@ const ERC20_ABI = [
 /**
  * Get token decimals from cache or fetch from contract
  */
-export async function getTokenDecimals(tokenAddress: string): Promise<number> {
+export async function getTokenDecimals(tokenAddress: `0x${string}`): Promise<number> {
   // Check cache first
   if (tokenDecimalsCache[tokenAddress]) {
     return tokenDecimalsCache[tokenAddress];
@@ -219,7 +219,7 @@ export async function getTokenDecimals(tokenAddress: string): Promise<number> {
 /**
  * Get token information (synchronous - only from cache/known tokens)
  */
-export function getTokenInfo(tokenAddress: string): TokenInfo {
+export function getTokenInfo(tokenAddress: `0x${string}`): TokenInfo {
   return KNOWN_TOKENS[tokenAddress] || {
     symbol: formatAddress(tokenAddress),
     name: `Token ${formatAddress(tokenAddress)}`,
@@ -231,7 +231,7 @@ export function getTokenInfo(tokenAddress: string): TokenInfo {
 /**
  * Get token information (asynchronous - fetches from backend if needed)
  */
-export async function getTokenInfoAsync(tokenAddress: string): Promise<TokenInfo> {
+export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<TokenInfo> {
   // Check cache first
   if (tokenInfoCache[tokenAddress]) {
     return tokenInfoCache[tokenAddress];
@@ -247,7 +247,7 @@ export async function getTokenInfoAsync(tokenAddress: string): Promise<TokenInfo
     // Fetch both symbol and decimals from backend API
     const ethereumService = new EthereumService();
     const [symbol, decimals] = await Promise.all([
-      ethereumService.fetchTokenSymbol(tokenAddress as `0x${string}`),
+      ethereumService.fetchTokenSymbol(tokenAddress),
       getTokenDecimals(tokenAddress)
     ]);
     
@@ -283,7 +283,7 @@ export async function getTokenInfoAsync(tokenAddress: string): Promise<TokenInfo
 /**
  * Get token symbol from address
  */
-export async function getTokenSymbol(tokenAddress: string): Promise<string> {
+export async function getTokenSymbol(tokenAddress: `0x${string}`): Promise<string> {
   // Check cache first
   if (tokenSymbolsCache[tokenAddress]) {
     return tokenSymbolsCache[tokenAddress];
@@ -409,7 +409,7 @@ export function formatAmountWithDecimals(amount: string | undefined | null, deci
 /**
  * Format token amount using token address (fetches decimals automatically)
  */
-export async function formatTokenAmount(amount: string | undefined | null, tokenAddress: string): Promise<string> {
+export async function formatTokenAmount(amount: string | undefined | null, tokenAddress: `0x${string}`): Promise<string> {
   if (!amount) return '0';
   
   const decimals = await getTokenDecimals(tokenAddress);
@@ -525,8 +525,8 @@ export function formatAddress(address: string | undefined | null): string {
  * Calculate conversion rates from clearing prices
  */
 export function calculateConversionRates(
-  sellToken: string,
-  buyToken: string,
+  sellToken: `0x${string}`,
+  buyToken: `0x${string}`,
   sellAmount: string,
   buyAmount: string,
   sellDecimals: number,

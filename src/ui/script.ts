@@ -9,28 +9,28 @@ interface TokenInfo {
 
 interface Trade {
   sellTokenIndex: number;
-  sellToken: string;
+  sellToken: `0x${string}`;
   buyTokenIndex: number;
-  buyToken: string;
-  receiver: string;
+  buyToken: `0x${string}`;
+  receiver: `0x${string}`;
   sellAmount: string;
   buyAmount: string;
   executedAmount: string;
   validTo: string;
-  appData: string;
+  appData: `0x${string}`;
   feeAmount: string;
   flags: number;
-  signature: string;
+  signature: `0x${string}`;
 }
 
 interface Interaction {
-  target: string;
+  target: `0x${string}`;
   value: string;
-  callData: string;
+  callData: `0x${string}`;
 }
 
 interface ParsedData {
-  tokens: string[];
+  tokens: `0x${string}`[];
   clearingPrices: string[];
   trades: Trade[];
   interactions: Interaction[][];
@@ -39,11 +39,11 @@ interface ParsedData {
 }
 
 interface TradeData {
-  hash: string;
+  hash: `0x${string}`;
   blockNumber: string;
   timestamp: string;
-  from: string;
-  to: string;
+  from: `0x${string}`;
+  to: `0x${string}`;
   value: string;
   gasPrice: string;
   gasUsed: string;
@@ -218,7 +218,7 @@ const tradesData: TradeData[] = [
 ];
 
 // Token information mapping with cached decimals
-const tokenInfo: Record<string, TokenInfo> = {
+const tokenInfo: Record<`0x${string}`, TokenInfo> = {
   "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {
     symbol: "USDC",
     name: "USD Coin",
@@ -237,7 +237,7 @@ const tokenInfo: Record<string, TokenInfo> = {
 };
 
 // Cache for token decimals to avoid repeated contract calls
-const tokenDecimalsCache = new Map<string, number>();
+const tokenDecimalsCache = new Map<`0x${string}`, number>();
 
 // ERC20 ABI for decimals function
 const ERC20_ABI: ERC20ABI[] = [
