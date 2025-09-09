@@ -31,10 +31,10 @@ export interface ParsedData {
 }
 
 export interface Transaction {
-  hash: string;
+  hash: `0x${string}`;
   blockNumber: string;
-  from?: string;
-  to?: string;
+  from?: `0x${string}`;
+  to?: `0x${string}`;
   value?: string;
   gasPrice?: string;
   gasUsed?: string;
@@ -43,15 +43,15 @@ export interface Transaction {
   functionDescription?: string;
   parsedData?: ParsedData;
   // New database format fields
-  sellToken?: string;
-  buyToken?: string;
+  sellToken?: `0x${string}`;
+  buyToken?: `0x${string}`;
   sellAmount?: string;
   buyAmount?: string;
   executedAmount?: string;
   realSellAmount: string;
   sellPrice: string;
   buyPrice: string;
-  receiver: string;
+  receiver: `0x${string}`;
   // Additional fields from new database format
   executedBuyAmount?: string;
   executedSellAmount?: string;
@@ -63,7 +63,7 @@ export interface TokenInfo {
   symbol: string;
   name: string;
   decimals: number;
-  address: string;
+  address: `0x${string}`;
 }
 
 // UI State Types

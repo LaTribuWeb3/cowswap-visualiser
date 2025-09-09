@@ -1011,8 +1011,8 @@ async function createTradeTableRow(
       return row;
     }
 
-    const sellToken = await getTokenInfoAsync(tradeData.sellToken);
-    const buyToken = await getTokenInfoAsync(tradeData.buyToken);
+    const sellToken = await getTokenInfoAsync(tradeData.sellToken as `0x${string}`);
+    const buyToken = await getTokenInfoAsync(tradeData.buyToken as `0x${string}`);
 
     row.innerHTML = `
       <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
@@ -1120,17 +1120,17 @@ async function createTradeInfoFrameOverlay(
       realSellAmount = "0";
     }
 
-    const sellToken = await getTokenInfoAsync(sellTokenAddress);
-    const buyToken = await getTokenInfoAsync(buyTokenAddress);
+    const sellToken = await getTokenInfoAsync(sellTokenAddress as `0x${string}`);
+    const buyToken = await getTokenInfoAsync(buyTokenAddress as `0x${string}`);
 
     // Format amounts with proper decimals
-    const formattedSellAmount = await formatTokenAmount(sellAmount, sellTokenAddress);
-    const formattedBuyAmount = await formatTokenAmount(buyAmount, buyTokenAddress);
-    const formattedExecutedAmount = await formatTokenAmount(executedAmount, buyTokenAddress);
-    const formattedRealSellAmount = await formatTokenAmount(realSellAmount, sellTokenAddress);
-    const formattedExecutedBuyAmount = await formatTokenAmount(trade.executedBuyAmount, buyTokenAddress);
-    const formattedExecutedSellAmount = await formatTokenAmount(trade.executedSellAmount, sellTokenAddress);
-    const formattedExecutedSellAmountBeforeFees = await formatTokenAmount(trade.executedSellAmountBeforeFees, sellTokenAddress);
+    const formattedSellAmount = await formatTokenAmount(sellAmount, sellTokenAddress as `0x${string}`);
+    const formattedBuyAmount = await formatTokenAmount(buyAmount, buyTokenAddress as `0x${string}`);
+    const formattedExecutedAmount = await formatTokenAmount(executedAmount, buyTokenAddress as `0x${string}`);
+    const formattedRealSellAmount = await formatTokenAmount(realSellAmount, sellTokenAddress as `0x${string}`);
+    const formattedExecutedBuyAmount = await formatTokenAmount(trade.executedBuyAmount, buyTokenAddress as `0x${string}`);
+    const formattedExecutedSellAmount = await formatTokenAmount(trade.executedSellAmount, sellTokenAddress as `0x${string}`);
+    const formattedExecutedSellAmountBeforeFees = await formatTokenAmount(trade.executedSellAmountBeforeFees, sellTokenAddress as `0x${string}`);
 
     // Debug logging to see what data we extracted
     console.log(`🔍 Extracted trade data:`, {
