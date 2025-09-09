@@ -117,13 +117,18 @@ function sanitizeForJSON(obj: any): any {
 // CORS configuration based on environment
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    console.log('🔍 CORS origin:', origin);
     if (configFile.CORS_ALLOW_ALL_ORIGINS) {
       // In development, allow all origins for local development
+      console.log('🔍 CORS allow all origins');
+      
       callback(null, true);
     } else {
       // In production, specify allowed origins
       const allowedOrigins = configFile.CORS_ALLOWED_ORIGINS;
-      
+      console.log('🔍 CORS allowed origins:', allowedOrigins);
+      console.log('🔍 CORS origin:', origin);
+
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
       
