@@ -1193,7 +1193,7 @@ async function createTradeInfoFrameOverlay(
                 <div class="info-item">
                   <span class="info-label">Transaction Hash</span>
                   <span class="info-value hash-value">
-                    <a href="https://etherscan.io/tx/${
+                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/tx/${
                       trade.hash
                     }" target="_blank" class="address-link">
                       ${formatAddress(trade.hash)}
@@ -1215,7 +1215,7 @@ async function createTradeInfoFrameOverlay(
                 <div class="info-item">
                   <span class="info-label">Sell Token</span>
                   <span class="info-value hash-value">
-                    <a href="https://etherscan.io/address/${
+                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                       trade.sellToken ||
                       trade.parsedData?.trades?.[0]?.sellToken ||
                       "Unknown"
@@ -1232,7 +1232,7 @@ async function createTradeInfoFrameOverlay(
                 <div class="info-item">
                   <span class="info-label">Buy Token</span>
                   <span class="info-value hash-value">
-                    <a href="https://etherscan.io/address/${
+                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                       trade.buyToken ||
                       trade.parsedData?.trades?.[0]?.buyToken ||
                       "Unknown"
@@ -1309,7 +1309,7 @@ async function createTradeInfoFrameOverlay(
                 <div class="info-item">
                   <span class="info-label">Receiver</span>
                   <span class="info-value hash-value">
-                    <a href="https://etherscan.io/address/${
+                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                       trade.receiver || trade.from || "Unknown"
                     }" target="_blank" class="address-link">
                       ${formatAddress(
@@ -1836,7 +1836,7 @@ async function createTradeInfoFrameOverlay(
                     <div class="token-symbol">${sellToken.symbol}</div>
                     <div class="token-name">${sellToken.name}</div>
                     <div class="token-address">
-                      <a href="https://etherscan.io/address/${
+                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                         trade.sellToken
                       }" target="_blank" class="address-link">
                         ${formatAddress(trade.sellToken)}
@@ -1853,7 +1853,7 @@ async function createTradeInfoFrameOverlay(
                     <div class="token-symbol">${buyToken.symbol}</div>
                     <div class="token-name">${buyToken.name}</div>
                     <div class="token-address">
-                      <a href="https://etherscan.io/address/${
+                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                         trade.buyToken
                       }" target="_blank" class="address-link">
                         ${formatAddress(trade.buyToken)}

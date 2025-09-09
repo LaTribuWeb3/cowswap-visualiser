@@ -25,6 +25,9 @@ export default defineConfig(({ mode }) => {
         env.COW_API_URL || "https://api.cow.fi"
       ),
       "process.env.COW_API_KEY": JSON.stringify(env.COW_API_KEY || ""),
+      "process.env.BLOCKCHAIN_EXPLORER_URL": JSON.stringify(
+        env.BLOCKCHAIN_EXPLORER_URL || "https://etherscan.io"
+      ),
     },
     optimizeDeps: {
       esbuildOptions: {
