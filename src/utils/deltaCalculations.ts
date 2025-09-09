@@ -343,8 +343,18 @@ export const calculateCompetitorDeltas = (order: OrderWithMetadata): CompetitorD
     
     // Calculate delta if we have an offered price
     if (offeredPrice && offeredPrice > 0) {
-      deltaAbsolute = offeredPrice - livePrice;
-      deltaPercent = (deltaAbsolute / livePrice) * 100;
+      if (isWETHToUSDC) {
+        // WETH → USDC: User selling WETH, higher offered price is better
+        deltaAbsolute = offeredPrice - livePrice;
+      } else if (isUSDCToWETH) {
+        // USDC → WETH: User buying WETH, lower offered price is better
+        deltaAbsolute = livePrice - offeredPrice;
+      } else {
+        // Fallback: assume WETH → USDC
+        deltaAbsolute = offeredPrice - livePrice;
+      }
+      
+      deltaPercent = livePrice > 0 ? (deltaAbsolute / livePrice) * 100 : 0;
     }
     
     return {
