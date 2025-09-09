@@ -202,7 +202,7 @@ async function getTokenDecimals(tokenAddress) {
     try {
         // Use ethers.js or web3 to call the contract
         // For now, we'll use a simple fetch to an Ethereum RPC
-        const response = await fetch('https://eth-mainnet.g.alchemy.com/v2/demo', {
+        const response = await fetch(process.env.RPC_URL || 'https://eth-mainnet.g.alchemy.com/v2/demo', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
