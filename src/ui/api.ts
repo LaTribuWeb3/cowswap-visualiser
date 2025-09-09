@@ -128,7 +128,7 @@ export async function fetchRecentEvents(): Promise<any[]> {
  */
 export async function checkAPIHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/health`);
+    const response = await fetch(`${API_BASE_URL}/health`);
     return response.ok;
   } catch (error) {
     console.error('API health check failed:', error);
