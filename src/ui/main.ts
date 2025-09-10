@@ -1250,61 +1250,58 @@ async function createTradeInfoFrameOverlay(
                   <span class="info-label">Trade Type</span>
                   <span class="info-value">${trade.kind || 'sell'}</span>
                 </div>
-                <div class="info-item">
-                  <span class="info-label">Expected Buy Amount</span>
-                  <span class="info-value">${formattedBuyAmount} ${
-      buyToken.symbol
-    }</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Executed Buy Amount</span>
-                  <span class="info-value">${formattedExecutedBuyAmount || formattedExecutedAmount} ${
-      buyToken.symbol
-    }</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Expected Sell Amount</span>
-                  <span class="info-value">${formattedSellAmount} ${
-      sellToken.symbol
-    }</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Executed Sell Amount</span>
-                  <span class="info-value">${formattedExecutedSellAmount || formattedRealSellAmount} ${
-      sellToken.symbol
-    }</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Executed Sell Amount (Before Fees)</span>
-                  <span class="info-value">${formattedExecutedSellAmountBeforeFees || formattedExecutedSellAmount || formattedRealSellAmount} ${
-      sellToken.symbol
-    }</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Buy Amount Difference</span>
-                  <span class="info-value ${calculateAmountDifferenceClass(
-                    formattedBuyAmount,
-                    formattedExecutedBuyAmount || formattedExecutedAmount
-                  )}">
-                    ${calculateAmountDifference(
-                      formattedBuyAmount,
-                      formattedExecutedBuyAmount || formattedExecutedAmount,
-                      buyToken.symbol
-                    )}
-                  </span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Sell Amount Difference</span>
-                  <span class="info-value ${calculateAmountDifferenceClass(
-                    formattedSellAmount,
-                    formattedExecutedSellAmount || formattedRealSellAmount
-                  )}">
-                    ${calculateAmountDifference(
-                      formattedSellAmount,
-                      formattedExecutedSellAmount || formattedRealSellAmount,
-                      sellToken.symbol
-                    )}
-                  </span>
+                <div class="trade-summary-table-container">
+                  <table class="trade-summary-table">
+                    <thead>
+                      <tr>
+                        <th>Expected Buy Amount</th>
+                        <th>Executed Buy Amount</th>
+                        <th>Buy Amount Difference</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>${formattedBuyAmount} ${buyToken.symbol}</td>
+                        <td>${formattedExecutedBuyAmount || formattedExecutedAmount} ${buyToken.symbol}</td>
+                        <td class="${calculateAmountDifferenceClass(
+                          formattedBuyAmount,
+                          formattedExecutedBuyAmount || formattedExecutedAmount
+                        )}">
+                          ${calculateAmountDifference(
+                            formattedBuyAmount,
+                            formattedExecutedBuyAmount || formattedExecutedAmount,
+                            buyToken.symbol
+                          )}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  
+                  <table class="trade-summary-table">
+                    <thead>
+                      <tr>
+                        <th>Expected Sell Amount</th>
+                        <th>Executed Sell Amount</th>
+                        <th>Sell Amount Difference</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>${formattedSellAmount} ${sellToken.symbol}</td>
+                        <td>${formattedExecutedSellAmount || formattedRealSellAmount} ${sellToken.symbol}</td>
+                        <td class="${calculateAmountDifferenceClass(
+                          formattedSellAmount,
+                          formattedExecutedSellAmount || formattedRealSellAmount
+                        )}">
+                          ${calculateAmountDifference(
+                            formattedSellAmount,
+                            formattedExecutedSellAmount || formattedRealSellAmount,
+                            sellToken.symbol
+                          )}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
                 <div class="info-item">
                   <span class="info-label">Receiver</span>
