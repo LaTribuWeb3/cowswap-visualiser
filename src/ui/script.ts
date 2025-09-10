@@ -267,6 +267,23 @@ function formatNumber(num: number): string {
   return new Intl.NumberFormat().format(num);
 }
 
+function formatScientific(value: number | string, threshold: number = 0.001): string {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0';
+  
+  // Use scientific notation for very small numbers
+  if (Math.abs(num) < threshold && num !== 0) {
+    return num.toExponential(3);
+  }
+  
+  // For larger numbers, use regular formatting with appropriate decimal places
+  if (Math.abs(num) >= 1) {
+    return num.toFixed(6);
+  } else {
+    return num.toFixed(8);
+  }
+}
+
 function formatAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
@@ -292,8 +309,13 @@ function formatCurrency(amount: string | number, decimals: number = 18): string 
 function formatPrice(price: string | number): string {
   const num = parseFloat(price.toString());
   if (num === 0) return '0.00';
-  if (num < 0.000001) return num.toExponential(4);
-  if (num < 0.01) return num.toFixed(8);
+  
+  // Use scientific notation for very small numbers (< 0.01) or very large numbers (> 100)
+  if (num < 0.01 || num > 100) {
+    return num.toExponential(3);
+  }
+  
+  // For numbers in the normal range, use regular formatting
   if (num < 1) return num.toFixed(6);
   if (num < 100) return num.toFixed(4);
   return num.toFixed(2);
@@ -301,8 +323,13 @@ function formatPrice(price: string | number): string {
 
 function calculateExchangeRate(sellPrice: string | number, buyPrice: string | number): string {
   const rate = parseFloat(buyPrice.toString()) / parseFloat(sellPrice.toString());
-  if (rate < 0.000001) return rate.toExponential(4);
-  if (rate < 0.01) return rate.toFixed(6);
+  
+  // Use scientific notation for very small numbers (< 0.01) or very large numbers (> 100)
+  if (rate < 0.01 || rate > 100) {
+    return rate.toExponential(3);
+  }
+  
+  // For numbers in the normal range, use regular formatting
   if (rate < 1) return rate.toFixed(4);
   return rate.toFixed(2);
 }
@@ -716,22 +743,22 @@ async function populateConversionRates(trade: Trade, sellToken: TokenInfo, buyTo
   conversionRatesGrid.innerHTML = `
     <div class="conversion-rate-item">
       <div class="conversion-rate-label">Clearing Price Ratio</div>
-      <div class="conversion-rate-value">${clearingPriceRatio.toFixed(6)}</div>
+      <div class="conversion-rate-value">${formatScientific(clearingPriceRatio)}</div>
       <div style="font-size: 0.75rem; color: #6c757d; margin-top: 4px;">${buyToken.symbol} per ${sellToken.symbol}</div>
     </div>
     <div class="conversion-rate-item">
       <div class="conversion-rate-label">Inverse Clearing Price</div>
-      <div class="conversion-rate-value">${inverseClearingPriceRatio.toFixed(6)}</div>
+      <div class="conversion-rate-value">${formatScientific(inverseClearingPriceRatio)}</div>
       <div style="font-size: 0.75rem; color: #6c757d; margin-top: 4px;">${sellToken.symbol} per ${buyToken.symbol}</div>
     </div>
     <div class="conversion-rate-item">
       <div class="conversion-rate-label">Executed Rate</div>
-      <div class="conversion-rate-value">${executedRate.toFixed(6)}</div>
+      <div class="conversion-rate-value">${formatScientific(executedRate)}</div>
       <div style="font-size: 0.75rem; color: #6c757d; margin-top: 4px;">Actual ${buyToken.symbol} received per ${sellToken.symbol}</div>
     </div>
     <div class="conversion-rate-item">
       <div class="conversion-rate-label">Inverse Executed Rate</div>
-      <div class="conversion-rate-value">${inverseExecutedRate.toFixed(6)}</div>
+      <div class="conversion-rate-value">${formatScientific(inverseExecutedRate)}</div>
       <div style="font-size: 0.75rem; color: #6c757d; margin-top: 4px;">Actual ${sellToken.symbol} per ${buyToken.symbol}</div>
     </div>
   `;

@@ -24,6 +24,7 @@ import {
   getTokenDecimals,
   getTokenSymbol,
   calculateConversionRates,
+  formatScientific,
 } from "./utils";
 import {
   fetchRecentTrades,
@@ -1428,9 +1429,9 @@ async function createTradeInfoFrameOverlay(
                             <div class="rate-cell">
                               <div class="rate-value">1 ${sellToken.symbol} = ${
       parseFloat(formattedBuyAmount || "0") > 0 && parseFloat(formattedSellAmount || "0") > 0
-        ? (
+        ? formatScientific(
             parseFloat(formattedBuyAmount || "0") / parseFloat(formattedSellAmount || "0")
-          ).toFixed(6)
+          )
         : "0"
     } ${buyToken.symbol}</div>
                             </div>
@@ -1439,16 +1440,16 @@ async function createTradeInfoFrameOverlay(
                             <div class="rate-cell">
                               <div class="rate-value">1 ${sellToken.symbol} = ${
       parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") > 0 && parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0") > 0
-        ? (
+        ? formatScientific(
             parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") / parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0")
-          ).toFixed(6)
+          )
         : "0"
     } ${buyToken.symbol}</div>
                             </div>
                           </td>
                           <td>
                             <div class="rate-difference-cell">
-                              <div class="rate-difference-value">
+                              <div class="rate-difference-frames">
                                 ${(() => {
                                   const expectedRate = parseFloat(formattedBuyAmount || "0") > 0 && parseFloat(formattedSellAmount || "0") > 0
                                     ? parseFloat(formattedBuyAmount || "0") / parseFloat(formattedSellAmount || "0")
@@ -1457,8 +1458,24 @@ async function createTradeInfoFrameOverlay(
                                     ? parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") / parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0")
                                     : 0;
                                   if (expectedRate === 0 || actualRate === 0) return "N/A";
-                                  const diff = ((actualRate - expectedRate) / expectedRate) * 100;
-                                  return diff > 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`;
+                                  
+                                  const rateDiff = actualRate - expectedRate;
+                                  const percentDiff = ((actualRate - expectedRate) / expectedRate) * 100;
+                                  
+                                  const rateDiffFormatted = formatScientific(rateDiff);
+                                  const percentDiffFormatted = percentDiff > 0 ? `+${percentDiff.toFixed(2)}%` : `${percentDiff.toFixed(2)}%`;
+                                  
+                                  const isPositive = rateDiff > 0;
+                                  const isNegative = rateDiff < 0;
+                                  
+                                  return `
+                                    <div class="rate-difference-frame ${isPositive ? 'positive' : isNegative ? 'negative' : ''}">
+                                      <div class="rate-difference-value">${rateDiffFormatted} ${buyToken.symbol}</div>
+                                    </div>
+                                    <div class="rate-difference-frame ${isPositive ? 'positive' : isNegative ? 'negative' : ''}">
+                                      <div class="rate-difference-value">${percentDiffFormatted}</div>
+                                    </div>
+                                  `;
                                 })()}
                               </div>
                               <div class="rate-difference-label">vs Expected</div>
@@ -1508,9 +1525,9 @@ async function createTradeInfoFrameOverlay(
                             <div class="rate-cell">
                               <div class="rate-value">1 ${sellToken.symbol} = ${
       parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") > 0 && parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0") > 0
-        ? (
+        ? formatScientific(
             parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") / parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0")
-          ).toFixed(6)
+          )
         : "0"
     } ${buyToken.symbol}</div>
                             </div>

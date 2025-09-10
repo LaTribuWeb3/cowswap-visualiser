@@ -1707,27 +1707,47 @@ body {
   gap: 4px;
 }
 
-.rate-difference-value {
-  font-size: 1.1rem;
-  font-weight: 700;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+.rate-difference-frames {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.rate-difference-frame {
   padding: 8px 12px;
   border-radius: 8px;
   border: 2px solid;
   min-width: 120px;
   text-align: center;
+  background: #f8f9fa;
+  border-color: #e9ecef;
 }
 
-.rate-difference-value.positive-difference {
-  color: #198754;
+.rate-difference-frame.positive {
   background: #d4edda;
   border-color: #c3e6cb;
 }
 
-.rate-difference-value.negative-difference {
-  color: #dc3545;
+.rate-difference-frame.negative {
   background: #f8d7da;
   border-color: #f5c6cb;
+}
+
+.rate-difference-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.rate-difference-frame.positive .rate-difference-value {
+  color: #198754;
+}
+
+.rate-difference-frame.negative .rate-difference-value {
+  color: #dc3545;
 }
 
 .rate-difference-label {

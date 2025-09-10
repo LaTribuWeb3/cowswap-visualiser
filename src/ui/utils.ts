@@ -360,11 +360,32 @@ export function formatPrice(value: number | string): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
   if (isNaN(num)) return '$0.00';
   
-  if (num < 0.01 && num > 0) {
-    return `$${num.toExponential(2)}`;
+  // Use scientific notation for very small numbers (< 0.01) or very large numbers (> 100)
+  if ((num < 0.01 && num > 0) || num > 100) {
+    return `$${num.toExponential(3)}`;
   }
   
   return formatCurrency(num);
+}
+
+/**
+ * Format small numbers using scientific notation for better readability
+ */
+export function formatScientific(value: number | string, threshold: number = 0.001): string {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0';
+  
+  // Use scientific notation for very small numbers
+  if (Math.abs(num) < threshold && num !== 0) {
+    return num.toExponential(3);
+  }
+  
+  // For larger numbers, use regular formatting with appropriate decimal places
+  if (Math.abs(num) >= 1) {
+    return num.toFixed(6);
+  } else {
+    return num.toFixed(8);
+  }
 }
 
 /**
@@ -424,7 +445,15 @@ export function calculateExchangeRate(amount1: string, decimals1: number, amount
   const num2 = parseFloat(amount2) / Math.pow(10, decimals2);
   
   if (num1 === 0) return '0';
-  return formatNumber(num2 / num1, 6);
+  
+  const rate = num2 / num1;
+  
+  // Use scientific notation for very small numbers (< 0.01) or very large numbers (> 100)
+  if (rate < 0.01 || rate > 100) {
+    return rate.toExponential(3);
+  }
+  
+  return formatNumber(rate, 6);
 }
 
 /**
