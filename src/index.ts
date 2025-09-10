@@ -50,9 +50,15 @@ const configFile = {
   PORT: parseInt(process.env.PORT || '8080'),
   API_BASE_URL: process.env.API_BASE_URL || 'http://localhost:8080',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
-  CORS_ALLOW_ALL_ORIGINS: process.env.CORS_ALLOW_ALL_ORIGINS === 'true',
-  CORS_CREDENTIALS: process.env.CORS_CREDENTIALS === 'true',
-  CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(',') : ['http://localhost:3000'],
+  CORS_ALLOW_ALL_ORIGINS: process.env.CORS_ALLOW_ALL_ORIGINS === 'true' || NODE_ENV === 'development',
+  CORS_CREDENTIALS: process.env.CORS_CREDENTIALS === 'true' || NODE_ENV === 'development',
+  CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(',') : [
+    'http://localhost:3000',
+    'http://localhost:5001', 
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5001',
+    'http://localhost:8080'
+  ],
   PAIR_API_TOKEN: process.env.PAIR_API_TOKEN
 };
 
@@ -118,10 +124,11 @@ function sanitizeForJSON(obj: any): any {
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     console.log('🔍 CORS origin:', origin);
+    console.log('🔍 CORS_ALLOW_ALL_ORIGINS:', configFile.CORS_ALLOW_ALL_ORIGINS);
+    
     if (configFile.CORS_ALLOW_ALL_ORIGINS) {
       // In development, allow all origins for local development
       console.log('🔍 CORS allow all origins');
-      
       callback(null, true);
     } else {
       // In production, specify allowed origins
@@ -130,18 +137,23 @@ const corsOptions = {
       console.log('🔍 CORS origin:', origin);
 
       // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        console.log('🔍 CORS allowing request with no origin');
+        return callback(null, true);
+      }
       
       if (allowedOrigins.indexOf(origin) !== -1) {
+        console.log('🔍 CORS origin allowed:', origin);
         callback(null, true);
       } else {
+        console.log('🔍 CORS origin not allowed:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     }
   },
   credentials: configFile.CORS_CREDENTIALS,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   optionsSuccessStatus: 200
 };
 
@@ -445,7 +457,7 @@ app.get('/api/block-timestamp/:blockNumber', async (req, res) => {
     const ethereumService = new EthereumService();
     const timestamp = await ethereumService.getBlockTimestamp(blockNum);
     
-    res.json({
+    return res.json({
       success: true,
       data: {
         blockNumber: blockNum,
@@ -454,7 +466,7 @@ app.get('/api/block-timestamp/:blockNumber', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error fetching block timestamp:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch block timestamp'
     });

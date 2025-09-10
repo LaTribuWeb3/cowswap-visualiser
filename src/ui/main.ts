@@ -1213,99 +1213,25 @@ async function createTradeInfoFrameOverlay(
             <div class="info-section-content">
               <div class="info-grid">
                 <div class="info-item">
-                  <span class="info-label">Sell Token</span>
-                  <span class="info-value hash-value">
-                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
-                      trade.sellToken ||
-                      trade.parsedData?.trades?.[0]?.sellToken ||
-                      "Unknown"
-                    }" target="_blank" class="address-link">
-                      ${formatAddress(
-                        trade.sellToken ||
-                          trade.parsedData?.trades?.[0]?.sellToken ||
-                          "Unknown"
-                      )}
-                    </a>
-                    <span class="token-symbol">(${sellToken.symbol})</span>
-                  </span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Buy Token</span>
-                  <span class="info-value hash-value">
-                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
-                      trade.buyToken ||
-                      trade.parsedData?.trades?.[0]?.buyToken ||
-                      "Unknown"
-                    }" target="_blank" class="address-link">
-                      ${formatAddress(
-                        trade.buyToken ||
-                          trade.parsedData?.trades?.[0]?.buyToken ||
-                          "Unknown"
-                      )}
-                    </a>
-                    <span class="token-symbol">(${buyToken.symbol})</span>
-                  </span>
-                </div>
-                <div class="info-item">
                   <span class="info-label">Trade Type</span>
                   <span class="info-value">${trade.kind || 'sell'}</span>
                 </div>
-                <div class="trade-summary-table-container">
-                  <table class="trade-summary-table">
-                    <thead>
-                      <tr>
-                        <th>Expected Buy Amount</th>
-                        <th>Executed Buy Amount</th>
-                        <th>Buy Amount Difference</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>${formattedBuyAmount} ${buyToken.symbol}</td>
-                        <td>${formattedExecutedBuyAmount || formattedExecutedAmount} ${buyToken.symbol}</td>
-                        <td class="${calculateAmountDifferenceClass(
-                          formattedBuyAmount,
-                          formattedExecutedBuyAmount || formattedExecutedAmount
-                        )}">
-                          ${calculateAmountDifference(
-                            formattedBuyAmount,
-                            formattedExecutedBuyAmount || formattedExecutedAmount,
-                            buyToken.symbol
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  
-                  <table class="trade-summary-table">
-                    <thead>
-                      <tr>
-                        <th>Expected Sell Amount</th>
-                        <th>Executed Sell Amount</th>
-                        <th>Sell Amount Difference</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>${formattedSellAmount} ${sellToken.symbol}</td>
-                        <td>${formattedExecutedSellAmount || formattedRealSellAmount} ${sellToken.symbol}</td>
-                        <td class="${calculateAmountDifferenceClass(
-                          formattedSellAmount,
-                          formattedExecutedSellAmount || formattedRealSellAmount
-                        )}">
-                          ${calculateAmountDifference(
-                            formattedSellAmount,
-                            formattedExecutedSellAmount || formattedRealSellAmount,
-                            sellToken.symbol
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Receiver</span>
-                  <span class="info-value hash-value">
+              </div>
+            </div>
+          </div>
+
+          <!-- Token Details with Amount Information -->
+          <div class="info-section">
+            <div class="info-section-title">
+              <i class="fas fa-coins"></i>
+              Token Details
+            </div>
+            <div class="info-section-content">
+              <!-- Receiver Information -->
+              <div class="receiver-section">
+                <div class="receiver-info">
+                  <span class="receiver-label">Receiver</span>
+                  <span class="receiver-value hash-value">
                     <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                       trade.receiver || trade.from || "Unknown"
                     }" target="_blank" class="address-link">
@@ -1316,54 +1242,291 @@ async function createTradeInfoFrameOverlay(
                   </span>
                 </div>
               </div>
+              
+              <div class="token-details-container">
+                <!-- Sell Token Section -->
+                <div class="token-detail-section sell-token">
+                  <div class="token-header">
+                    <div class="token-info">
+                      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">SELL</span>
+                        <span style="font-weight: 600; color: #dc3545; font-size: 1.1rem;">${sellToken.symbol}</span>
+                      </div>
+                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                        trade.sellToken ||
+                        trade.parsedData?.trades?.[0]?.sellToken ||
+                        "Unknown"
+                      }" target="_blank" class="address-link">
+                        ${formatAddress(
+                          trade.sellToken ||
+                            trade.parsedData?.trades?.[0]?.sellToken ||
+                            "Unknown"
+                        )}
+                      </a>
+                    </div>
+                  </div>
+                  
+                  <!-- Sell Amount Details -->
+                  <div class="amount-details-section">
+                    <div class="amount-details-header">
+                      <i class="fas fa-arrow-down"></i>
+                      <span>Amount Details</span>
+                    </div>
+                    <table class="amount-details-table">
+                      <thead>
+                        <tr>
+                          <th>Expected Amount</th>
+                          <th>Executed Amount</th>
+                          <th>Difference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <div class="amount-cell">
+                              <div class="amount-value">${formattedSellAmount}</div>
+                              <div class="amount-token">${sellToken.symbol}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="amount-cell">
+                              <div class="amount-value">${formattedExecutedSellAmount || formattedRealSellAmount}</div>
+                              <div class="amount-token">${sellToken.symbol}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="difference-cell">
+                              <div class="difference-value ${calculateAmountDifferenceClass(
+                                formattedSellAmount,
+                                formattedExecutedSellAmount || formattedRealSellAmount
+                              )}">
+                                ${calculateAmountDifference(
+                                  formattedSellAmount,
+                                  formattedExecutedSellAmount || formattedRealSellAmount,
+                                  sellToken.symbol
+                                )}
+                              </div>
+                              <div class="difference-label">vs Expected</div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Buy Token Section -->
+                <div class="token-detail-section buy-token">
+                  <div class="token-header">
+                    <div class="token-info">
+                      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span style="background: #198754; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">BUY</span>
+                        <span style="font-weight: 600; color: #198754; font-size: 1.1rem;">${buyToken.symbol}</span>
+                      </div>
+                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                        trade.buyToken ||
+                        trade.parsedData?.trades?.[0]?.buyToken ||
+                        "Unknown"
+                      }" target="_blank" class="address-link">
+                        ${formatAddress(
+                          trade.buyToken ||
+                            trade.parsedData?.trades?.[0]?.buyToken ||
+                            "Unknown"
+                        )}
+                      </a>
+                    </div>
+                  </div>
+                  
+                  <!-- Buy Amount Details -->
+                  <div class="amount-details-section">
+                    <div class="amount-details-header">
+                      <i class="fas fa-arrow-up"></i>
+                      <span>Amount Details</span>
+                    </div>
+                    <table class="amount-details-table">
+                      <thead>
+                        <tr>
+                          <th>Expected Amount</th>
+                          <th>Executed Amount</th>
+                          <th>Difference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <div class="amount-cell">
+                              <div class="amount-value">${formattedBuyAmount}</div>
+                              <div class="amount-token">${buyToken.symbol}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="amount-cell">
+                              <div class="amount-value">${formattedExecutedBuyAmount || formattedExecutedAmount}</div>
+                              <div class="amount-token">${buyToken.symbol}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="difference-cell">
+                              <div class="difference-value ${calculateAmountDifferenceClass(
+                                formattedBuyAmount,
+                                formattedExecutedBuyAmount || formattedExecutedAmount
+                              )}">
+                                ${calculateAmountDifference(
+                                  formattedBuyAmount,
+                                  formattedExecutedBuyAmount || formattedExecutedAmount,
+                                  buyToken.symbol
+                                )}
+                              </div>
+                              <div class="difference-label">vs Expected</div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Binance Price Comparison Section -->
+          <!-- Market Price Comparison Section -->
           <div class="info-section">
             <div class="info-section-title">
               <i class="fas fa-chart-bar"></i>
               Market Price Comparison
             </div>
             <div class="info-section-content">
-              <div class="info-grid">
-                <div class="info-item">
-                  <span class="info-label">Expected Trade Rate (${sellToken.symbol} → ${
-      buyToken.symbol
-    })</span>
-                  <span class="info-value">1 ${sellToken.symbol} = ${
+              <div class="market-comparison-container">
+                <!-- Trade Rates Section -->
+                <div class="market-detail-section trade-rates">
+                  <div class="market-header">
+                    <div class="market-info">
+                      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span style="background: #667eea; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">TRADE</span>
+                        <span style="font-weight: 600; color: #667eea; font-size: 1.1rem;">${sellToken.symbol} → ${buyToken.symbol}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Trade Rates Details -->
+                  <div class="market-details-section">
+                    <div class="market-details-header">
+                      <i class="fas fa-exchange-alt"></i>
+                      <span>Trade Rates</span>
+                    </div>
+                    <table class="market-details-table">
+                      <thead>
+                        <tr>
+                          <th>Expected Rate</th>
+                          <th>Actual Rate</th>
+                          <th>Difference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <div class="rate-cell">
+                              <div class="rate-value">1 ${sellToken.symbol} = ${
       parseFloat(formattedBuyAmount || "0") > 0 && parseFloat(formattedSellAmount || "0") > 0
         ? (
             parseFloat(formattedBuyAmount || "0") / parseFloat(formattedSellAmount || "0")
           ).toFixed(6)
         : "0"
-    } ${buyToken.symbol}</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Actual Trade Rate (${sellToken.symbol} → ${
-      buyToken.symbol
-    })</span>
-                  <span class="info-value">1 ${sellToken.symbol} = ${
+    } ${buyToken.symbol}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="rate-cell">
+                              <div class="rate-value">1 ${sellToken.symbol} = ${
       parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") > 0 && parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0") > 0
         ? (
             parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") / parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0")
           ).toFixed(6)
         : "0"
-    } ${buyToken.symbol}</span>
+    } ${buyToken.symbol}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="rate-difference-cell">
+                              <div class="rate-difference-value">
+                                ${(() => {
+                                  const expectedRate = parseFloat(formattedBuyAmount || "0") > 0 && parseFloat(formattedSellAmount || "0") > 0
+                                    ? parseFloat(formattedBuyAmount || "0") / parseFloat(formattedSellAmount || "0")
+                                    : 0;
+                                  const actualRate = parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") > 0 && parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0") > 0
+                                    ? parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") / parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0")
+                                    : 0;
+                                  if (expectedRate === 0 || actualRate === 0) return "N/A";
+                                  const diff = ((actualRate - expectedRate) / expectedRate) * 100;
+                                  return diff > 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`;
+                                })()}
+                              </div>
+                              <div class="rate-difference-label">vs Expected</div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-                <div class="info-item">
-                  <span class="info-label">Binance Rate (${
-                    sellToken.symbol
-                  } → ${buyToken.symbol})</span>
-                  <span class="info-value" id="binance-rate-${
-                    trade.hash
-                  }">Loading...</span>
-                </div>
-                <div class="info-item">
-                  <span class="info-label">Price Difference</span>
-                  <span class="info-value" id="price-diff-${
-                    trade.hash
-                  }">-</span>
+
+                <!-- Binance Rate Section -->
+                <div class="market-detail-section binance-rate">
+                  <div class="market-header">
+                    <div class="market-info">
+                      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span style="background: #f7931a; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">BINANCE</span>
+                        <span style="font-weight: 600; color: #f7931a; font-size: 1.1rem;">${sellToken.symbol} → ${buyToken.symbol}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Binance Rate Details -->
+                  <div class="market-details-section">
+                    <div class="market-details-header">
+                      <i class="fas fa-chart-line"></i>
+                      <span>Market Rate</span>
+                    </div>
+                    <table class="market-details-table">
+                      <thead>
+                        <tr>
+                          <th>Binance Rate</th>
+                          <th>Trade Rate</th>
+                          <th>Price Difference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <div class="rate-cell">
+                              <div class="rate-value" id="binance-rate-${
+                                trade.hash
+                              }">Loading...</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="rate-cell">
+                              <div class="rate-value">1 ${sellToken.symbol} = ${
+      parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") > 0 && parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0") > 0
+        ? (
+            parseFloat(formattedExecutedBuyAmount || formattedExecutedAmount || "0") / parseFloat(formattedExecutedSellAmount || formattedRealSellAmount || "0")
+          ).toFixed(6)
+        : "0"
+    } ${buyToken.symbol}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="rate-difference-cell">
+                              <div class="rate-difference-value" id="price-diff-${
+                                trade.hash
+                              }">-</div>
+                              <div class="rate-difference-label">vs Binance</div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
