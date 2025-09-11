@@ -473,15 +473,149 @@ app.get('/api/block-timestamp/:blockNumber', async (req, res) => {
   }
 });
 
-// Configuration endpoint to expose API tokens to frontend
+// Configuration endpoint (no longer exposes sensitive tokens)
 app.get('/api/config', (req, res) => {
   res.json({
     success: true,
     data: {
-      pairApiToken: configFile.PAIR_API_TOKEN,
       pairApiTokenAvailable: !!configFile.PAIR_API_TOKEN
     }
   });
+});
+
+// Simple in-memory rate limiting for the proxy endpoint
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per IP
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const clientData = rateLimitMap.get(ip);
+  
+  if (!clientData || now > clientData.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    return true;
+  }
+  
+  if (clientData.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+  
+  clientData.count++;
+  return true;
+}
+
+// Secure proxy endpoint for Binance price requests
+app.get('/api/binance-price', async (req, res) => {
+  try {
+    // Rate limiting
+    const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+    if (!checkRateLimit(clientIP)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Rate limit exceeded. Please try again later.'
+      });
+    }
+    
+    const { inputToken, outputToken, timestamp } = req.query;
+    
+    // Validate required parameters
+    if (!inputToken || !outputToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: inputToken and outputToken are required'
+      });
+    }
+    
+    // Validate token format (basic Ethereum address validation)
+    const addressRegex = /^0x[a-fA-F0-9]{40}$/;
+    if (!addressRegex.test(inputToken as string) || !addressRegex.test(outputToken as string)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid token address format'
+      });
+    }
+    
+    // Validate timestamp if provided
+    if (timestamp) {
+      const timestampNum = parseInt(timestamp as string);
+      if (isNaN(timestampNum) || timestampNum < 0 || timestampNum > Date.now() / 1000 + 3600) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid timestamp format or value'
+        });
+      }
+    }
+    
+    // Check if API token is available
+    if (!configFile.PAIR_API_TOKEN || configFile.PAIR_API_TOKEN === 'your_jwt_token_here') {
+      return res.status(503).json({
+        success: false,
+        error: 'PAIR_API_TOKEN not configured'
+      });
+    }
+    
+    // Build the external API URL
+    const url = new URL('https://pair-pricing.la-tribu.xyz/api/price');
+    url.searchParams.append('inputToken', inputToken as string);
+    url.searchParams.append('outputToken', outputToken as string);
+    
+    if (timestamp) {
+      url.searchParams.append('timestamp', timestamp as string);
+    }
+    
+    console.log('🌐 Proxying request to:', url.toString());
+    
+    // Make the request to the external API with the secure token
+    const response = await fetch(url.toString(), {
+      headers: {
+        'Authorization': `Bearer ${configFile.PAIR_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      // Add timeout to prevent hanging requests
+      signal: AbortSignal.timeout(10000) // 10 second timeout
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      if (errorData.error && errorData.error.includes('Failed to get pair price: Request failed with status code 404')) {
+        return res.status(404).json({
+          success: false,
+          error: 'Pair not found'
+        });
+      }
+      
+      return res.status(response.status).json({
+        success: false,
+        error: `External API error: ${errorData.message || errorData.error || 'Unknown error'}`
+      });
+    }
+    
+    const data = await response.json();
+    res.json({
+      success: true,
+      data: data
+    });
+    return;
+    
+  } catch (error) {
+    console.error('Error in Binance price proxy:', error);
+    
+    // Handle timeout errors specifically
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      return res.status(504).json({
+        success: false,
+        error: 'Request timeout - external API took too long to respond'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error'
+    });
+    return;
+  }
 });
 
 // Static file serving removed - using Cloudflare for frontend deployment

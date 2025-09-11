@@ -246,27 +246,27 @@ export async function getBlockTimestamp(blockNumber: number): Promise<number> {
 }
 
 /**
- * Fetch Binance price data for token pair
+ * Fetch Binance price data for token pair via secure proxy
  */
 export async function fetchBinancePrice(inputToken: string, outputToken: string, timestamp?: number): Promise<BinancePriceData> {
   try {
-    // First, get the API token from our config endpoint
+    // First, check if the API token is available
     const configResponse = await fetch(`${API_BASE_URL}/api/config`);
     if (!configResponse.ok) {
       throw new Error('Failed to fetch configuration');
     }
     
     const configData = await configResponse.json() as any;
-    const apiToken = configData.data?.pairApiToken;
+    const tokenAvailable = configData.data?.pairApiTokenAvailable;
     
-    console.log('🔑 API Token received:', apiToken ? 'Token present' : 'No token');
+    console.log('🔑 API Token available:', tokenAvailable ? 'Yes' : 'No');
     
-    if (!apiToken || apiToken === 'your_jwt_token_here') {
+    if (!tokenAvailable) {
       throw new Error('PAIR_API_TOKEN not configured');
     }
     
-    // Now call the external API with the token
-    const url = new URL('https://pair-pricing.la-tribu.xyz/api/price');
+    // Use the secure proxy endpoint instead of direct API calls
+    const url = new URL(`${API_BASE_URL}/api/binance-price`);
     url.searchParams.append('inputToken', inputToken);
     url.searchParams.append('outputToken', outputToken);
     
@@ -278,12 +278,10 @@ export async function fetchBinancePrice(inputToken: string, outputToken: string,
       console.log('⚠️ No timestamp provided');
     }
     
-    console.log('🌐 Making request to:', url.toString());
-    console.log('🔐 Authorization header:', `Bearer ${apiToken.substring(0, 20)}...`);
+    console.log('🌐 Making request to secure proxy:', url.toString());
     
     const response = await fetch(url.toString(), {
       headers: {
-        'Authorization': `Bearer ${apiToken}`,
         'Content-Type': 'application/json'
       }
     });
@@ -291,15 +289,20 @@ export async function fetchBinancePrice(inputToken: string, outputToken: string,
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
 
-      if(errorData.error && errorData.error.includes('Failed to get pair price: Request failed with status code 404')) {
+      if (errorData.error && errorData.error.includes('Pair not found')) {
         throw new Error('Pair not found');
       }
 
-      throw new Error(`HTTP error! status: ${response.status} - ${errorData.message || errorData.error || 'Unknown error'}`);
+      throw new Error(`HTTP error! status: ${response.status} - ${errorData.error || 'Unknown error'}`);
     }
     
-    const data = await response.json() as BinancePriceData;
-    return data;
+    const responseData = await response.json();
+    
+    if (!responseData.success) {
+      throw new Error(responseData.error || 'Unknown error from proxy');
+    }
+    
+    return responseData.data as BinancePriceData;
   } catch (error) {
     console.error('Error fetching Binance price:', error);
     throw error;
