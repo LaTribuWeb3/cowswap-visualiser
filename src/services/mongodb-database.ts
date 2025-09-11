@@ -288,9 +288,18 @@ export class MongoDBDatabaseService {
       
       // Normalize the data to match the expected Transaction interface
       const normalizedTransactions = transactions.map(tx => {
+        // Debug the raw transaction data
+        console.log('🔍 Raw transaction from MongoDB:', {
+          hash: tx.hash,
+          creationDate: tx.creationDate,
+          creationDateType: typeof tx.creationDate,
+          creationDateInstance: tx.creationDate instanceof Date
+        });
+        
         // Convert numeric fields to strings and provide defaults
         const normalized = {
           ...tx,
+          hash: tx.hash || 'Unknown',
           blockNumber: String(tx.blockNumber || 'Unknown'),
           timestamp: tx.timestamp || this.calculateTimestampFromBlock(tx.blockNumber), // Calculate from block number
           status: tx.status || 'success', // Provide default status
@@ -313,10 +322,17 @@ export class MongoDBDatabaseService {
           executedSellAmount: tx.executedSellAmount ? String(tx.executedSellAmount) : '0',
           executedSellAmountBeforeFees: tx.executedSellAmountBeforeFees ? String(tx.executedSellAmountBeforeFees) : '0',
           kind: tx.kind || 'sell',
-          receiver: tx.receiver || 'Unknown'
+          receiver: tx.receiver || 'Unknown',
+          // Handle creationDate - ensure it's properly converted to Date object
+          creationDate: this.normalizeDate(tx.creationDate)
         };
         
-        console.log('🔍 Normalized transaction:', normalized);
+        console.log('🔍 Normalized transaction:', {
+          hash: normalized.hash,
+          creationDate: normalized.creationDate,
+          creationDateType: typeof normalized.creationDate,
+          creationDateInstance: normalized.creationDate instanceof Date
+        });
         return normalized;
       });
       
@@ -343,7 +359,39 @@ export class MongoDBDatabaseService {
         .sort({ timestamp: -1 })
         .toArray();
       
-      return transactions;
+      // Normalize the data to match the expected Transaction interface
+      const normalizedTransactions = transactions.map(tx => {
+        const normalized = {
+          ...tx,
+          hash: tx.hash || 'Unknown',
+          blockNumber: String(tx.blockNumber || 'Unknown'),
+          timestamp: tx.timestamp || this.calculateTimestampFromBlock(tx.blockNumber),
+          status: tx.status || 'success',
+          from: tx.from || 'Unknown',
+          to: tx.to || 'Unknown',
+          value: tx.value ? String(tx.value) : '0',
+          gasPrice: tx.gasPrice ? String(tx.gasPrice) : '0',
+          gasUsed: tx.gasUsed ? String(tx.gasUsed) : '0',
+          decodedFunction: tx.decodedFunction || 'Unknown',
+          functionDescription: tx.functionDescription || 'No description available',
+          sellAmount: tx.sellAmount ? String(tx.sellAmount) : '0',
+          buyAmount: tx.buyAmount ? String(tx.buyAmount) : '0',
+          executedAmount: tx.executedBuyAmount ? String(tx.executedBuyAmount) : '0',
+          realSellAmount: tx.executedSellAmount ? String(tx.executedSellAmount) : '0',
+          sellPrice: tx.sellPrice ? String(tx.sellPrice) : '0',
+          buyPrice: tx.buyPrice ? String(tx.buyPrice) : '0',
+          executedBuyAmount: tx.executedBuyAmount ? String(tx.executedBuyAmount) : '0',
+          executedSellAmount: tx.executedSellAmount ? String(tx.executedSellAmount) : '0',
+          executedSellAmountBeforeFees: tx.executedSellAmountBeforeFees ? String(tx.executedSellAmountBeforeFees) : '0',
+          kind: tx.kind || 'sell',
+          receiver: tx.receiver || 'Unknown',
+          // Handle creationDate - ensure it's properly converted to Date object
+          creationDate: this.normalizeDate(tx.creationDate)
+        };
+        return normalized;
+      });
+      
+      return normalizedTransactions;
     } catch (error) {
       console.error('❌ Error fetching transactions from last days from MongoDB:', error);
       throw error;
@@ -406,8 +454,9 @@ export class MongoDBDatabaseService {
       const normalizedTransactions = transactions.map(tx => {
         const normalized = {
           ...tx,
+          hash: tx.hash || 'Unknown',
           blockNumber: String(tx.blockNumber || 'Unknown'),
-          timestamp: tx.timestamp || this.calculateTimestampFromBlock(tx.blockNumber),
+          timestamp: tx.timestamp,
           status: tx.status || 'success',
           from: tx.from || 'Unknown',
           to: tx.to || 'Unknown',
@@ -426,7 +475,9 @@ export class MongoDBDatabaseService {
           executedSellAmount: tx.executedSellAmount ? String(tx.executedSellAmount) : '0',
           executedSellAmountBeforeFees: tx.executedSellAmountBeforeFees ? String(tx.executedSellAmountBeforeFees) : '0',
           kind: tx.kind || 'sell',
-          receiver: tx.receiver || 'Unknown'
+          receiver: tx.receiver || 'Unknown',
+          // Handle creationDate - ensure it's properly converted to Date object
+          creationDate: this.normalizeDate(tx.creationDate)
         };
         return normalized;
       });
@@ -483,5 +534,40 @@ export class MongoDBDatabaseService {
       console.warn('Failed to calculate timestamp from block number:', error);
       return new Date().toISOString();
     }
+  }
+
+  /**
+   * Normalize date values from MongoDB to ensure they're proper Date objects
+   */
+  private normalizeDate(dateValue: any): Date | null {
+    if (!dateValue) {
+      return null;
+    }
+    
+    // If it's already a Date object, return it
+    if (dateValue instanceof Date) {
+      return dateValue;
+    }
+    
+    // If it's a string, try to parse it
+    if (typeof dateValue === 'string') {
+      const parsedDate = new Date(dateValue);
+      return isNaN(parsedDate.getTime()) ? null : parsedDate;
+    }
+    
+    // If it's a number (timestamp), convert it
+    if (typeof dateValue === 'number') {
+      // Check if it's in seconds or milliseconds
+      const timestamp = dateValue > 1e10 ? dateValue : dateValue * 1000;
+      const parsedDate = new Date(timestamp);
+      return isNaN(parsedDate.getTime()) ? null : parsedDate;
+    }
+    
+    // If it's a MongoDB Date object (BSON), convert it
+    if (dateValue && typeof dateValue === 'object' && dateValue.constructor && dateValue.constructor.name === 'Date') {
+      return new Date(dateValue);
+    }
+    
+    return null;
   }
 }

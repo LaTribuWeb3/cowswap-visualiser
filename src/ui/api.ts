@@ -233,11 +233,23 @@ export async function getBlockTimestamp(blockNumber: number): Promise<number> {
     const response = await fetch(`${API_BASE_URL}/api/block-timestamp/${blockNumber}`);
     
     if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`Block ${blockNumber} not found, using fallback timestamp`);
+        // Use a reasonable fallback based on current time and block number
+        const currentBlock = 19000000; // Approximate current block
+        const blocksDiff = currentBlock - blockNumber;
+        const secondsDiff = blocksDiff * 12; // 12 seconds per block
+        return Math.floor(Date.now() / 1000) - secondsDiff;
+      }
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     const data = await response.json();
-    return data.timestamp;
+    if (!data.success || !data.data || !data.data.timestamp) {
+      throw new Error('Invalid response format from block timestamp API');
+    }
+    
+    return data.data.timestamp;
   } catch (error) {
     console.error('Error getting block timestamp:', error);
     // Fallback to current time if API call fails

@@ -457,6 +457,14 @@ app.get('/api/block-timestamp/:blockNumber', async (req, res) => {
     const ethereumService = new EthereumService();
     const timestamp = await ethereumService.getBlockTimestamp(blockNum);
     
+    // Check if we got a valid timestamp
+    if (!timestamp || timestamp <= 0) {
+      return res.status(404).json({
+        success: false,
+        error: `Block ${blockNum} not found or invalid`
+      });
+    }
+    
     return res.json({
       success: true,
       data: {

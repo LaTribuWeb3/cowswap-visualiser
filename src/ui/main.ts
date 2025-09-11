@@ -14,8 +14,7 @@ import {
   formatAmount,
   formatAmountWithDecimals,
   formatTokenAmount,
-  formatDate,
-  formatDateTime,
+  formatDatabaseDate,
   formatGasUsed,
   formatGasPrice,
   formatAddress,
@@ -520,46 +519,6 @@ async function checkForNewTrades(): Promise<void> {
 }
 
 /**
- * Add new trades to the existing table without rebuilding the entire list
- */
-async function addNewTradesToTable(newTrades: Transaction[]): Promise<void> {
-  if (!elements.tradesGrid) {
-    console.error("❌ tradesGrid element not found!");
-    return;
-  }
-
-  const tbody = elements.tradesGrid.querySelector("tbody");
-  if (!tbody) {
-    console.error("❌ tbody element not found!");
-    return;
-  }
-
-  // Add new trades to the beginning of the table (most recent first)
-  for (let i = newTrades.length - 1; i >= 0; i--) {
-    const trade = newTrades[i];
-    const tradeIndex = state.trades.findIndex(t => t.hash === trade.hash);
-    
-    if (tradeIndex !== -1) {
-      console.log(`🔍 Adding new trade row ${tradeIndex}`);
-      const tradeRow = await createTradeTableRow(trade, tradeIndex);
-      
-      // Insert at the beginning of the tbody (after the header row)
-      tbody.insertBefore(tradeRow, tbody.firstChild);
-      
-      // Add a subtle highlight animation to indicate it's new
-      tradeRow.classList.add('new-trade');
-      
-      // Remove the highlight class after 3 seconds
-      setTimeout(() => {
-        tradeRow.classList.remove('new-trade');
-      }, 3000);
-    }
-  }
-
-  console.log(`✅ Added ${newTrades.length} new trades to the table`);
-}
-
-/**
  * Go to a specific page
  */
 async function goToPage(page: number): Promise<void> {
@@ -622,7 +581,6 @@ async function populateTradesList(): Promise<void> {
           <th>Amount</th>
           <th>Date</th>
           <th>Block</th>
-          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -911,6 +869,31 @@ async function createTradeTableRow(
       const executedBuyAmount = await formatTokenAmount(trade.executedBuyAmount, trade.buyToken);
       const executedSellAmount = await formatTokenAmount(trade.executedSellAmount, trade.sellToken);
 
+      // Handle creationDate - it might be a Date object or a string from the database
+      let localeString: string;
+      if (trade.creationDate) {
+        const formattedDate = formatDatabaseDate(trade.creationDate);
+        console.log('🔍 Formatted creation date:', formattedDate);
+        if (formattedDate !== 'No Date' && formattedDate !== 'Invalid Date') {
+          localeString = formattedDate;
+        } else {
+          // Fallback to block timestamp if date is invalid
+          const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+          console.log('🔍 Block timestamp from API:', blockTimestamp);
+          console.log('🔍 Block number:', trade.blockNumber);
+          localeString = timestampToDateTime(blockTimestamp);
+        }
+      } else {
+        // No creationDate, use block timestamp
+        const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+        console.log('🔍 No creation date, using block timestamp:', blockTimestamp);
+        console.log('🔍 Block number:', trade.blockNumber);
+        localeString = timestampToDateTime(blockTimestamp);
+      }
+
+      console.log('🔍 Trade creation date:', trade.creationDate);
+      console.log('🔍 Locale string:', localeString); 
+
       row.innerHTML = `
         <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
         <td class="trade-status success">Success</td>
@@ -919,9 +902,7 @@ async function createTradeTableRow(
         buyToken.symbol
       }
         </td>
-        <td class="trade-date">${timestampToDateTime(
-          await getBlockTimestamp(parseInt(trade.blockNumber))
-        )}</td>
+        <td class="trade-date">${localeString}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
         <td class="trade-arrow">
           <i class="fas fa-chevron-right"></i>
@@ -934,7 +915,7 @@ async function createTradeTableRow(
         <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
         <td class="trade-status success">Success</td>
         <td class="trade-amount">Token Info Missing</td>
-        <td class="trade-date">${timestampToDateTime(
+        <td class="trade-date">${"here4: " + timestampToDateTime(
           await getBlockTimestamp(parseInt(trade.blockNumber))
         )}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
@@ -1093,6 +1074,7 @@ async function createTradeInfoFrameOverlay(
       buyTokenAddress,
       sellAmount,
       buyAmount,
+      creationDate,
       executedAmount,
       realSellAmount;
 
@@ -1103,6 +1085,7 @@ async function createTradeInfoFrameOverlay(
       buyTokenAddress = trade.buyToken;
       sellAmount = trade.sellAmount;
       buyAmount = trade.buyAmount;
+      creationDate = trade.creationDate;
       executedAmount = trade.executedBuyAmount || trade.executedAmount;
       realSellAmount = trade.executedSellAmount || trade.realSellAmount;
     } else if (trade.parsedData?.trades?.[0]) {
@@ -1146,7 +1129,27 @@ async function createTradeInfoFrameOverlay(
       realSellAmount: formattedRealSellAmount,
       sellTokenAddress,
       buyTokenAddress,
+      creationDate,
     });
+
+    // Format timestamp with proper fallback logic
+    let formattedTimestamp: string;
+    if (creationDate) {
+      const formattedDate = formatDatabaseDate(creationDate);
+      if (formattedDate !== 'No Date' && formattedDate !== 'Invalid Date') {
+        formattedTimestamp = formattedDate;
+      } else {
+        // Fallback to block timestamp if date is invalid
+        const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+        formattedTimestamp = timestampToDateTime(blockTimestamp);
+      }
+    } else {
+      // No creationDate, use block timestamp
+      const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+      formattedTimestamp = timestampToDateTime(blockTimestamp);
+    }
+
+    console.log('🔍 Formatted timestamp for overlay:', formattedTimestamp);
 
     overlay.innerHTML = `
       <div class="overlay-backdrop"></div>
@@ -1186,13 +1189,9 @@ async function createTradeInfoFrameOverlay(
                 </div>
                 <div class="info-item">
                   <span class="info-label">Timestamp</span>
-                  <span class="info-value">${formatDateTime(
-                    timestampToDateTime(
-                      await getBlockTimestamp(
-                        parseInt(trade.blockNumber)
-                      )
-                    )
-                  )}</span>
+                  <span class="info-value">${
+                    formattedTimestamp
+                  }</span>
                 </div>
                 <div class="info-item">
                   <span class="info-label">Transaction Hash</span>
@@ -2086,7 +2085,31 @@ async function createTradeInfoFrameOverlay(
 }
 
 function timestampToDateTime(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleString();
+  console.log('🔍 timestampToDateTime input:', timestamp);
+  
+  // Handle invalid timestamps
+  if (!timestamp || isNaN(timestamp) || timestamp <= 0) {
+    console.warn('Invalid timestamp provided to timestampToDateTime:', timestamp);
+    return 'Invalid Date';
+  }
+  
+  // Handle timestamps that might already be in milliseconds
+  let timestampMs = timestamp;
+  if (timestamp < 1e10) {
+    // If timestamp is less than 1e10, it's likely in seconds, convert to milliseconds
+    timestampMs = timestamp * 1000;
+  }
+  
+  const date = new Date(timestampMs);
+  console.log('🔍 Converted date:', date);
+  console.log('🔍 Date valid:', !isNaN(date.getTime()));
+  
+  if (isNaN(date.getTime())) {
+    console.warn('Invalid date created from timestamp:', timestamp, '->', timestampMs);
+    return 'Invalid Date';
+  }
+  
+  return date.toLocaleString();
 }
 
 /**

@@ -457,70 +457,39 @@ export function calculateExchangeRate(amount1: string, decimals1: number, amount
 }
 
 /**
- * Format date
+ * Safely format a date that might be a Date object or string from database
  */
-export function formatDate(timestamp: string | undefined | null): string {
-  // Handle undefined/null cases
-  if (!timestamp) {
+export function formatDatabaseDate(dateValue: Date | string | null | undefined): string {
+  if (!dateValue) {
     return 'No Date';
   }
   
-  let date: Date;
-  
-  // Handle both Unix timestamp (seconds) and ISO string formats
-  if (timestamp.match(/^\d+$/)) {
-    // Unix timestamp in seconds
-    date = new Date(parseInt(timestamp) * 1000);
-  } else {
-    // ISO string or other date format
-    date = new Date(timestamp);
-  }
-  
-  // Check if date is valid
-  if (isNaN(date.getTime())) {
+  try {
+    let date: Date;
+    
+    if (dateValue instanceof Date) {
+      date = dateValue;
+    } else {
+      date = new Date(dateValue);
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date';
+    }
+    
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  } catch (error) {
+    console.warn('Error formatting database date:', error);
     return 'Invalid Date';
   }
-  
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
-}
-
-/**
- * Format date and time
- */
-export function formatDateTime(timestamp: string | undefined | null): string {
-  // Handle undefined/null cases
-  if (!timestamp) {
-    return 'No Date';
-  }
-  
-  let date: Date;
-  
-  // Handle both Unix timestamp (seconds) and ISO string formats
-  if (timestamp.match(/^\d+$/)) {
-    // Unix timestamp in seconds
-    date = new Date(parseInt(timestamp) * 1000);
-  } else {
-    // ISO string or other date format
-    date = new Date(timestamp);
-  }
-  
-  // Check if date is valid
-  if (isNaN(date.getTime())) {
-    return 'Invalid Date';
-  }
-  
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
 }
 
 /**
