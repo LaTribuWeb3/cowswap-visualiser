@@ -537,10 +537,10 @@ app.get('/api/binance-price', async (req, res) => {
     
     // Validate token format (basic Ethereum address validation)
     const addressRegex = /^0x[a-fA-F0-9]{40}$/;
-    if (!addressRegex.test(inputToken as string) || !addressRegex.test(outputToken as string)) {
+    if (addressRegex.test(inputToken as string) || addressRegex.test(outputToken as string)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid token address format'
+        error: 'Expecting token symbols, not addresses'
       });
     }
     
@@ -601,6 +601,74 @@ app.get('/api/binance-price', async (req, res) => {
     }
     
     const data = await response.json();
+    
+    // Check if the response indicates a job is being processed
+    if (data.status === 'processing' && data.jobId) {
+      console.log(`🔄 Job ${data.jobId} is being processed, polling for completion...`);
+      
+      // Poll for job completion
+      const maxPollingAttempts = 30; // Maximum 30 attempts (30 seconds)
+      const pollingInterval = 1000; // 1 second between attempts
+      let attempts = 0;
+      
+      while (attempts < maxPollingAttempts) {
+        attempts++;
+        console.log(`🔄 Polling attempt ${attempts}/${maxPollingAttempts} for job ${data.jobId}`);
+        
+        // Wait before polling (except on first attempt)
+        if (attempts > 1) {
+          await new Promise(resolve => setTimeout(resolve, pollingInterval));
+        }
+        
+        try {
+          // Check job status
+          const statusUrl = `https://pair-pricing.la-tribu.xyz/api/job/${data.jobId}`;
+          const statusResponse = await fetch(statusUrl, {
+            headers: {
+              'Authorization': `Bearer ${configFile.PAIR_API_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            signal: AbortSignal.timeout(5000) // 5 second timeout for status checks
+          });
+          
+          if (!statusResponse.ok) {
+            console.warn(`⚠️ Status check failed for job ${data.jobId}, attempt ${attempts}`);
+            continue;
+          }
+          
+          const statusData = await statusResponse.json();
+          console.log(`📊 Job ${data.jobId} status:`, statusData.status);
+          
+          if (statusData.status === 'completed' && statusData.result) {
+            console.log(`✅ Job ${data.jobId} completed successfully`);
+            return res.json({
+              success: true,
+              data: statusData.result
+            });
+          } else if (statusData.status === 'failed' || statusData.status === 'error') {
+            console.error(`❌ Job ${data.jobId} failed:`, statusData.message || statusData.error);
+            return res.status(500).json({
+              success: false,
+              error: `Job failed: ${statusData.message || statusData.error || 'Unknown error'}`
+            });
+          }
+          // If still processing, continue polling
+          
+        } catch (statusError) {
+          console.warn(`⚠️ Error checking job status for ${data.jobId}, attempt ${attempts}:`, statusError);
+          // Continue polling on error
+        }
+      }
+      
+      // If we've exhausted all polling attempts
+      console.error(`❌ Job ${data.jobId} did not complete within ${maxPollingAttempts} seconds`);
+      return res.status(504).json({
+        success: false,
+        error: 'Job processing timeout - the request took too long to complete'
+      });
+    }
+    
+    // If the response is not a job processing response, return it directly
     res.json({
       success: true,
       data: data

@@ -295,7 +295,9 @@ export async function fetchBinancePrice(inputToken: string, outputToken: string,
     const response = await fetch(url.toString(), {
       headers: {
         'Content-Type': 'application/json'
-      }
+      },
+      // Increase timeout to handle job polling (30 seconds + buffer)
+      signal: AbortSignal.timeout(35000) // 35 second timeout
     });
     
     if (!response.ok) {

@@ -123,6 +123,15 @@ async function fetchAndDisplayBinancePrices(
       `🔍 Fetching Binance prices for ${sellToken.symbol}/${buyToken.symbol} pair`
     );
 
+    // Show initial loading state
+    await updateBinanceUIElements(
+      trade.hash,
+      sellToken.symbol,
+      buyToken,
+      "Loading...",
+      "Loading..."
+    );
+
     // Try to fetch Binance price data
     const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
     console.log('🕐 Block timestamp for trade:', blockTimestamp);
@@ -233,12 +242,18 @@ async function updateBinanceUIElements(
       if (isError || binanceRate === null) {
         binanceRateElement.innerHTML = "No price on Binance for this pair";
         binanceRateElement.className = "info-value no-price-available";
+      } else if (binanceRate === "Loading...") {
+        binanceRateElement.innerHTML = "Loading...";
+        binanceRateElement.className = "info-value loading";
       } else {
         binanceRateElement.innerHTML = `1 ${sellSymbol} = ${binanceRate} ${buyToken.symbol}`;
         binanceRateElement.className = "info-value";
       }
 
-      if (priceDiff && priceDiff !== "N/A") {
+      if (priceDiff === "Loading...") {
+        priceDiffElement.innerHTML = "Loading...";
+        priceDiffElement.className = "info-value loading";
+      } else if (priceDiff && priceDiff !== "N/A") {
         priceDiffElement.innerHTML = priceDiff;
         priceDiffElement.className = `info-value ${
           priceDiff.includes("+")
