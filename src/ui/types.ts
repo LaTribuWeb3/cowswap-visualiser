@@ -48,6 +48,7 @@ export interface Transaction {
   sellAmount?: string;
   buyAmount?: string;
   executedAmount?: string;
+  creationDate?: Date;
   realSellAmount: string;
   sellPrice: string;
   buyPrice: string;

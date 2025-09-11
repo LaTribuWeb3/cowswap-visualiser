@@ -21,6 +21,7 @@ interface CowOrderData {
   executedBuyAmount: number;
   executedSellAmount: number;
   executedSellAmountBeforeFees: number;
+  creationDate: Date;
   sellToken: string;
   buyToken: string;
   receiver: string;
@@ -203,6 +204,7 @@ class HistoricalTradesSync {
             executedSellAmountBeforeFees: parseInt(
               order.executedSellAmountBeforeFees
             ),
+            creationDate: new Date(order.creationDate),
             sellToken: order.sellToken,
             buyToken: order.buyToken,
             receiver: order.receiver,

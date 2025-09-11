@@ -6,7 +6,7 @@ import {
   formatEther,
   formatUnits,
 } from "viem";
-import { mainnet } from "viem/chains";
+import { arbitrum } from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
 
 // CoW Protocol contract address
@@ -19,13 +19,13 @@ export class EthereumService {
   constructor() {
     // Get RPC URL from environment variables
     const rpcUrl =
-      process.env.RPC_URL || "https://eth-mainnet.g.alchemy.com/v2/demo";
+      process.env.RPC_URL || "https://arb-mainnet.g.alchemy.com/v2/demo"; 
 
     console.log(`🔗 Using RPC URL: ${rpcUrl}`);
 
     // Create public client for Ethereum mainnet
     this.client = createPublicClient({
-      chain: mainnet,
+      chain: arbitrum,
       transport: http(rpcUrl),
     });
 
