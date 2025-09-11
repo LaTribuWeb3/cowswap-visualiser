@@ -478,6 +478,7 @@ app.get('/api/config', (req, res) => {
   res.json({
     success: true,
     data: {
+      pairApiToken: configFile.PAIR_API_TOKEN,
       pairApiTokenAvailable: !!configFile.PAIR_API_TOKEN
     }
   });

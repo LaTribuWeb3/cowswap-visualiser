@@ -125,10 +125,13 @@ async function fetchAndDisplayBinancePrices(
     );
 
     // Try to fetch Binance price data
+    const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+    console.log('🕐 Block timestamp for trade:', blockTimestamp);
+    
     const binanceData = await fetchBinancePrice(
       sellToken.symbol,
       buyToken.symbol,
-      await getBlockTimestamp(parseInt(trade.blockNumber))
+      blockTimestamp
     );
 
     if (
@@ -1749,6 +1752,7 @@ async function createTradeInfoFrameOverlay(
     let binanceRateBToA = "No price on Binance for this pair";
     let priceDifference = "-";
     const timestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+    console.log('🕐 Block timestamp for overlay:', timestamp);
 
     try {
       const binanceData = await fetchBinancePrice(

@@ -259,6 +259,8 @@ export async function fetchBinancePrice(inputToken: string, outputToken: string,
     const configData = await configResponse.json() as any;
     const apiToken = configData.data?.pairApiToken;
     
+    console.log('🔑 API Token received:', apiToken ? 'Token present' : 'No token');
+    
     if (!apiToken || apiToken === 'your_jwt_token_here') {
       throw new Error('PAIR_API_TOKEN not configured');
     }
@@ -267,9 +269,17 @@ export async function fetchBinancePrice(inputToken: string, outputToken: string,
     const url = new URL('https://pair-pricing.la-tribu.xyz/api/price');
     url.searchParams.append('inputToken', inputToken);
     url.searchParams.append('outputToken', outputToken);
+    
+    console.log('⏰ Timestamp parameter:', timestamp);
     if (timestamp) {
       url.searchParams.append('timestamp', timestamp.toString());
+      console.log('✅ Timestamp added to URL');
+    } else {
+      console.log('⚠️ No timestamp provided');
     }
+    
+    console.log('🌐 Making request to:', url.toString());
+    console.log('🔐 Authorization header:', `Bearer ${apiToken.substring(0, 20)}...`);
     
     const response = await fetch(url.toString(), {
       headers: {
