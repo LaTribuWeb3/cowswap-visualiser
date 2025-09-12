@@ -930,7 +930,7 @@ async function createTradeTableRow(
         <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
         <td class="trade-status success">Success</td>
         <td class="trade-amount">Token Info Missing</td>
-        <td class="trade-date">${"here4: " + timestampToDateTime(
+        <td class="trade-date">${timestampToDateTime(
           await getBlockTimestamp(parseInt(trade.blockNumber))
         )}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
