@@ -243,7 +243,6 @@ async function updateBinanceUIElements(
         binanceRateElement.innerHTML = "No price on Binance for this pair";
         binanceRateElement.className = "info-value no-price-available";
       } else if (binanceRate === "Loading...") {
-        binanceRateElement.innerHTML = "Loading...";
         binanceRateElement.className = "info-value loading";
       } else {
         binanceRateElement.innerHTML = `1 ${sellSymbol} = ${binanceRate} ${buyToken.symbol}`;
@@ -251,7 +250,6 @@ async function updateBinanceUIElements(
       }
 
       if (priceDiff === "Loading...") {
-        priceDiffElement.innerHTML = "Loading...";
         priceDiffElement.className = "info-value loading";
       } else if (priceDiff && priceDiff !== "N/A") {
         priceDiffElement.innerHTML = priceDiff;
