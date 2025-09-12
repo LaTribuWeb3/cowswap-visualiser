@@ -9,8 +9,6 @@
     "build:frontend": "vite build",
     "dev:frontend": "vite",
     "dev:backend": "ts-node src/index.ts",
-    "start:frontend": "vite",
-    "start:backend": "node dist/index.js",
     "sync:historical": "ts-node src/scripts/sync-historical-trades.ts --method blockchain",
     "sync:realtime": "ts-node src/scripts/realtime-settlement-sync.ts"
   },
