@@ -249,6 +249,8 @@ class HistoricalTradesSync {
 
       const apiUrl = `${apiBaseUrl}/transactions/${transactionHash}/orders`;
 
+      console.log(`📡 Fetching order details from: ${apiUrl}`);
+
       const response = await fetch(apiUrl, {
         method: "GET",
         headers: {
@@ -258,8 +260,10 @@ class HistoricalTradesSync {
 
       if (!response.ok) {
         if (response.status === 404) {
+          console.log(`⚠️ No orders found for transaction ${transactionHash} (404)`);
           return [];
         }
+        console.error(`❌ HTTP error! status: ${response.status} for URL: ${apiUrl}`);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
