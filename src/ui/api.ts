@@ -32,9 +32,20 @@ export async function fetchRecentTrades(limit: number = 50, offset: number = 0):
 }
 
 /**
- * Fetch trades with pagination info
+ * Fetch trades with pagination info and filtering
  */
-export async function fetchTradesWithPagination(limit: number = 50, offset: number = 0): Promise<{
+export async function fetchTradesWithPagination(
+  limit: number = 50, 
+  offset: number = 0,
+  filters?: {
+    fromAddress?: string;
+    toAddress?: string;
+    startDate?: string;
+    endDate?: string;
+    sellToken?: string;
+    buyToken?: string;
+  }
+): Promise<{
   trades: Transaction[];
   pagination: {
     total: number;
@@ -49,6 +60,28 @@ export async function fetchTradesWithPagination(limit: number = 50, offset: numb
     const url = new URL(`${API_BASE_URL}/api/trades`);
     url.searchParams.append('limit', limit.toString());
     url.searchParams.append('offset', offset.toString());
+    
+    // Add filter parameters if provided
+    if (filters) {
+      if (filters.fromAddress) {
+        url.searchParams.append('fromAddress', filters.fromAddress);
+      }
+      if (filters.toAddress) {
+        url.searchParams.append('toAddress', filters.toAddress);
+      }
+      if (filters.startDate) {
+        url.searchParams.append('startDate', filters.startDate);
+      }
+      if (filters.endDate) {
+        url.searchParams.append('endDate', filters.endDate);
+      }
+      if (filters.sellToken) {
+        url.searchParams.append('sellToken', filters.sellToken);
+      }
+      if (filters.buyToken) {
+        url.searchParams.append('buyToken', filters.buyToken);
+      }
+    }
     
     const response = await fetch(url.toString());
     

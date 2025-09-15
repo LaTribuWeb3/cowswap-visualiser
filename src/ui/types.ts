@@ -80,6 +80,14 @@ export interface UIState {
     totalPages: number;
     hasMore: boolean;
   };
+  filters: {
+    fromAddress?: string;
+    toAddress?: string;
+    startDate?: string;
+    endDate?: string;
+    sellToken?: string;
+    buyToken?: string;
+  };
 }
 
 // API Response Types
@@ -127,5 +135,13 @@ export interface DOMElements {
   tradeDetailsSection: HTMLElement;
   paginationInfo?: HTMLElement;
   paginationControls?: HTMLElement;
+  filterContainer?: HTMLElement;
+  filterForm?: HTMLElement;
+  startDateInput?: HTMLInputElement;
+  endDateInput?: HTMLInputElement;
+  sellTokenInput?: HTMLInputElement;
+  buyTokenInput?: HTMLInputElement;
+  clearFiltersButton?: HTMLButtonElement;
+  applyFiltersButton?: HTMLButtonElement;
 }
 

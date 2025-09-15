@@ -48,6 +48,7 @@ const state: UIState = {
     totalPages: 0,
     hasMore: true,
   },
+  filters: {},
 };
 
 // Track the last trade hash to detect new trades
@@ -335,10 +336,21 @@ async function init(): Promise<void> {
     tradeDetailsSection: document.getElementById(
       "tradeDetailsSection"
     ) as HTMLElement,
+    filterContainer: document.getElementById("filterContent") as HTMLElement,
+    filterForm: document.getElementById("filterForm") as HTMLElement,
+    startDateInput: document.getElementById("startDate") as HTMLInputElement,
+    endDateInput: document.getElementById("endDate") as HTMLInputElement,
+    sellTokenInput: document.getElementById("sellToken") as HTMLInputElement,
+    buyTokenInput: document.getElementById("buyToken") as HTMLInputElement,
+    clearFiltersButton: document.getElementById("clearFiltersButton") as HTMLButtonElement,
+    applyFiltersButton: document.getElementById("applyFiltersButton") as HTMLButtonElement,
   };
 
   // Set up event listeners
   setupEventListeners();
+  
+  // Initialize filters
+  initializeFilters();
   
   // Add manual refresh button
   addManualRefreshButton();
@@ -357,6 +369,9 @@ async function init(): Promise<void> {
 
   // Load initial data
   await loadTrades(1);
+  
+  // Update filter display
+  updateFilterDisplay();
 }
 
 /**
@@ -409,7 +424,148 @@ function setupEventListeners(): void {
 }
 
 /**
- * Load trades from API for a specific page
+ * Initialize filter functionality
+ */
+function initializeFilters(): void {
+  console.log("🔧 Initializing filters...");
+  
+  // Toggle filters visibility
+  const toggleButton = document.getElementById("toggleFiltersButton");
+  if (toggleButton) {
+    toggleButton.addEventListener("click", toggleFilters);
+  }
+  
+  // Filter form submission
+  if (elements.filterForm) {
+    elements.filterForm.addEventListener("submit", handleFilterSubmit);
+  }
+  
+  // Clear filters button
+  if (elements.clearFiltersButton) {
+    elements.clearFiltersButton.addEventListener("click", clearFilters);
+  }
+  
+  console.log("✅ Filters initialized");
+}
+
+/**
+ * Toggle filters visibility
+ */
+function toggleFilters(): void {
+  const filterContent = elements.filterContainer;
+  const toggleButton = document.getElementById("toggleFiltersButton");
+  
+  if (!filterContent || !toggleButton) return;
+  
+  const isVisible = filterContent.style.display !== "none";
+  
+  if (isVisible) {
+    filterContent.style.display = "none";
+    toggleButton.classList.remove("expanded");
+  } else {
+    filterContent.style.display = "block";
+    toggleButton.classList.add("expanded");
+  }
+}
+
+/**
+ * Handle filter form submission
+ */
+async function handleFilterSubmit(event: Event): Promise<void> {
+  event.preventDefault();
+  
+  console.log("🔍 Applying filters...");
+  
+  // Collect filter values
+  const filters = {
+    startDate: elements.startDateInput?.value || undefined,
+    endDate: elements.endDateInput?.value || undefined,
+    sellToken: elements.sellTokenInput?.value?.trim().toUpperCase() || undefined,
+    buyToken: elements.buyTokenInput?.value?.trim().toUpperCase() || undefined,
+  };
+  
+  // Validate date range
+  if (filters.startDate && filters.endDate) {
+    const startDate = new Date(filters.startDate);
+    const endDate = new Date(filters.endDate);
+    
+    if (startDate > endDate) {
+      showToast("Start date must be before end date", "error");
+      return;
+    }
+  }
+  
+  // Remove empty values
+  const cleanFilters = Object.fromEntries(
+    Object.entries(filters).filter(([_, value]) => value !== undefined && value !== "")
+  );
+  
+  console.log("🔍 Applied filters:", cleanFilters);
+  
+  // Update state
+  state.filters = cleanFilters;
+  
+  // Reset to page 1 when applying filters
+  state.pagination.currentPage = 1;
+  
+  // Load trades with new filters
+  await loadTrades(1);
+  
+  // Update filter display
+  updateFilterDisplay();
+  
+  // Show success message
+  showToast("Filters applied successfully", "success");
+}
+
+/**
+ * Clear all filters
+ */
+async function clearFilters(): Promise<void> {
+  console.log("🧹 Clearing filters...");
+  
+  // Clear form inputs
+  if (elements.startDateInput) elements.startDateInput.value = "";
+  if (elements.endDateInput) elements.endDateInput.value = "";
+  if (elements.sellTokenInput) elements.sellTokenInput.value = "";
+  if (elements.buyTokenInput) elements.buyTokenInput.value = "";
+  
+  // Clear state
+  state.filters = {};
+  
+  // Reset to page 1
+  state.pagination.currentPage = 1;
+  
+  // Load trades without filters
+  await loadTrades(1);
+  
+  // Update filter display
+  updateFilterDisplay();
+  
+  // Show success message
+  showToast("Filters cleared successfully", "success");
+}
+
+/**
+ * Update filter display to show active filters
+ */
+function updateFilterDisplay(): void {
+  const filterHeader = document.querySelector('.filters-card .card-header h2') as HTMLElement;
+  if (!filterHeader) return;
+  
+  const activeFilters = Object.keys(state.filters).length;
+  
+  if (activeFilters > 0) {
+    filterHeader.innerHTML = `<i class="fas fa-filter"></i> Filters (${activeFilters} active)`;
+    filterHeader.style.color = '#4ade80'; // Green color for active filters
+  } else {
+    filterHeader.innerHTML = `<i class="fas fa-filter"></i> Filters`;
+    filterHeader.style.color = 'white'; // Default white color
+  }
+}
+
+/**
+ * Load trades from API for a specific page with filters
  */
 async function loadTrades(page: number = 1): Promise<void> {
   try {
@@ -421,7 +577,9 @@ async function loadTrades(page: number = 1): Promise<void> {
     const offset = (page - 1) * state.pagination.pageSize;
     
     console.log(`📡 Fetching trades (page ${page}, offset ${offset})...`);
-    const result = await fetchTradesWithPagination(state.pagination.pageSize, offset);
+    console.log(`🔍 Current filters:`, state.filters);
+    
+    const result = await fetchTradesWithPagination(state.pagination.pageSize, offset, state.filters);
 
     console.log(`🔍 Fetched ${result.trades.length} trades from API`);
 
