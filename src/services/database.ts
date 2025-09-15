@@ -38,6 +38,8 @@ export interface DatabaseService {
     toAddress?: string;
     startDate?: Date;
     endDate?: Date;
+    sellToken?: string;
+    buyToken?: string;
   }): Promise<{
     transactions: any[];
     total: number;
@@ -200,6 +202,8 @@ export class MockDatabaseService implements DatabaseService {
     toAddress?: string;
     startDate?: Date;
     endDate?: Date;
+    sellToken?: string;
+    buyToken?: string;
   }): Promise<{
     transactions: any[];
     total: number;
@@ -222,6 +226,21 @@ export class MockDatabaseService implements DatabaseService {
         if (params.endDate && txDate > params.endDate) return false;
         return true;
       });
+    }
+
+    // Apply token filters
+    if (params.sellToken) {
+      transactions = transactions.filter(tx => 
+        tx.sellToken === params.sellToken || 
+        (tx.parsedData?.trades?.[0]?.sellToken === params.sellToken)
+      );
+    }
+
+    if (params.buyToken) {
+      transactions = transactions.filter(tx => 
+        tx.buyToken === params.buyToken || 
+        (tx.parsedData?.trades?.[0]?.buyToken === params.buyToken)
+      );
     }
 
     // Sort by timestamp in reverse chronological order

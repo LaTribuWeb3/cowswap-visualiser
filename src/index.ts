@@ -187,14 +187,14 @@ app.get('/api/database/health', async (req, res) => {
       await initializeDatabase();
     }
     
-    res.json({
+    return res.json({
       success: true,
       status: 'connected',
       type: isDatabaseConnected ? 'MongoDB' : 'Mock',
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       status: 'error',
       error: error.message,
@@ -203,7 +203,7 @@ app.get('/api/database/health', async (req, res) => {
   }
 });
 
-// API endpoint to get trades with pagination
+// API endpoint to get trades with pagination and filtering
 app.get('/api/trades', async (req, res) => {
   try {
     console.log('📡 Fetching CoW Protocol trades...');
@@ -216,17 +216,44 @@ app.get('/api/trades', async (req, res) => {
     // Get query parameters
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = parseInt(req.query.offset as string) || 0;
+    const fromAddress = req.query.fromAddress as string;
+    const toAddress = req.query.toAddress as string;
+    const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+    const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+    const sellToken = req.query.sellToken as string;
+    const buyToken = req.query.buyToken as string;
     
-    // Get transactions from database with proper pagination
+    // Validate date parameters
+    if (startDate && isNaN(startDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid startDate format. Use ISO 8601 format (e.g., 2024-01-01T00:00:00.000Z)'
+      });
+    }
+    
+    if (endDate && isNaN(endDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid endDate format. Use ISO 8601 format (e.g., 2024-01-01T00:00:00.000Z)'
+      });
+    }
+    
+    // Get transactions from database with proper pagination and filtering
     const result = await databaseService.getTransactionsWithPagination({
       limit,
-      offset
+      offset,
+      fromAddress,
+      toAddress,
+      startDate,
+      endDate,
+      sellToken,
+      buyToken
     });
     
     console.log(`✅ Retrieved ${result.transactions.length} transactions from database (showing latest first)`);
     console.log(`📊 Total transactions in database: ${result.total}`);
     
-    res.json({
+    return res.json({
       success: true,
       data: sanitizeForJSON(result.transactions),
       pagination: {
@@ -241,7 +268,7 @@ app.get('/api/trades', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error fetching trades:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch trades'
     });
@@ -263,7 +290,7 @@ app.get('/api/trades/recent', async (req, res) => {
     
     console.log(`✅ Retrieved ${transactions.length} transactions from last ${days} days`);
     
-    res.json({
+    return res.json({
       success: true,
       data: sanitizeForJSON(transactions),
       days,
@@ -271,7 +298,7 @@ app.get('/api/trades/recent', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error fetching recent trades:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch recent trades'
     });
@@ -300,14 +327,14 @@ app.get('/api/trades/:hash', async (req, res) => {
       return;
     }
     
-    res.json({
+    return res.json({
       success: true,
       data: sanitizeForJSON([transaction]),
       database: isDatabaseConnected ? 'MongoDB' : 'Mock'
     });
   } catch (error: any) {
     console.error('❌ Error fetching trade details:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch trade details'
     });
@@ -324,13 +351,13 @@ app.get('/api/events', async (req, res) => {
     
     console.log(`✅ Fetched ${events.length} real events`);
     
-    res.json({
+    return res.json({
       success: true,
       events: sanitizeForJSON(events)
     });
   } catch (error: any) {
     console.error('❌ Error fetching events:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch events'
     });
@@ -367,7 +394,7 @@ app.post('/api/trades/sync', async (req, res) => {
     
     console.log(`✅ Successfully synced ${savedCount} transactions to database`);
     
-    res.json({
+    return res.json({
       success: true,
       message: `Synced ${savedCount} transactions to database`,
       totalFetched: transactions.length,
@@ -376,7 +403,7 @@ app.post('/api/trades/sync', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error syncing trades:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message || 'Failed to sync trades'
     });
@@ -397,14 +424,14 @@ app.get('/api/token/:address/decimals', async (req, res) => {
     
     console.log(`✅ Token ${address} has ${decimals} decimals`);
     
-    res.json({
+    return res.json({
       success: true,
       decimals: decimals
     });
   } catch (error: any) {
     console.error('❌ Error fetching token decimals:', error);
     console.error('❌ Error stack:', error.stack);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch token decimals'
     });
@@ -425,14 +452,14 @@ app.get('/api/token/:address/symbol', async (req, res) => {
     
     console.log(`✅ Token ${address} has symbol: ${symbol}`);
     
-    res.json({
+    return res.json({
       success: true,
       symbol: symbol
     });
   } catch (error: any) {
     console.error('❌ Error fetching token symbol:', error);
     console.error('❌ Error stack:', error.stack);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch token symbol'
     });

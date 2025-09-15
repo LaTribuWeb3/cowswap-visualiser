@@ -9,7 +9,7 @@ import {
 import { arbitrum } from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
 
-// CoW Protocol contract address
+// CoW Protocol contract address (Arbitrum)
 const COW_PROTOCOL_ADDRESS = "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
 
 export class EthereumService {
@@ -23,7 +23,7 @@ export class EthereumService {
 
     console.log(`🔗 Using RPC URL: ${rpcUrl}`);
 
-    // Create public client for Ethereum mainnet
+    // Create public client for Arbitrum
     this.client = createPublicClient({
       chain: arbitrum,
       transport: http(rpcUrl),
@@ -55,6 +55,24 @@ export class EthereumService {
       console.error("Error fetching block:", error);
     }
     return 0;
+  }
+
+  async getBlockNumberFromDate(date: Date): Promise<number> {
+    /*
+     * 1757929503 => 379365564
+     * 1757929504 => 379365568
+     * 
+     * 379365564 / 4 is number of seconds since startTimeStamp until timestamp 1757929503
+     * 
+     * startTimeStamp: 1757929503 - 379365564 / 4 = 1663088112
+     *                 1757929503 -      94841391 = 1663088112                      
+     * 
+     * Formula: (timestamp - startTimeStamp) * 4
+     */
+    const startTimeStamp = 1663088112;
+    const nowInSeconds = date.getTime() / 1000;
+    const blockNumber = Math.floor((nowInSeconds - startTimeStamp) * 4);
+    return Number(blockNumber);
   }
 
   async fetchTokenSymbol(tokenAddress: `0x${string}`): Promise<string> {

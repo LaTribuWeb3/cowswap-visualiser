@@ -1,7 +1,9 @@
 import { MongoClient, Db, Collection } from 'mongodb';
 import { CowOrder, CowBatch } from '../types/cow-protocol';
+import { EthereumService } from './ethereum';
 
 export class MongoDBDatabaseService {
+  private ethereumService: EthereumService;
   private client: MongoClient;
   private db: Db | null = null;
   private ordersCollection: Collection | null = null;
@@ -10,6 +12,7 @@ export class MongoDBDatabaseService {
 
   constructor() {
     const mongoUri = process.env.MONGODB_URI;
+    this.ethereumService = new EthereumService();
 
     if (!mongoUri) {
       throw new Error('MONGODB_URI environment variable is required');
@@ -405,6 +408,8 @@ export class MongoDBDatabaseService {
     toAddress?: string;
     startDate?: Date;
     endDate?: Date;
+    sellToken?: string;
+    buyToken?: string;
   }): Promise<{
     transactions: any[];
     total: number;
@@ -415,23 +420,48 @@ export class MongoDBDatabaseService {
 
     try {
       let filter: any = {};
-      
+      filter.$and = filter.$and || [];
+
       if (params.fromAddress) {
-        filter.from = params.fromAddress;
+        filter.$and.push({ from: params.fromAddress });
       }
       
       if (params.toAddress) {
-        filter.to = params.toAddress;
+        filter.$and.push({ to: params.toAddress });
       }
       
       if (params.startDate || params.endDate) {
-        filter.timestamp = {};
+        let blockNumberFilter: any = {};
+
         if (params.startDate) {
-          filter.timestamp.$gte = params.startDate;
+          blockNumberFilter.$gte = await this.ethereumService.getBlockNumberFromDate(params.startDate);
         }
         if (params.endDate) {
-          filter.timestamp.$lte = params.endDate;
+          blockNumberFilter.$lte = await this.ethereumService.getBlockNumberFromDate(params.endDate);
         }
+      
+        filter.$and.push({ blockNumber: blockNumberFilter });
+      }
+
+      // Apply token filters
+      if (params.sellToken) {
+        filter.$and.push({ sellToken: params.sellToken.toLowerCase() });
+      }
+      
+      if (params.buyToken) {
+        filter.$and.push({ buyToken: params.buyToken.toLowerCase() });
+      }
+        
+      if (params.fromAddress) {
+        filter.$and.push({ from: params.fromAddress });
+      }
+
+      if (params.toAddress) {
+        filter.$and.push({ to: params.toAddress });
+      }
+
+      if(filter.$and.length === 0) {
+        filter = {};
       }
 
       // Get total count
