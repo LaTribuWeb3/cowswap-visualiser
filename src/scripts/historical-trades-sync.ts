@@ -14,6 +14,8 @@ interface SyncProgress {
   errors: number;
   startTime: Date;
   lastProcessedBlock: number;
+  isWaitingForTimeout: boolean;
+  timeoutStartTime?: Date;
 }
 
 interface CowOrderData {
@@ -48,6 +50,7 @@ class HistoricalTradesSync {
       errors: 0,
       startTime: new Date(),
       lastProcessedBlock: 0,
+      isWaitingForTimeout: false,
     };
   }
 
@@ -94,6 +97,7 @@ class HistoricalTradesSync {
     console.log(
       "📅 Starting historical sync from most recent to 4 months ago..."
     );
+    console.log("⏰ Adding 10-minute timeout between block fetches to prevent RPC limits");
 
     try {
       // Process blocks from most recent to oldest
@@ -108,6 +112,18 @@ class HistoricalTradesSync {
           // Update progress every 100 blocks
           if (blockNumber % 100 === 0) {
             this.printProgressReport();
+          }
+
+          // Add 10-minute timeout between block fetches to prevent RPC limits
+          // Skip timeout for the last block to avoid unnecessary delay
+          if (blockNumber > this.targetBlock) {
+            this.progress.isWaitingForTimeout = true;
+            this.progress.timeoutStartTime = new Date();
+            console.log("⏳ Waiting 10 minutes before fetching next block to prevent RPC limits...");
+            await this.delay(10 * 60 * 1000); // 10 minutes = 600,000ms
+            this.progress.isWaitingForTimeout = false;
+            this.progress.timeoutStartTime = undefined;
+            console.log("✅ Timeout completed, continuing with next block...");
           }
         } catch (error) {
           console.error(`❌ Error processing block ${blockNumber}:`, error);
@@ -292,6 +308,16 @@ class HistoricalTradesSync {
     console.log(`⏭️ Duplicates skipped: ${this.progress.skippedDuplicates}`);
     console.log(`❌ Errors: ${this.progress.errors}`);
     console.log(`🗄️  Database: ${this.isDatabaseConnected ? "MongoDB" : "Mock"}`);
+    
+    if (this.progress.isWaitingForTimeout && this.progress.timeoutStartTime) {
+      const timeoutElapsed = Date.now() - this.progress.timeoutStartTime.getTime();
+      const timeoutRemaining = Math.max(0, (10 * 60 * 1000) - timeoutElapsed);
+      const remainingTime = this.formatTime(timeoutRemaining);
+      console.log(`⏳ RPC Timeout: ${remainingTime} remaining`);
+    } else {
+      console.log(`⏳ RPC Timeout: Not active`);
+    }
+    
     console.log("===========================\n");
   }
 

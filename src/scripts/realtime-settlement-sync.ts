@@ -13,6 +13,8 @@ interface SyncProgress {
   errors: number;
   startTime: Date;
   lastProcessedBlock: number;
+  isWaitingForTimeout: boolean;
+  timeoutStartTime?: Date;
 }
 
 interface CowOrderData {
@@ -46,6 +48,7 @@ class RealtimeSettlementSync {
       errors: 0,
       startTime: new Date(),
       lastProcessedBlock: 0,
+      isWaitingForTimeout: false,
     };
   }
 
@@ -120,6 +123,7 @@ class RealtimeSettlementSync {
           this.progress.lastProcessedBlock + 1
         } to ${currentBlock}`
       );
+      console.log("⏰ Adding 10-minute timeout between block fetches to prevent RPC limits");
 
       // Process each new block
       for (
@@ -128,6 +132,18 @@ class RealtimeSettlementSync {
         blockNumber++
       ) {
         await this.processBlock(BigInt(blockNumber));
+        
+        // Add 10-minute timeout between block fetches to prevent RPC limits
+        // Skip timeout for the last block to avoid unnecessary delay
+        if (blockNumber < currentBlock) {
+          this.progress.isWaitingForTimeout = true;
+          this.progress.timeoutStartTime = new Date();
+          console.log("⏳ Waiting 10 minutes before fetching next block to prevent RPC limits...");
+          await this.delay(10 * 60 * 1000); // 10 minutes = 600,000ms
+          this.progress.isWaitingForTimeout = false;
+          this.progress.timeoutStartTime = undefined;
+          console.log("✅ Timeout completed, continuing with next block...");
+        }
       }
 
       this.progress.lastProcessedBlock = currentBlock;
@@ -297,6 +313,16 @@ class RealtimeSettlementSync {
     console.log(
       `🗄️  Database: ${this.isDatabaseConnected ? "MongoDB" : "Mock"}`
     );
+    
+    if (this.progress.isWaitingForTimeout && this.progress.timeoutStartTime) {
+      const timeoutElapsed = Date.now() - this.progress.timeoutStartTime.getTime();
+      const timeoutRemaining = Math.max(0, (10 * 60 * 1000) - timeoutElapsed);
+      const remainingTime = this.formatTime(timeoutRemaining);
+      console.log(`⏳ RPC Timeout: ${remainingTime} remaining`);
+    } else {
+      console.log(`⏳ RPC Timeout: Not active`);
+    }
+    
     console.log("========================\n");
   }
 
