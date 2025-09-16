@@ -376,7 +376,7 @@ async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
         </div>
         
         <div class="solutions-summary">
-          ${await Promise.all(sortedSolutions.map(async (solution: any, index: number) => {
+          ${(await Promise.all(sortedSolutions.map(async (solution: any, index: number) => {
             // Calculate total buy amount across all orders
             let totalBuyAmount = '0';
             let buyTokenAddress = '';
@@ -438,7 +438,7 @@ async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
               </div>
             </div>
             `;
-          }))}
+          }))).join("")}
         </div>
       </div>
     `;
