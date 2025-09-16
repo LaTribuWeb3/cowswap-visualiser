@@ -23,6 +23,8 @@ const OrdersTable: React.FC = () => {
   const [filterValidSolutions, setFilterValidSolutions] = useState<boolean>(false);
   const [filterSellToken, setFilterSellToken] = useState<string>(WETH_ADDRESS);
   const [filterBuyToken, setFilterBuyToken] = useState<string>(USDC_ADDRESS);
+  const [filterOrderId, setFilterOrderId] = useState<string>('');
+  const [filterTimeframe, setFilterTimeframe] = useState<string>('last-month');
   const [sellTokenSearch, setSellTokenSearch] = useState<string>('');
   const [buyTokenSearch, setBuyTokenSearch] = useState<string>('');
   const [showSellDropdown, setShowSellDropdown] = useState<boolean>(false);
@@ -30,6 +32,46 @@ const OrdersTable: React.FC = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const itemsPerPage = 20;
+
+  // Timeframe options
+  const timeframeOptions = [
+    { value: '24h', label: 'Last 24 hours' },
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'last-week', label: 'Last week' },
+    { value: 'last-month', label: 'Last month' }
+  ];
+
+  // Get date range for timeframe filter
+  const getTimeframeRange = (timeframe: string) => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (timeframe) {
+      case '24h':
+        return {
+          start: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+          end: now
+        };
+      case 'yesterday':
+        const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+        return {
+          start: startOfYesterday,
+          end: startOfToday
+        };
+      case 'last-week':
+        return {
+          start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+          end: now
+        };
+      case 'last-month':
+        return {
+          start: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+          end: now
+        };
+      default:
+        return null;
+    }
+  };
 
   // Get unique tokens from orders for filtering
   const getUniqueTokens = (orders: OrderWithMetadata[]) => {
@@ -109,12 +151,12 @@ const OrdersTable: React.FC = () => {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken, sortBy, sortOrder]);
+  }, [filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken, filterOrderId, filterTimeframe, sortBy, sortOrder]);
 
   // Apply client-side filtering and pagination (when filters or page change)
   useEffect(() => {
     applyFiltersAndPagination();
-  }, [allOrders, page, sortBy, sortOrder, filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken]);
+  }, [allOrders, page, sortBy, sortOrder, filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken, filterOrderId, filterTimeframe]);
 
   // Update search display when token selection changes
   useEffect(() => {
@@ -229,6 +271,24 @@ const OrdersTable: React.FC = () => {
       filteredOrders = filteredOrders.filter(order => 
         order.buyToken.toLowerCase() === filterBuyToken.toLowerCase()
       );
+    }
+
+    // Apply client-side filtering for order ID
+    if (filterOrderId) {
+      filteredOrders = filteredOrders.filter(order => 
+        order._id.toLowerCase().includes(filterOrderId.toLowerCase())
+      );
+    }
+
+    // Apply client-side filtering for timeframe
+    if (filterTimeframe) {
+      const timeframeRange = getTimeframeRange(filterTimeframe);
+      if (timeframeRange) {
+        filteredOrders = filteredOrders.filter(order => {
+          const orderTimestamp = order.timestamp ? new Date(order.timestamp) : new Date(order.eventBlockTimestamp * 1000);
+          return orderTimestamp >= timeframeRange.start && orderTimestamp <= timeframeRange.end;
+        });
+      }
     }
 
 
@@ -565,6 +625,38 @@ const OrdersTable: React.FC = () => {
                 </div>
               </div>
               
+              <div className="flex-1 min-w-48">
+                <label htmlFor="filter-order-id" className="block text-sm font-medium text-gray-700 mb-1">
+                  Order ID
+                </label>
+                <input
+                  id="filter-order-id"
+                  type="text"
+                  value={filterOrderId}
+                  onChange={(e) => setFilterOrderId(e.target.value)}
+                  placeholder="Search by order ID..."
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+              </div>
+              
+              <div className="flex-1 min-w-48">
+                <label htmlFor="filter-timeframe" className="block text-sm font-medium text-gray-700 mb-1">
+                  Timeframe
+                </label>
+                <select
+                  id="filter-timeframe"
+                  value={filterTimeframe}
+                  onChange={(e) => setFilterTimeframe(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  {timeframeOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
               <div className="flex-shrink-0">
                 <button
                   onClick={() => {
@@ -572,6 +664,8 @@ const OrdersTable: React.FC = () => {
                     setFilterValidSolutions(false);
                     setFilterSellToken(WETH_ADDRESS);
                     setFilterBuyToken(USDC_ADDRESS);
+                    setFilterOrderId('');
+                    setFilterTimeframe('last-month');
                     setSellTokenSearch(getTokenDisplayValue(WETH_ADDRESS));
                     setBuyTokenSearch(getTokenDisplayValue(USDC_ADDRESS));
                   }}
