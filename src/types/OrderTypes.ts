@@ -17,68 +17,87 @@ export interface TokenInfo {
   tags?: string[];
 }
 
-// Interface for the order document (matches the MongoDB model)
+// Competition data structure for each solver
+export interface CompetitionData {
+  solverAddress: string;
+  clearingPrices: Record<string, string>;
+  order: {
+    id: string;
+    sellAmount: string;
+    buyAmount: string;
+    buyToken: string;
+    sellToken: string;
+  };
+}
+
+// Price range for event block prices
+export interface PriceRange {
+  high: number;
+  low: number;
+}
+
+// Solver bid price information
+export interface SolverBidPriceInfo {
+  solverPrice: string;
+  solverPriceTimestamp: number;
+  markup: number;
+}
+
+// Interface for the order document (matches the new MongoDB model)
 export interface IOrderDocument {
-  // Use orderUid as the document _id
-  _id: OrderUid;
-  
-  // Request metadata
-  auctionId: string;
-  timestamp: Date;
-  requestIp?: string;
-  processingTimeMs?: number;
-  
-  // Order details
-  sellToken: Token;
-  buyToken: Token;
-  sellAmount: TokenAmount;
-  buyAmount: TokenAmount;
-  kind: OrderKind;
-  owner: string;
-  
-  // Our pricing and offer
-  livePrice: number;        // The live market price we based our quote on
-  markup: number;           // The markup we applied (in basis points)
-  ourOffer: {
-    clearingPrices? : {
-      [token: string]: string;
-    }
-    sellAmount: TokenAmount; // How much we offered to sell
-    buyAmount: TokenAmount;  // How much we offered to buy
-    wasIncluded: boolean;    // Whether this order was included in our solution
-  };
-  
-  // Competitive analysis data
-  competitors?: {
-    [solverAddress: string]: {
-      sellAmount?: TokenAmount;
-      buyAmount?: TokenAmount;
-      clearingPrices? : {
-        [token: string]: string;
-      }
-      ranking?: number;
-      isWinner?: boolean;
-    };
-  };
-  
-  // Additional metadata
-  metadata?: {
-    gasEstimate?: number;
-    profitability?: number;
-    priceDeviation?: number;
-    // Competition data (order-specific)
-    isWinner?: boolean; // Whether our solver won this specific order
-    ranking?: number; // Our ranking for this specific order (1 = winner, 0 = filtered out)
-    totalCompetitors?: number; // Total number of solvers who competed for this order
-    competitionEnrichedAt?: Date; // When competition data was last enriched
-    [key: string]: any;
-  };
+  _id: string; // orderUid as the document _id
+  eventBlockNumber: number;
+  eventBlockTimestamp: number;
+  eventTxHash: string;
+  sellToken: string;
+  buyToken: string;
+  eventSellAmount: string;
+  eventBuyAmount: string;
+  competitionData: CompetitionData[];
+  auctionStartBlock: number;
+  auctionStartTimestamp: number;
+  solverBidPriceInfo: SolverBidPriceInfo;
+  eventBlockPrices: Record<string, PriceRange>;
+  checked?: boolean;
 }
 
 // Enhanced order interface with token metadata for frontend display
 export interface OrderWithMetadata extends IOrderDocument {
   sellTokenInfo?: TokenInfo;
   buyTokenInfo?: TokenInfo;
+  // Legacy fields for backward compatibility with existing components
+  timestamp?: Date;
+  livePrice?: number;
+  markup?: number;
+  kind?: OrderKind;
+  owner?: string;
+  sellAmount?: string; // Legacy field
+  buyAmount?: string; // Legacy field
+  ourOffer?: {
+    clearingPrices?: Record<string, string>;
+    sellAmount: string;
+    buyAmount: string;
+    wasIncluded: boolean;
+  };
+  competitors?: {
+    [solverAddress: string]: {
+      sellAmount?: string;
+      buyAmount?: string;
+      clearingPrices?: Record<string, string>;
+      ranking?: number;
+      isWinner?: boolean;
+    };
+  };
+  metadata?: {
+    gasEstimate?: number;
+    profitability?: number;
+    priceDeviation?: number;
+    isWinner?: boolean;
+    ranking?: number;
+    totalCompetitors?: number;
+    competitionEnrichedAt?: Date;
+    [key: string]: any;
+  };
 }
 
 // Dashboard statistics interface

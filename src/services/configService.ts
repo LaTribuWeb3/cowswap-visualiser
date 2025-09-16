@@ -4,6 +4,7 @@ export interface SolverConfig {
   endpoint: string;
   timeout: number;
   maxGasPrice: string;
+  address: string; // Our solver address
 }
 
 export interface MarginConfig {
@@ -58,6 +59,9 @@ export interface SupportedToken {
   address: string;
   decimals: number;
 }
+
+// Our solver address - this should match the address used in the competition data
+export const OUR_SOLVER_ADDRESS = '0x6080cc68234c2333EF0bAe42B1a217F8E5C7020b'; // Helixbox solver address
 
 export interface ConfigResponse {
   solver: SolverConfig;
@@ -120,6 +124,10 @@ class ConfigService {
   async getTradingPairs(): Promise<string[]> {
     const config = await this.getConfig();
     return config.tradingPairs;
+  }
+
+  getOurSolverAddress(): string {
+    return OUR_SOLVER_ADDRESS;
   }
 
   async getWethUsdcOrders(): Promise<unknown[]> {

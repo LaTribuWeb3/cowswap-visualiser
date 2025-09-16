@@ -61,7 +61,14 @@ const Dashboard: React.FC = () => {
         throw new Error(errorData.details || errorData.error || 'Failed to fetch dashboard data');
       }
       const data = await response.json();
-      setStats(data);
+      
+      // Transform the data to match the expected structure
+      const transformedStats = {
+        ...data,
+        // Add any necessary transformations here if the API response structure changed
+      };
+      
+      setStats(transformedStats);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {

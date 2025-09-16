@@ -4,6 +4,7 @@ import type { OrderWithMetadata, OrdersResponse } from '../types/OrderTypes';
 import { getTokenDisplaySymbol, getTokenMetadata } from '../utils/tokenMapping';
 import { getSolverName } from '../utils/solversMapping';
 import { calculateCompetitorDeltas } from '../utils/deltaCalculations';
+import { configService } from '../services/configService';
 
 const OrdersTable: React.FC = () => {
   const [allOrders, setAllOrders] = useState<OrderWithMetadata[]>([]);
@@ -40,14 +41,46 @@ const OrdersTable: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders-bulk?limit=20000&withMetadata=false');
+      const response = await fetch('https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders-bulk?limit=10000');
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to fetch orders');
       }
       
       const data: OrdersResponse = await response.json();
-      setAllOrders(data.orders);
+      
+      // Transform orders to include legacy fields for backward compatibility
+      const transformedOrders = data.orders.map(order => ({
+        ...order,
+        // Add legacy fields for backward compatibility
+        timestamp: order.timestamp || new Date(order.eventBlockTimestamp * 1000),
+        livePrice: order.livePrice || (order.solverBidPriceInfo ? parseFloat(order.solverBidPriceInfo.solverPrice) : 0),
+        markup: order.markup || (order.solverBidPriceInfo ? order.solverBidPriceInfo.markup : 0),
+        kind: order.kind || 'sell', // Default to sell if not specified
+        owner: order.owner || '', // Will need to be populated from somewhere
+        ourOffer: order.ourOffer || {
+          sellAmount: order.eventSellAmount,
+          buyAmount: order.eventBuyAmount,
+          wasIncluded: !!(order.solverBidPriceInfo && 
+            order.solverBidPriceInfo.solverPrice && 
+            parseFloat(order.solverBidPriceInfo.solverPrice) > 0),
+          clearingPrices: order.competitionData?.find(comp => 
+            comp.solverAddress.toLowerCase() === configService.getOurSolverAddress().toLowerCase()
+          )?.clearingPrices
+        },
+        // Don't create competitors object to avoid duplicates - use competitionData directly
+        competitors: order.competitors || {},
+        metadata: order.metadata || {
+          ranking: order.competitionData?.find(comp => 
+            comp.solverAddress.toLowerCase() === configService.getOurSolverAddress().toLowerCase()
+          ) ? 1 : 0, // 1 if our solver is in competition, 0 otherwise
+          isWinner: order.competitionData?.find(comp => 
+            comp.solverAddress.toLowerCase() === configService.getOurSolverAddress().toLowerCase()
+          ) !== undefined
+        }
+      }));
+      
+      setAllOrders(transformedOrders);
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -58,34 +91,36 @@ const OrdersTable: React.FC = () => {
 
   const applyFiltersAndPagination = () => {
     let filteredOrders = [...allOrders];
+    const ourSolverAddress = configService.getOurSolverAddress();
 
-    // Apply client-side filtering for included orders
+    // Apply client-side filtering for orders with solutions (solverPrice exists and is non-zero)
     if (filterIncluded !== null) {
-      filteredOrders = filteredOrders.filter(order => 
-        order.ourOffer && order.ourOffer.wasIncluded === filterIncluded
-      );
+      filteredOrders = filteredOrders.filter(order => {
+        const hasSolverPrice = order.solverBidPriceInfo && 
+          order.solverBidPriceInfo.solverPrice && 
+          parseFloat(order.solverBidPriceInfo.solverPrice) > 0;
+        
+        return filterIncluded ? hasSolverPrice : !hasSolverPrice;
+      });
     }
 
-    // Apply client-side filtering for valid solutions
+    // Apply client-side filtering for valid solutions (competitionData includes our solver)
     if (filterValidSolutions) {
       filteredOrders = filteredOrders.filter(order => {
-        const hasValidRanking = order.metadata && 
-          order.metadata.ranking !== undefined && 
-          order.metadata.ranking !== null && 
-          order.metadata.ranking > 0;
+        const hasOurSolverInCompetition = order.competitionData && 
+          order.competitionData.some(comp => comp.solverAddress.toLowerCase() === ourSolverAddress.toLowerCase());
         
         // Debug logging
-        if (!hasValidRanking) {
-          console.log('Filtering out order:', {
+        if (!hasOurSolverInCompetition) {
+          console.log('Filtering out order (no our solver in competition):', {
             orderId: order._id,
-            metadata: order.metadata,
-            ranking: order.metadata?.ranking,
-            hasMetadata: !!order.metadata,
-            rankingType: typeof order.metadata?.ranking
+            competitionData: order.competitionData,
+            ourSolverAddress,
+            hasCompetitionData: !!order.competitionData
           });
         }
         
-        return hasValidRanking;
+        return hasOurSolverInCompetition;
       });
     }
 
@@ -96,16 +131,16 @@ const OrdersTable: React.FC = () => {
       
       switch (sortBy) {
         case 'timestamp':
-          aValue = new Date(a.timestamp).getTime();
-          bValue = new Date(b.timestamp).getTime();
+          aValue = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          bValue = b.timestamp ? new Date(b.timestamp).getTime() : 0;
           break;
         case 'markup':
-          aValue = a.markup;
-          bValue = b.markup;
+          aValue = a.markup || 0;
+          bValue = b.markup || 0;
           break;
         case 'livePrice':
-          aValue = a.livePrice;
-          bValue = b.livePrice;
+          aValue = a.livePrice || 0;
+          bValue = b.livePrice || 0;
           break;
         default:
           return 0;
@@ -190,7 +225,7 @@ const OrdersTable: React.FC = () => {
 
   const handleRowClick = (order: OrderWithMetadata) => {
     // Only allow expansion for included orders
-    if (order.ourOffer.wasIncluded) {
+    if (order.ourOffer?.wasIncluded) {
       setExpandedOrderId(expandedOrderId === order._id ? null : order._id);
     }
   };
@@ -290,7 +325,7 @@ const OrdersTable: React.FC = () => {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label htmlFor="filter-included" className="ml-2 block text-sm font-medium text-gray-700">
-                Only orders with solution
+                Only orders with solver price
               </label>
             </div>
             <div className="flex items-center">
@@ -302,7 +337,7 @@ const OrdersTable: React.FC = () => {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label htmlFor="filter-valid-solutions" className="ml-2 block text-sm font-medium text-gray-700">
-                Only valid solutions
+                Only orders with our solver in competition
               </label>
             </div>
           </div>
@@ -370,9 +405,6 @@ const OrdersTable: React.FC = () => {
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Owner
-                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -383,16 +415,16 @@ const OrdersTable: React.FC = () => {
                       }
                       return orders.map((order) => {
                       const isExpanded = expandedOrderId === order._id;
-                      const competitors = order.ourOffer.wasIncluded ? getCompetitorsData(order) : [];
+                      const competitors = order.ourOffer?.wasIncluded ? getCompetitorsData(order) : [];
                       
                       return (
                         <React.Fragment key={order._id}>
                           <tr 
-                            className={`hover:bg-gray-50 ${order.ourOffer.wasIncluded ? 'cursor-pointer' : ''}`}
+                            className={`hover:bg-gray-50 ${order.ourOffer?.wasIncluded ? 'cursor-pointer' : ''}`}
                             onClick={() => handleRowClick(order)}
                           >
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-48">
-                          {format(new Date(order.timestamp), 'MMM dd, yyyy HH:mm:ss')}
+                          {format(order.timestamp || new Date(), 'MMM dd, yyyy HH:mm:ss')}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900 w-32">
                           <a
@@ -430,7 +462,7 @@ const OrdersTable: React.FC = () => {
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">Sell:</span>
                               <span className="font-medium">
-                                {formatTokenAmount(order.sellAmount, order.sellTokenInfo, order.sellToken)}
+                                {formatTokenAmount(order.eventSellAmount || order.sellAmount || '0', order.sellTokenInfo, order.sellToken)}
                               </span>
                               <span className="text-xs text-gray-500 ml-1">
                                 {getTokenSymbol(order.sellToken, order.sellTokenInfo)}
@@ -439,7 +471,7 @@ const OrdersTable: React.FC = () => {
                             <div className="flex items-center">
                               <span className="text-gray-500 text-xs mr-1">Buy:</span>
                               <span className="font-medium">
-                                {formatTokenAmount(order.buyAmount, order.buyTokenInfo, order.buyToken)}
+                                {formatTokenAmount(order.eventBuyAmount || order.buyAmount || '0', order.buyTokenInfo, order.buyToken)}
                               </span>
                               <span className="text-xs text-gray-500 ml-1">
                                 {getTokenSymbol(order.buyToken, order.buyTokenInfo)}
@@ -449,18 +481,18 @@ const OrdersTable: React.FC = () => {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap w-20">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            order.kind === 'sell' 
+                            (order.kind || 'sell') === 'sell' 
                               ? 'bg-red-100 text-red-800' 
                               : 'bg-green-100 text-green-800'
                           }`}>
-                            {order.kind.toUpperCase()}
+                            {(order.kind || 'sell').toUpperCase()}
                           </span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-24">
-                          ${order.livePrice.toFixed(2)}
+                          ${(order.livePrice || 0).toFixed(2)}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-20">
-                          {order.markup.toFixed(1)}
+                          {(order.markup || 0).toFixed(1)}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 w-16">
                           {order.metadata?.ranking ? (
@@ -479,29 +511,19 @@ const OrdersTable: React.FC = () => {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap w-24">
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            order.ourOffer.wasIncluded 
+                            order.ourOffer?.wasIncluded 
                               ? 'bg-green-100 text-green-800' 
                               : 'bg-red-100 text-red-800'
                           }`}>
-                            {order.ourOffer.wasIncluded ? 'Included' : 'Excluded'}
+                            {order.ourOffer?.wasIncluded ? 'Included' : 'Excluded'}
                           </span>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-500 w-32">
-                          <a
-                            href={`https://arbiscan.io/address/${order.owner}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 hover:underline"
-                          >
-                            {formatAddress(order.owner)}
-                          </a>
                         </td>
                       </tr>
                       
                       {/* Expandable competitors section for included orders */}
-                      {isExpanded && order.ourOffer.wasIncluded && (
+                      {isExpanded && order.ourOffer?.wasIncluded && (
                         <tr>
-                          <td colSpan={9} className="px-4 py-4 bg-gray-50">
+                          <td colSpan={8} className="px-4 py-4 bg-gray-50">
                             <div className="bg-white rounded-lg shadow-sm border">
                               <div className="px-4 py-3 border-b border-gray-200">
                                 <h3 className="text-lg font-medium text-gray-900">

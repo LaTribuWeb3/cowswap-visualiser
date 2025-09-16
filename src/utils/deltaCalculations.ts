@@ -71,14 +71,46 @@ const getActualPriceFromClearingPrices = (
  * Prioritizes clearing prices when available, falls back to buy/sell amounts
  */
 export const getWinningBidPrice = (order: OrderWithMetadata): number | null => {
-  if (!order.competitors || Object.keys(order.competitors).length === 0) {
+  // Use new competitionData structure if available, fallback to legacy competitors
+  const competitionData = order.competitionData || [];
+  const legacyCompetitors = order.competitors || {};
+  
+  if (competitionData.length === 0 && Object.keys(legacyCompetitors).length === 0) {
     return null;
   }
 
   // Find the best offer (highest effective buy amount)
   let bestPrice = 0n;
 
-  Object.values(order.competitors).forEach(competitor => {
+  // Process new competition data structure
+  competitionData.forEach(competitor => {
+    // Try to get price from clearing prices first
+    const clearingPrice = getActualPriceFromClearingPrices(
+      order.sellToken, 
+      order.buyToken, 
+      competitor.clearingPrices
+    );
+    
+    if (clearingPrice) {
+      if (clearingPrice > bestPrice) {
+        bestPrice = clearingPrice;
+      }
+    } else {
+      // Fallback to calculating from buy/sell amounts
+      const buyAmount = BigInt(competitor.order.buyAmount || '0');
+      const sellAmount = BigInt(competitor.order.sellAmount || '0');
+      
+      if (buyAmount > 0n && sellAmount > 0n) {
+        const calculatedPrice = (buyAmount * PRECISION_FACTOR) / sellAmount;
+        if (calculatedPrice > bestPrice) {
+          bestPrice = calculatedPrice;
+        }
+      }
+    }
+  });
+
+  // Process legacy competitors structure
+  Object.values(legacyCompetitors).forEach(competitor => {
     // Try to get price from clearing prices first
     const clearingPrice = getActualPriceFromClearingPrices(
       order.sellToken, 
@@ -136,15 +168,20 @@ export const calculateOrderDelta = (order: OrderWithMetadata): DeltaResult | nul
     return null;
   }
 
-  const livePrice = order.livePrice;
+  // Use legacy livePrice if available, otherwise calculate from solverBidPriceInfo
+  const livePrice = order.livePrice || (order.solverBidPriceInfo ? parseFloat(order.solverBidPriceInfo.solverPrice) : 0);
   
   // Get token decimals
   const sellTokenDecimals = getTokenDecimals(order.sellToken, order.sellTokenInfo);
   const buyTokenDecimals = getTokenDecimals(order.buyToken, order.buyTokenInfo);
   
+  // Use new event amounts if available, fallback to legacy amounts
+  const sellAmount = order.eventSellAmount || order.sellAmount || '0';
+  const buyAmount = order.eventBuyAmount || order.buyAmount || '0';
+  
   // Convert amounts to actual token values using BigInt for precision
-  const actualSellAmount = bigIntToNumber(BigInt(order.sellAmount), sellTokenDecimals);
-  const actualBuyAmount = bigIntToNumber(BigInt(order.buyAmount), buyTokenDecimals);
+  const actualSellAmount = bigIntToNumber(BigInt(sellAmount), sellTokenDecimals);
+  const actualBuyAmount = bigIntToNumber(BigInt(buyAmount), buyTokenDecimals);
   
   // Determine order direction
   const isWETHToUSDC = order.sellToken === WETH_ADDRESS && order.buyToken === USDC_ADDRESS;
@@ -186,16 +223,29 @@ export const calculateCompetitorDeltas = (order: OrderWithMetadata): CompetitorD
   const competitors = [];
   
   // Add our offer first (always available for included orders)
-  competitors.push({
-    solverName: 'Our Solver',
-    sellAmount: order.ourOffer.sellAmount,
-    buyAmount: order.ourOffer.buyAmount,
-    clearingPrices: order.ourOffer.clearingPrices,
-    isOurs: true
-  });
+  if (order.ourOffer) {
+    competitors.push({
+      solverName: 'Our Solver',
+      sellAmount: order.ourOffer.sellAmount,
+      buyAmount: order.ourOffer.buyAmount,
+      clearingPrices: order.ourOffer.clearingPrices,
+      isOurs: true
+    });
+  }
   
-  // Add other competitors if they exist
-  if (order.competitors) {
+  // Add competitors from new competitionData structure (preferred)
+  if (order.competitionData && order.competitionData.length > 0) {
+    order.competitionData.forEach(competitor => {
+      competitors.push({
+        solverName: competitor.solverAddress, // Will be mapped to readable name in component
+        sellAmount: competitor.order.sellAmount || '0',
+        buyAmount: competitor.order.buyAmount || '0',
+        clearingPrices: competitor.clearingPrices,
+        isOurs: false
+      });
+    });
+  } else if (order.competitors) {
+    // Fallback to legacy structure only if competitionData is not available
     Object.entries(order.competitors).forEach(([solverAddress, data]) => {
       competitors.push({
         solverName: solverAddress, // Will be mapped to readable name in component
@@ -221,7 +271,8 @@ export const calculateCompetitorDeltas = (order: OrderWithMetadata): CompetitorD
   // TODO: Re-enable clearing prices once we understand the format  
   const winningBuyAmountBigInt = BigInt(sortedCompetitors[0]?.buyAmount || '0');
   
-  const livePrice = order.livePrice;
+  // Use legacy livePrice if available, otherwise calculate from solverBidPriceInfo
+  const livePrice = order.livePrice || (order.solverBidPriceInfo ? parseFloat(order.solverBidPriceInfo.solverPrice) : 0);
   
   // Determine order direction
   const isWETHToUSDC = order.sellToken === WETH_ADDRESS && order.buyToken === USDC_ADDRESS;
@@ -357,24 +408,31 @@ export const getOrderSizeInUSD = (order: OrderWithMetadata): number => {
   const sellTokenDecimals = getTokenDecimals(order.sellToken, order.sellTokenInfo);
   const buyTokenDecimals = getTokenDecimals(order.buyToken, order.buyTokenInfo);
 
-  const sellAmount = bigIntToNumber(BigInt(order.sellAmount), sellTokenDecimals);
-  const buyAmount = bigIntToNumber(BigInt(order.buyAmount), buyTokenDecimals);
+  // Use new event amounts if available, fallback to legacy amounts
+  const sellAmount = order.eventSellAmount || order.sellAmount || '0';
+  const buyAmount = order.eventBuyAmount || order.buyAmount || '0';
+
+  const actualSellAmount = bigIntToNumber(BigInt(sellAmount), sellTokenDecimals);
+  const actualBuyAmount = bigIntToNumber(BigInt(buyAmount), buyTokenDecimals);
+
+  // Use legacy livePrice if available, otherwise calculate from solverBidPriceInfo
+  const livePrice = order.livePrice || (order.solverBidPriceInfo ? parseFloat(order.solverBidPriceInfo.solverPrice) : 0);
 
   // Calculate USD value based on token type using the order's live price
   if (order.sellToken === WETH_ADDRESS) {
     // WETH -> USDC: sellAmount is in WETH, multiply by live price to get USD value
-    return sellAmount * order.livePrice;
+    return actualSellAmount * livePrice;
   } else if (order.sellToken === USDC_ADDRESS) {
     // USDC -> WETH: sellAmount is in USDC (6 decimals), already in USD
-    return sellAmount;
+    return actualSellAmount;
   } else if (order.buyToken === WETH_ADDRESS) {
     // USDC -> WETH: buyAmount is in WETH, multiply by live price to get USD value
-    return buyAmount * order.livePrice;
+    return actualBuyAmount * livePrice;
   } else if (order.buyToken === USDC_ADDRESS) {
     // WETH -> USDC: buyAmount is in USDC (6 decimals), already in USD
-    return buyAmount;
+    return actualBuyAmount;
   } else {
     // Fallback: use sell amount with live price
-    return sellAmount * order.livePrice;
+    return actualSellAmount * livePrice;
   }
 };
