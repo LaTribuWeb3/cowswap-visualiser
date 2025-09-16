@@ -32,6 +32,7 @@ import {
   checkAPIHealth,
   fetchBinancePrice,
   getBlockTimestamp,
+  fetchSolverCompetition,
 } from "./api";
 // EthereumService is now accessed via API calls to the backend
 
@@ -317,6 +318,143 @@ async function calculatePriceDifference(
     return `${difference.toFixed(2)}% (Worse than Binance)`;
   } else {
     return "0.00% (Same as Binance)";
+  }
+}
+
+/**
+ * Fetch and display solver competition data in the trade info frame
+ */
+async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
+  const competitionContent = document.getElementById(`competition-content-${txHash}`);
+  if (!competitionContent) {
+    console.warn(`Could not find competition content element for trade ${txHash}`);
+    return;
+  }
+
+  try {
+    console.log(`🔍 Fetching solver competition data for ${txHash}`);
+    
+    const competitionData = await fetchSolverCompetition(txHash);
+    
+    if (!competitionData || !competitionData.solutions || competitionData.solutions.length === 0) {
+      competitionContent.innerHTML = `
+        <div class="no-competition-data">
+          <i class="fas fa-info-circle"></i>
+          <span>No solver competition data available for this transaction</span>
+        </div>
+      `;
+      return;
+    }
+
+    // Sort solutions by ranking (1 = best, higher numbers = worse)
+    const sortedSolutions = [...competitionData.solutions].sort((a, b) => {
+      const rankA = a.ranking || Number.MAX_SAFE_INTEGER;
+      const rankB = b.ranking || Number.MAX_SAFE_INTEGER;
+      return rankA - rankB;
+    });
+
+    // Create the competition display
+    competitionContent.innerHTML = `
+      <div class="competition-summary">
+        <div class="competition-header">
+          <div class="competition-info">
+            <span class="competition-label">Auction ID:</span>
+            <span class="competition-value">${competitionData.auctionId || 'N/A'}</span>
+          </div>
+          
+           <div class="competition-info order-id-info">
+             <span class="competition-label">Order ID:</span>
+             <a href="https://explorer.cow.fi/arb1/orders/${competitionData.solutions[0].orders[0].id}" target="_blank" class="order-id-link">
+               ${formatAddress(competitionData.solutions[0].orders[0].id)}
+             </a>
+           </div>
+          
+          <div class="competition-info">
+            <span class="competition-label">Total Solvers:</span>
+            <span class="competition-value">${competitionData.solutions.length}</span>
+          </div>
+        </div>
+        
+        <div class="solutions-summary">
+          ${await Promise.all(sortedSolutions.map(async (solution: any, index: number) => {
+            // Calculate total buy amount across all orders
+            let totalBuyAmount = '0';
+            let buyTokenAddress = '';
+            let formattedBuyAmount = 'N/A';
+            
+            if (solution.orders && solution.orders.length > 0) {
+              // Sum up all buy amounts from orders
+              totalBuyAmount = solution.orders.reduce((sum: bigint, order: any) => {
+                return sum + BigInt(order.buyAmount || '0');
+              }, BigInt(0)).toString();
+              // Use the buy token from the first order (assuming all orders use the same buy token)
+              buyTokenAddress = solution.orders[0].buyToken;
+              
+              if (totalBuyAmount !== '0' && buyTokenAddress) {
+                try {
+                  // Get token info to get the correct decimals
+                  const tokenInfo = await getTokenInfoAsync(buyTokenAddress as `0x${string}`);
+                  formattedBuyAmount = formatAmount(totalBuyAmount, tokenInfo.decimals);
+                } catch (error) {
+                  console.warn(`Failed to get token info for ${buyTokenAddress}:`, error);
+                  // Fallback to using 6 decimals (common for USDC-like tokens)
+                  formattedBuyAmount = formatAmount(totalBuyAmount, 6);
+                }
+              }
+            }
+            
+            return `
+            <div class="solution-summary-card ${solution.isWinner ? 'winner' : ''}">
+              <div class="solution-header">
+                <div class="solution-rank">
+                  <span class="rank-number">#${index + 1}</span>
+                  ${solution.isWinner ? '<span class="winner-badge">🏆 Winner</span>' : ''}
+                </div>
+                <div class="solution-address">
+                  <a href="https://arbiscan.io/address/${solution.solverAddress}" target="_blank" class="address-link">
+                    ${formatAddress(solution.solverAddress)}
+                  </a>
+                </div>
+              </div>
+              <div class="solution-metrics">
+                <div class="metric">
+                  <span class="metric-label">Score:</span>
+                  <span class="metric-value">${solution.score || 'N/A'}</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">Ranking:</span>
+                  <span class="metric-value">${solution.ranking || 'N/A'}</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">Buy Amount:</span>
+                  <span class="metric-value">${formattedBuyAmount}</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">Status:</span>
+                  <span class="metric-value ${solution.filteredOut ? 'filtered' : 'active'}">
+                    ${solution.filteredOut ? 'Filtered' : 'Active'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            `;
+          }))}
+        </div>
+      </div>
+    `;
+
+    console.log(`✅ Solver competition data displayed for ${txHash}`);
+    
+  } catch (error) {
+    console.error(`❌ Error fetching solver competition data for ${txHash}:`, error);
+    
+    competitionContent.innerHTML = `
+      <div class="competition-error">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span>Failed to load solver competition data</span>
+        <small>${error instanceof Error ? error.message : 'Unknown error'}</small>
+      </div>
+    `;
   }
 }
 
@@ -752,6 +890,8 @@ async function populateTradesList(): Promise<void> {
           <th>Amount</th>
           <th>Date</th>
           <th>Block</th>
+          <th>Details</th>
+          <th>Orders</th>
         </tr>
       </thead>
       <tbody>
@@ -774,7 +914,7 @@ async function populateTradesList(): Promise<void> {
   if (state.trades.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="no-trades-message">
+        <td colspan="7" class="no-trades-message">
           <div style="text-align: center; padding: 40px; color: #666;">
             <i class="fas fa-info-circle" style="font-size: 24px; margin-bottom: 16px;"></i>
             <p>No trades found in the database.</p>
@@ -1078,6 +1218,11 @@ async function createTradeTableRow(
         <td class="trade-arrow">
           <i class="fas fa-chevron-right"></i>
         </td>
+        <td class="trade-unfold">
+          <button class="unfold-button" data-tx-hash="${trade.hash}">
+            <i class="fas fa-chevron-down"></i>
+          </button>
+        </td>
       `;
     } catch (error) {
       console.error(`❌ Error getting token info for trade ${index}:`, error);
@@ -1093,6 +1238,11 @@ async function createTradeTableRow(
         <td class="trade-arrow">
           <i class="fas fa-chevron-right"></i>
         </td>
+        <td class="trade-unfold">
+          <button class="unfold-button" data-tx-hash="${trade.hash}">
+            <i class="fas fa-chevron-down"></i>
+          </button>
+        </td>
       `;
     }
 
@@ -1103,6 +1253,15 @@ async function createTradeTableRow(
       console.log(`🖱️ Trade row ${index} clicked (simplified structure)`);
       showTradeDetails(trade);
     });
+
+    // Add unfold button event listener
+    const unfoldButton = row.querySelector('.unfold-button') as HTMLButtonElement;
+    if (unfoldButton) {
+      unfoldButton.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent row click
+        toggleSolverCompetition(trade.hash, unfoldButton);
+      });
+    }
 
     console.log(`🔍 Trade row ${index} HTML content:`, row.innerHTML);
     console.log(`🔍 Trade row ${index} element:`, row);
@@ -1128,6 +1287,11 @@ async function createTradeTableRow(
       <td class="trade-arrow">
         <i class="fas fa-chevron-right"></i>
       </td>
+      <td class="trade-unfold">
+        <button class="unfold-button" data-tx-hash="${trade.hash}">
+          <i class="fas fa-chevron-down"></i>
+        </button>
+      </td>
     `;
 
     console.log(`🔍 Adding click listener to trade row ${index} (no data)`);
@@ -1135,6 +1299,15 @@ async function createTradeTableRow(
       console.log(`🖱️ Trade row ${index} clicked (no data)`);
       showTradeDetails(trade);
     });
+
+    // Add unfold button event listener
+    const unfoldButton = row.querySelector('.unfold-button') as HTMLButtonElement;
+    if (unfoldButton) {
+      unfoldButton.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent row click
+        toggleSolverCompetition(trade.hash, unfoldButton);
+      });
+    }
 
     return row;
   } else {
@@ -1163,7 +1336,22 @@ async function createTradeTableRow(
         <td class="trade-arrow">
           <i class="fas fa-chevron-right"></i>
         </td>
+        <td class="trade-unfold">
+          <button class="unfold-button" data-tx-hash="${trade.hash}">
+            <i class="fas fa-chevron-down"></i>
+          </button>
+        </td>
       `;
+      
+      // Add unfold button event listener
+      const unfoldButton = row.querySelector('.unfold-button') as HTMLButtonElement;
+      if (unfoldButton) {
+        unfoldButton.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent row click
+          toggleSolverCompetition(trade.hash, unfoldButton);
+        });
+      }
+      
       return row;
     }
 
@@ -1189,6 +1377,11 @@ async function createTradeTableRow(
       <td class="trade-arrow">
         <i class="fas fa-chevron-right"></i>
       </td>
+      <td class="trade-unfold">
+        <button class="unfold-button" data-tx-hash="${trade.hash}">
+          <i class="fas fa-chevron-down"></i>
+        </button>
+      </td>
     `;
 
     console.log(`🔍 Adding click listener to trade row ${index} (with data)`);
@@ -1197,7 +1390,165 @@ async function createTradeTableRow(
       showTradeDetails(trade);
     });
 
+    // Add unfold button event listener
+    const unfoldButton = row.querySelector('.unfold-button') as HTMLButtonElement;
+    if (unfoldButton) {
+      unfoldButton.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent row click
+        toggleSolverCompetition(trade.hash, unfoldButton);
+      });
+    }
+
     return row;
+  }
+}
+
+/**
+ * Toggle solver competition display
+ */
+async function toggleSolverCompetition(txHash: string, button: HTMLButtonElement): Promise<void> {
+  const row = button.closest('tr') as HTMLTableRowElement;
+  if (!row) return;
+
+  // Check if already expanded
+  const existingDetails = row.querySelector('.solver-competition-details');
+  if (existingDetails) {
+    // Collapse
+    existingDetails.remove();
+    button.innerHTML = '<i class="fas fa-chevron-down"></i>';
+    button.classList.remove('expanded');
+    return;
+  }
+
+  // Expand - show loading state
+  button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  button.disabled = true;
+
+  try {
+    const competitionData = await fetchSolverCompetition(txHash);
+    
+    // Create details row
+    const detailsRow = document.createElement('tr');
+    detailsRow.className = 'solver-competition-details';
+    detailsRow.innerHTML = `
+      <td colspan="7">
+        <div class="solver-competition-container">
+          <div class="solver-competition-header">
+            <h3><i class="fas fa-trophy"></i> Solver Competition</h3>
+            <p>Auction ID: ${competitionData.auctionId || 'N/A'}</p>
+          </div>
+          <div class="solutions-list">
+            ${competitionData.solutions?.map((solution: any, index: number) => `
+              <div class="solution-card ${solution.isWinner ? 'winner' : ''}">
+                <div class="solution-header">
+                  <div class="solution-info">
+                    <h4>Solver ${index + 1} ${solution.isWinner ? '🏆' : ''}</h4>
+                    <p class="solver-address">${formatAddress(solution.solverAddress)}</p>
+                  </div>
+                  <div class="solution-stats">
+                    <div class="stat">
+                      <span class="stat-label">Score:</span>
+                      <span class="stat-value">${solution.score || 'N/A'}</span>
+                    </div>
+                    <div class="stat">
+                      <span class="stat-label">Ranking:</span>
+                      <span class="stat-value">${solution.ranking || 'N/A'}</span>
+                    </div>
+                    <div class="stat">
+                      <span class="stat-label">Winner:</span>
+                      <span class="stat-value ${solution.isWinner ? 'winner' : 'loser'}">${solution.isWinner ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div class="stat">
+                      <span class="stat-label">Filtered:</span>
+                      <span class="stat-value">${solution.filteredOut ? 'Yes' : 'No'}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                ${solution.clearingPrices ? `
+                  <div class="clearing-prices">
+                    <h5>Clearing Prices:</h5>
+                    <div class="prices-grid">
+                      ${Object.entries(solution.clearingPrices).map(([token, price]) => `
+                        <div class="price-item">
+                          <span class="token-address">${formatAddress(token)}</span>
+                          <span class="price-value">${price}</span>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+                
+                ${solution.orders && solution.orders.length > 0 ? `
+                  <div class="orders-section">
+                    <h5>Orders (${solution.orders.length}):</h5>
+                    <div class="orders-list">
+                      ${solution.orders.map((order: any, orderIndex: number) => `
+                        <div class="order-item">
+                          <div class="order-header">
+                            <span class="order-index">Order ${orderIndex + 1}</span>
+                          </div>
+                          <div class="order-details">
+                            <div class="order-token">
+                              <span class="token-label">Sell:</span>
+                              <span class="token-address">${formatAddress(order.sellToken)}</span>
+                              <span class="token-amount">${order.sellAmount || 'N/A'}</span>
+                            </div>
+                            <div class="order-token">
+                              <span class="token-label">Buy:</span>
+                              <span class="token-address">${formatAddress(order.buyToken)}</span>
+                              <span class="token-amount">${order.buyAmount || 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+                
+                ${solution.referenceScore ? `
+                  <div class="reference-score">
+                    <span class="stat-label">Reference Score:</span>
+                    <span class="stat-value">${solution.referenceScore}</span>
+                  </div>
+                ` : ''}
+              </div>
+            `).join('') || '<p>No solutions available</p>'}
+          </div>
+        </div>
+      </td>
+    `;
+
+    // Insert the details row after the current row
+    row.parentNode?.insertBefore(detailsRow, row.nextSibling);
+    
+    // Update button state
+    button.innerHTML = '<i class="fas fa-chevron-up"></i>';
+    button.classList.add('expanded');
+    
+  } catch (error) {
+    console.error('Error fetching solver competition data:', error);
+    
+    // Show error state
+    const detailsRow = document.createElement('tr');
+    detailsRow.className = 'solver-competition-details error';
+    detailsRow.innerHTML = `
+      <td colspan="7">
+        <div class="solver-competition-container error">
+          <div class="error-message">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>Failed to load solver competition data</p>
+            <small>${error instanceof Error ? error.message : 'Unknown error'}</small>
+          </div>
+        </div>
+      </td>
+    `;
+    
+    row.parentNode?.insertBefore(detailsRow, row.nextSibling);
+    button.innerHTML = '<i class="fas fa-chevron-up"></i>';
+    button.classList.add('expanded');
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -1722,6 +2073,22 @@ async function createTradeInfoFrameOverlay(
             </div>
           </div>
 
+          <!-- Solver Competition Section -->
+          <div class="info-section">
+            <div class="info-section-title">
+              <i class="fas fa-trophy"></i>
+              Solver Competition
+            </div>
+            <div class="info-section-content">
+              <div id="competition-content-${trade.hash}" class="competition-content">
+                <div class="loading-competition">
+                  <i class="fas fa-spinner fa-spin"></i>
+                  <span>Loading competition data...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Additional Trade Details Section -->
           <div class="info-section">
             <div class="info-section-title">
@@ -1769,6 +2136,11 @@ async function createTradeInfoFrameOverlay(
     // Fetch Binance prices for this trade after ensuring DOM is ready
     setTimeout(async () => {
       await fetchAndDisplayBinancePrices(trade, sellToken, buyToken);
+    }, 0);
+
+    // Fetch and display solver competition data
+    setTimeout(async () => {
+      await fetchAndDisplaySolverCompetition(trade.hash);
     }, 0);
   } else if (
     !trade.parsedData ||
@@ -1860,6 +2232,22 @@ async function createTradeInfoFrameOverlay(
             </div>
           </div>
 
+          <!-- Solver Competition Section -->
+          <div class="info-section">
+            <div class="info-section-title">
+              <i class="fas fa-trophy"></i>
+              Solver Competition
+            </div>
+            <div class="info-section-content">
+              <div id="competition-content-${trade.hash}" class="competition-content">
+                <div class="loading-competition">
+                  <i class="fas fa-spinner fa-spin"></i>
+                  <span>Loading competition data...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Warning Section -->
           <div class="info-section">
             <div class="info-section-title">
@@ -1883,6 +2271,11 @@ async function createTradeInfoFrameOverlay(
         </button>
       </div>
     `;
+
+    // Fetch and display solver competition data for this branch too
+    setTimeout(async () => {
+      await fetchAndDisplaySolverCompetition(trade.hash);
+    }, 0);
   } else if (trade.sellToken && trade.buyToken) {
     // Handle simplified database structure (new format)
     const sellToken = await getTokenInfoAsync(trade.sellToken);
@@ -2215,12 +2608,33 @@ async function createTradeInfoFrameOverlay(
               </div>
             </div>
           </div>
+
+          <!-- Solver Competition Section -->
+          <div class="info-section">
+            <div class="info-section-title">
+              <i class="fas fa-trophy"></i>
+              Solver Competition
+            </div>
+            <div class="info-section-content">
+              <div id="competition-content-${trade.hash}" class="competition-content">
+                <div class="loading-competition">
+                  <i class="fas fa-spinner fa-spin"></i>
+                  <span>Loading competition data...</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <button class="close-button" id="closeButton">
           <i class="fas fa-times"></i>
         </button>
       </div>
     `;
+
+    // Fetch and display solver competition data for this branch too
+    setTimeout(async () => {
+      await fetchAndDisplaySolverCompetition(trade.hash);
+    }, 0);
   }
 
   // Add event listeners for closing the overlay

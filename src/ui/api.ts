@@ -291,6 +291,25 @@ export async function getBlockTimestamp(blockNumber: number): Promise<number> {
 }
 
 /**
+ * Fetch solver competition data by transaction hash
+ */
+export async function fetchSolverCompetition(txHash: string): Promise<any> {
+  try {
+    const response = await fetch(`https://api.cow.fi/arbitrum_one/api/v2/solver_competition/by_tx_hash/${txHash}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching solver competition data:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetch Binance price data for token pair via secure proxy
  */
 export async function fetchBinancePrice(inputToken: string, outputToken: string, timestamp?: number): Promise<BinancePriceData> {
