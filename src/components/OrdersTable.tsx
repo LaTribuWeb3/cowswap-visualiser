@@ -23,6 +23,10 @@ const OrdersTable: React.FC = () => {
   const [filterValidSolutions, setFilterValidSolutions] = useState<boolean>(false);
   const [filterSellToken, setFilterSellToken] = useState<string>(WETH_ADDRESS);
   const [filterBuyToken, setFilterBuyToken] = useState<string>(USDC_ADDRESS);
+  const [sellTokenSearch, setSellTokenSearch] = useState<string>('');
+  const [buyTokenSearch, setBuyTokenSearch] = useState<string>('');
+  const [showSellDropdown, setShowSellDropdown] = useState<boolean>(false);
+  const [showBuyDropdown, setShowBuyDropdown] = useState<boolean>(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const itemsPerPage = 20;
@@ -35,6 +39,66 @@ const OrdersTable: React.FC = () => {
       tokens.add(order.buyToken);
     });
     return Array.from(tokens).sort();
+  };
+
+  // Filter and sort tokens based on search input
+  const getFilteredTokens = (searchTerm: string, allTokens: string[]) => {
+    if (!searchTerm) return allTokens;
+    
+    const searchLower = searchTerm.toLowerCase();
+    
+    // First filter tokens that match the search
+    const matchingTokens = allTokens.filter(token => {
+      const tokenInfo = getTokenMetadata(token);
+      const symbol = tokenInfo?.symbol?.toLowerCase() || '';
+      const name = tokenInfo?.name?.toLowerCase() || '';
+      const address = token.toLowerCase();
+      
+      return symbol.includes(searchLower) || 
+             name.includes(searchLower) || 
+             address.includes(searchLower);
+    });
+    
+    // Then sort by relevance (exact symbol match first, then partial matches)
+    return matchingTokens.sort((a, b) => {
+      const aInfo = getTokenMetadata(a);
+      const bInfo = getTokenMetadata(b);
+      const aSymbol = aInfo?.symbol?.toLowerCase() || '';
+      const bSymbol = bInfo?.symbol?.toLowerCase() || '';
+      const aName = aInfo?.name?.toLowerCase() || '';
+      const bName = bInfo?.name?.toLowerCase() || '';
+      
+      // Exact symbol match gets highest priority
+      if (aSymbol === searchLower && bSymbol !== searchLower) return -1;
+      if (bSymbol === searchLower && aSymbol !== searchLower) return 1;
+      
+      // Symbol starts with search term gets second priority
+      if (aSymbol.startsWith(searchLower) && !bSymbol.startsWith(searchLower)) return -1;
+      if (bSymbol.startsWith(searchLower) && !aSymbol.startsWith(searchLower)) return 1;
+      
+      // Name starts with search term gets third priority
+      if (aName.startsWith(searchLower) && !bName.startsWith(searchLower)) return -1;
+      if (bName.startsWith(searchLower) && !aName.startsWith(searchLower)) return 1;
+      
+      // Symbol contains search term gets fourth priority
+      if (aSymbol.includes(searchLower) && !bSymbol.includes(searchLower)) return -1;
+      if (bSymbol.includes(searchLower) && !aSymbol.includes(searchLower)) return 1;
+      
+      // Name contains search term gets fifth priority
+      if (aName.includes(searchLower) && !bName.includes(searchLower)) return -1;
+      if (bName.includes(searchLower) && !aName.includes(searchLower)) return 1;
+      
+      // Finally, sort alphabetically by symbol
+      return aSymbol.localeCompare(bSymbol);
+    });
+  };
+
+  // Get display value for selected token
+  const getTokenDisplayValue = (tokenAddress: string) => {
+    if (!tokenAddress) return '';
+    const tokenInfo = getTokenMetadata(tokenAddress);
+    const symbol = getTokenDisplaySymbol(tokenAddress, tokenInfo || undefined);
+    return `${symbol} (${tokenAddress.slice(0, 6)}...${tokenAddress.slice(-4)})`;
   };
 
   // Fetch data from API once when component loads
@@ -51,6 +115,19 @@ const OrdersTable: React.FC = () => {
   useEffect(() => {
     applyFiltersAndPagination();
   }, [allOrders, page, sortBy, sortOrder, filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken]);
+
+  // Update search display when token selection changes
+  useEffect(() => {
+    if (filterSellToken) {
+      setSellTokenSearch(getTokenDisplayValue(filterSellToken));
+    }
+  }, [filterSellToken]);
+
+  useEffect(() => {
+    if (filterBuyToken) {
+      setBuyTokenSearch(getTokenDisplayValue(filterBuyToken));
+    }
+  }, [filterBuyToken]);
 
   const fetchOrders = async () => {
     try {
@@ -380,46 +457,112 @@ const OrdersTable: React.FC = () => {
                 <label htmlFor="filter-sell-token" className="block text-sm font-medium text-gray-700 mb-1">
                   Sell Token
                 </label>
-                <select
-                  id="filter-sell-token"
-                  value={filterSellToken}
-                  onChange={(e) => setFilterSellToken(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                >
-                  <option value="">All sell tokens</option>
-                  {getUniqueTokens(allOrders).map(token => {
-                    const tokenInfo = getTokenMetadata(token);
-                    const displaySymbol = getTokenDisplaySymbol(token, tokenInfo || undefined);
-                    return (
-                      <option key={token} value={token}>
-                        {displaySymbol} ({token.slice(0, 6)}...{token.slice(-4)})
-                      </option>
-                    );
-                  })}
-                </select>
+                <div className="relative">
+                  <input
+                    id="filter-sell-token"
+                    type="text"
+                    value={sellTokenSearch}
+                    onChange={(e) => {
+                      setSellTokenSearch(e.target.value);
+                      setShowSellDropdown(true);
+                      if (!e.target.value) {
+                        setFilterSellToken('');
+                      }
+                    }}
+                    onFocus={() => {
+                      setShowSellDropdown(true);
+                      if (!sellTokenSearch) {
+                        setSellTokenSearch('');
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay hiding to allow click on dropdown items
+                      setTimeout(() => setShowSellDropdown(false), 200);
+                    }}
+                    placeholder="Type to search tokens..."
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                  {showSellDropdown && sellTokenSearch && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {getFilteredTokens(sellTokenSearch, getUniqueTokens(allOrders)).slice(0, 20).map(token => {
+                        const tokenInfo = getTokenMetadata(token);
+                        const displaySymbol = getTokenDisplaySymbol(token, tokenInfo || undefined);
+                        return (
+                          <div
+                            key={token}
+                            onClick={() => {
+                              setFilterSellToken(token);
+                              setSellTokenSearch(getTokenDisplayValue(token));
+                              setShowSellDropdown(false);
+                            }}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          >
+                            {displaySymbol} ({token.slice(0, 6)}...{token.slice(-4)})
+                          </div>
+                        );
+                      })}
+                      {getFilteredTokens(sellTokenSearch, getUniqueTokens(allOrders)).length === 0 && (
+                        <div className="px-3 py-2 text-gray-500 text-sm">No tokens found</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="flex-1 min-w-48">
                 <label htmlFor="filter-buy-token" className="block text-sm font-medium text-gray-700 mb-1">
                   Buy Token
                 </label>
-                <select
-                  id="filter-buy-token"
-                  value={filterBuyToken}
-                  onChange={(e) => setFilterBuyToken(e.target.value)}
-                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                >
-                  <option value="">All buy tokens</option>
-                  {getUniqueTokens(allOrders).map(token => {
-                    const tokenInfo = getTokenMetadata(token);
-                    const displaySymbol = getTokenDisplaySymbol(token, tokenInfo || undefined);
-                    return (
-                      <option key={token} value={token}>
-                        {displaySymbol} ({token.slice(0, 6)}...{token.slice(-4)})
-                      </option>
-                    );
-                  })}
-                </select>
+                <div className="relative">
+                  <input
+                    id="filter-buy-token"
+                    type="text"
+                    value={buyTokenSearch}
+                    onChange={(e) => {
+                      setBuyTokenSearch(e.target.value);
+                      setShowBuyDropdown(true);
+                      if (!e.target.value) {
+                        setFilterBuyToken('');
+                      }
+                    }}
+                    onFocus={() => {
+                      setShowBuyDropdown(true);
+                      if (!buyTokenSearch) {
+                        setBuyTokenSearch('');
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay hiding to allow click on dropdown items
+                      setTimeout(() => setShowBuyDropdown(false), 200);
+                    }}
+                    placeholder="Type to search tokens..."
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                  {showBuyDropdown && buyTokenSearch && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {getFilteredTokens(buyTokenSearch, getUniqueTokens(allOrders)).slice(0, 20).map(token => {
+                        const tokenInfo = getTokenMetadata(token);
+                        const displaySymbol = getTokenDisplaySymbol(token, tokenInfo || undefined);
+                        return (
+                          <div
+                            key={token}
+                            onClick={() => {
+                              setFilterBuyToken(token);
+                              setBuyTokenSearch(getTokenDisplayValue(token));
+                              setShowBuyDropdown(false);
+                            }}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          >
+                            {displaySymbol} ({token.slice(0, 6)}...{token.slice(-4)})
+                          </div>
+                        );
+                      })}
+                      {getFilteredTokens(buyTokenSearch, getUniqueTokens(allOrders)).length === 0 && (
+                        <div className="px-3 py-2 text-gray-500 text-sm">No tokens found</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="flex-shrink-0">
@@ -429,6 +572,8 @@ const OrdersTable: React.FC = () => {
                     setFilterValidSolutions(false);
                     setFilterSellToken(WETH_ADDRESS);
                     setFilterBuyToken(USDC_ADDRESS);
+                    setSellTokenSearch(getTokenDisplayValue(WETH_ADDRESS));
+                    setBuyTokenSearch(getTokenDisplayValue(USDC_ADDRESS));
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
