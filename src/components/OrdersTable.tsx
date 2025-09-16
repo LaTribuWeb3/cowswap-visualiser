@@ -6,6 +6,10 @@ import { getSolverName } from '../utils/solversMapping';
 import { calculateCompetitorDeltas } from '../utils/deltaCalculations';
 import { configService } from '../services/configService';
 
+// Token addresses for default filtering
+const WETH_ADDRESS = '0x82af49447d8a07e3bd95bd0d56f35241523fbab1';
+const USDC_ADDRESS = '0xaf88d065e77c8cc2239327c5edb3a432268e5831';
+
 const OrdersTable: React.FC = () => {
   const [allOrders, setAllOrders] = useState<OrderWithMetadata[]>([]);
   const [orders, setOrders] = useState<OrderWithMetadata[]>([]);
@@ -17,9 +21,21 @@ const OrdersTable: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterIncluded, setFilterIncluded] = useState<boolean | null>(null);
   const [filterValidSolutions, setFilterValidSolutions] = useState<boolean>(false);
+  const [filterSellToken, setFilterSellToken] = useState<string>(WETH_ADDRESS);
+  const [filterBuyToken, setFilterBuyToken] = useState<string>(USDC_ADDRESS);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const itemsPerPage = 20;
+
+  // Get unique tokens from orders for filtering
+  const getUniqueTokens = (orders: OrderWithMetadata[]) => {
+    const tokens = new Set<string>();
+    orders.forEach(order => {
+      tokens.add(order.sellToken);
+      tokens.add(order.buyToken);
+    });
+    return Array.from(tokens).sort();
+  };
 
   // Fetch data from API once when component loads
   useEffect(() => {
@@ -29,12 +45,12 @@ const OrdersTable: React.FC = () => {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [filterIncluded, filterValidSolutions, sortBy, sortOrder]);
+  }, [filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken, sortBy, sortOrder]);
 
   // Apply client-side filtering and pagination (when filters or page change)
   useEffect(() => {
     applyFiltersAndPagination();
-  }, [allOrders, page, sortBy, sortOrder, filterIncluded, filterValidSolutions]);
+  }, [allOrders, page, sortBy, sortOrder, filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken]);
 
   const fetchOrders = async () => {
     try {
@@ -122,6 +138,20 @@ const OrdersTable: React.FC = () => {
         
         return hasOurSolverInCompetition;
       });
+    }
+
+    // Apply client-side filtering for sell token
+    if (filterSellToken) {
+      filteredOrders = filteredOrders.filter(order => 
+        order.sellToken.toLowerCase() === filterSellToken.toLowerCase()
+      );
+    }
+
+    // Apply client-side filtering for buy token
+    if (filterBuyToken) {
+      filteredOrders = filteredOrders.filter(order => 
+        order.buyToken.toLowerCase() === filterBuyToken.toLowerCase()
+      );
     }
 
 
@@ -315,30 +345,96 @@ const OrdersTable: React.FC = () => {
 
         {/* Filters */}
         <div className="mt-6 bg-white shadow rounded-lg p-4">
-          <div className="flex flex-wrap gap-6">
-            <div className="flex items-center">
-              <input
-                id="filter-included"
-                type="checkbox"
-                checked={filterIncluded === true}
-                onChange={(e) => setFilterIncluded(e.target.checked ? true : null)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="filter-included" className="ml-2 block text-sm font-medium text-gray-700">
-                Only orders with solver price
-              </label>
+          <div className="space-y-4">
+            {/* Checkbox filters */}
+            <div className="flex flex-wrap gap-6">
+              <div className="flex items-center">
+                <input
+                  id="filter-included"
+                  type="checkbox"
+                  checked={filterIncluded === true}
+                  onChange={(e) => setFilterIncluded(e.target.checked ? true : null)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="filter-included" className="ml-2 block text-sm font-medium text-gray-700">
+                  Only orders with solver price
+                </label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  id="filter-valid-solutions"
+                  type="checkbox"
+                  checked={filterValidSolutions}
+                  onChange={(e) => setFilterValidSolutions(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="filter-valid-solutions" className="ml-2 block text-sm font-medium text-gray-700">
+                  Only orders with our solver in competition
+                </label>
+              </div>
             </div>
-            <div className="flex items-center">
-              <input
-                id="filter-valid-solutions"
-                type="checkbox"
-                checked={filterValidSolutions}
-                onChange={(e) => setFilterValidSolutions(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="filter-valid-solutions" className="ml-2 block text-sm font-medium text-gray-700">
-                Only orders with our solver in competition
-              </label>
+            
+            {/* Token filters */}
+            <div className="flex flex-wrap gap-4 items-end">
+              <div className="flex-1 min-w-48">
+                <label htmlFor="filter-sell-token" className="block text-sm font-medium text-gray-700 mb-1">
+                  Sell Token
+                </label>
+                <select
+                  id="filter-sell-token"
+                  value={filterSellToken}
+                  onChange={(e) => setFilterSellToken(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  <option value="">All sell tokens</option>
+                  {getUniqueTokens(allOrders).map(token => {
+                    const tokenInfo = getTokenMetadata(token);
+                    const displaySymbol = getTokenDisplaySymbol(token, tokenInfo || undefined);
+                    return (
+                      <option key={token} value={token}>
+                        {displaySymbol} ({token.slice(0, 6)}...{token.slice(-4)})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              
+              <div className="flex-1 min-w-48">
+                <label htmlFor="filter-buy-token" className="block text-sm font-medium text-gray-700 mb-1">
+                  Buy Token
+                </label>
+                <select
+                  id="filter-buy-token"
+                  value={filterBuyToken}
+                  onChange={(e) => setFilterBuyToken(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  <option value="">All buy tokens</option>
+                  {getUniqueTokens(allOrders).map(token => {
+                    const tokenInfo = getTokenMetadata(token);
+                    const displaySymbol = getTokenDisplaySymbol(token, tokenInfo || undefined);
+                    return (
+                      <option key={token} value={token}>
+                        {displaySymbol} ({token.slice(0, 6)}...{token.slice(-4)})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              
+              <div className="flex-shrink-0">
+                <button
+                  onClick={() => {
+                    setFilterIncluded(null);
+                    setFilterValidSolutions(false);
+                    setFilterSellToken(WETH_ADDRESS);
+                    setFilterBuyToken(USDC_ADDRESS);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Reset to WETH/USDC
+                </button>
+              </div>
             </div>
           </div>
         </div>
