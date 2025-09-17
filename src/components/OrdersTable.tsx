@@ -6,9 +6,6 @@ import { getSolverName } from '../utils/solversMapping';
 import { calculateCompetitorDeltas } from '../utils/deltaCalculations';
 import { configService } from '../services/configService';
 
-// Token addresses for default filtering
-const WETH_ADDRESS = '0x82af49447d8a07e3bd95bd0d56f35241523fbab1';
-const USDC_ADDRESS = '0xaf88d065e77c8cc2239327c5edb3a432268e5831';
 
 const OrdersTable: React.FC = () => {
   const [allOrders, setAllOrders] = useState<OrderWithMetadata[]>([]);
@@ -21,8 +18,8 @@ const OrdersTable: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterIncluded, setFilterIncluded] = useState<boolean | null>(null);
   const [filterValidSolutions, setFilterValidSolutions] = useState<boolean>(false);
-  const [filterSellToken, setFilterSellToken] = useState<string>(WETH_ADDRESS);
-  const [filterBuyToken, setFilterBuyToken] = useState<string>(USDC_ADDRESS);
+  const [filterSellToken, setFilterSellToken] = useState<string>('');
+  const [filterBuyToken, setFilterBuyToken] = useState<string>('');
   const [filterOrderId, setFilterOrderId] = useState<string>('');
   const [filterTimeframe, setFilterTimeframe] = useState<string>('last-month');
   const [sellTokenSearch, setSellTokenSearch] = useState<string>('');
@@ -184,6 +181,15 @@ const OrdersTable: React.FC = () => {
       
       const data: OrdersResponse = await response.json();
       
+      // Debug: Log first order's competition data
+      if (data.orders.length > 0) {
+        console.log('First order from API:', {
+          orderId: data.orders[0]._id,
+          competitionData: data.orders[0].competitionData,
+          hasCompetitionData: !!data.orders[0].competitionData
+        });
+      }
+      
       // Transform orders to include legacy fields for backward compatibility
       const transformedOrders = data.orders.map(order => ({
         ...order,
@@ -241,22 +247,41 @@ const OrdersTable: React.FC = () => {
 
     // Apply client-side filtering for valid solutions (competitionData includes our solver)
     if (filterValidSolutions) {
+      console.log('Filtering for valid solutions. Our solver address:', ourSolverAddress);
+      console.log('Total orders before filtering:', filteredOrders.length);
+      
       filteredOrders = filteredOrders.filter(order => {
         const hasOurSolverInCompetition = order.competitionData && 
-          order.competitionData.some(comp => comp.solverAddress.toLowerCase() === ourSolverAddress.toLowerCase());
+          order.competitionData.some(comp => {
+            const solverAddr = comp.solverAddress.trim().toLowerCase();
+            const ourAddr = ourSolverAddress.trim().toLowerCase();
+            return solverAddr === ourAddr;
+          });
         
-        // Debug logging
-        if (!hasOurSolverInCompetition) {
-          console.log('Filtering out order (no our solver in competition):', {
+        // Debug logging for first few orders
+        if (filteredOrders.indexOf(order) < 3) {
+          const solverAddresses = order.competitionData?.map(comp => comp.solverAddress) || [];
+          console.log('Order competition data:', {
             orderId: order._id,
             competitionData: order.competitionData,
+            solverAddresses,
             ourSolverAddress,
-            hasCompetitionData: !!order.competitionData
+            hasCompetitionData: !!order.competitionData,
+            hasOurSolverInCompetition,
+            addressMatches: solverAddresses.map(addr => ({
+              address: addr,
+              trimmed: addr.trim(),
+              ourAddress: ourSolverAddress,
+              ourTrimmed: ourSolverAddress.trim(),
+              matches: addr.trim().toLowerCase() === ourSolverAddress.trim().toLowerCase()
+            }))
           });
         }
         
         return hasOurSolverInCompetition;
       });
+      
+      console.log('Orders after valid solutions filter:', filteredOrders.length);
     }
 
     // Apply client-side filtering for sell token
@@ -662,16 +687,16 @@ const OrdersTable: React.FC = () => {
                   onClick={() => {
                     setFilterIncluded(null);
                     setFilterValidSolutions(false);
-                    setFilterSellToken(WETH_ADDRESS);
-                    setFilterBuyToken(USDC_ADDRESS);
+                    setFilterSellToken('');
+                    setFilterBuyToken('');
                     setFilterOrderId('');
                     setFilterTimeframe('last-month');
-                    setSellTokenSearch(getTokenDisplayValue(WETH_ADDRESS));
-                    setBuyTokenSearch(getTokenDisplayValue(USDC_ADDRESS));
+                    setSellTokenSearch('');
+                    setBuyTokenSearch('');
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  Reset to WETH/USDC
+                  Reset Filters
                 </button>
               </div>
             </div>
