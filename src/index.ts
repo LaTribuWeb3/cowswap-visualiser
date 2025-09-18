@@ -416,11 +416,21 @@ app.get('/api/token/:address/decimals', async (req, res) => {
     const { address } = req.params;
     console.log(`📡 Fetching decimals for token: ${address}`);
     
-    const ethereumService = new EthereumService();
-    console.log(`✅ EthereumService imported successfully`);
+    // Fetch token metadata from la-tribu API
+    const response = await fetch(`https://tokens-metadata.la-tribu.xyz/tokens/arbitrum/${address}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
     
-    console.log(`🔍 Calling ethereumService.getTokenDecimals(${address})`);
-    const decimals = await ethereumService.getTokenDecimals(address as `0x${string}`);
+    const decimals = data.decimals || 18; // Default to 18 if not specified
     
     console.log(`✅ Token ${address} has ${decimals} decimals`);
     
@@ -444,17 +454,29 @@ app.get('/api/token/:address/symbol', async (req, res) => {
     const { address } = req.params;
     console.log(`📡 Fetching symbol for token: ${address}`);
     
-    const ethereumService = new EthereumService();
-    console.log(`✅ EthereumService imported successfully`);
+    // Fetch token metadata from la-tribu API
+    const response = await fetch(`https://tokens-metadata.la-tribu.xyz/tokens/arbitrum/${address}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
     
-    console.log(`🔍 Calling ethereumService.fetchTokenSymbol(${address})`);
-    const symbol = await ethereumService.fetchTokenSymbol(address as `0x${string}`);
-    
-    console.log(`✅ Token ${address} has symbol: ${symbol}`);
+    if (!data.symbol) {
+      throw new Error('Invalid token metadata response - no symbol found');
+    }
+
+    console.log(`✅ Token ${address} has symbol: ${data.symbol}`);
     
     return res.json({
       success: true,
-      symbol: symbol
+      symbol: data.symbol
     });
   } catch (error: any) {
     console.error('❌ Error fetching token symbol:', error);

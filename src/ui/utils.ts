@@ -202,10 +202,10 @@ export async function getTokenDecimals(tokenAddress: `0x${string}`): Promise<num
   }
 
   try {
-    // Fetch from backend API instead of direct external API call
-    const decimals = await fetchTokenDecimals(tokenAddress);
-    tokenDecimalsCache[tokenAddress] = decimals;
-    return decimals;
+    // Fetch from la-tribu API
+    const metadata = await fetchTokenMetadata(tokenAddress);
+    tokenDecimalsCache[tokenAddress] = metadata.decimals;
+    return metadata.decimals;
   } catch (error) {
     console.warn(`Failed to fetch decimals for token ${tokenAddress}:`, error);
   }
@@ -229,6 +229,43 @@ export function getTokenInfo(tokenAddress: `0x${string}`): TokenInfo {
 }
 
 /**
+ * Fetch token metadata from la-tribu API
+ */
+async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
+  try {
+    console.log(`🔍 Fetching token metadata for: ${tokenAddress}`);
+    
+    const response = await fetch(`https://tokens-metadata.la-tribu.xyz/tokens/arbitrum/${tokenAddress}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.symbol || !data.name) {
+      throw new Error('Invalid token metadata response');
+    }
+
+    console.log(`✅ Fetched token metadata: ${data.symbol} - ${data.name} (${data.decimals || 18} decimals)`);
+    
+    return {
+      symbol: data.symbol,
+      name: data.name,
+      decimals: data.decimals || 18
+    };
+  } catch (error) {
+    console.warn(`Failed to fetch token metadata for ${tokenAddress}:`, error);
+    throw error;
+  }
+}
+
+/**
  * Get token information (asynchronous - fetches from backend if needed)
  */
 export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<TokenInfo> {
@@ -244,24 +281,20 @@ export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<To
   }
 
   try {
-    // Fetch both symbol and decimals from backend API
-    const ethereumService = new EthereumService();
-    const [symbol, decimals] = await Promise.all([
-      ethereumService.fetchTokenSymbol(tokenAddress),
-      getTokenDecimals(tokenAddress)
-    ]);
+    // Fetch token metadata from la-tribu API
+    const metadata = await fetchTokenMetadata(tokenAddress);
     
     const tokenInfo: TokenInfo = {
-      symbol: symbol,
-      name: `Token ${symbol}`,
-      decimals: decimals,
+      symbol: metadata.symbol,
+      name: metadata.name,
+      decimals: metadata.decimals,
       address: tokenAddress
     };
     
     // Cache the complete token info
     tokenInfoCache[tokenAddress] = tokenInfo;
-    tokenSymbolsCache[tokenAddress] = symbol;
-    tokenDecimalsCache[tokenAddress] = decimals;
+    tokenSymbolsCache[tokenAddress] = metadata.symbol;
+    tokenDecimalsCache[tokenAddress] = metadata.decimals;
     
     return tokenInfo;
   } catch (error) {
@@ -297,11 +330,10 @@ export async function getTokenSymbol(tokenAddress: `0x${string}`): Promise<strin
   }
 
   try {
-    // Fetch from backend API
-    const ethereumService = new EthereumService();
-    const symbol = await ethereumService.fetchTokenSymbol(tokenAddress as `0x${string}`);
-    tokenSymbolsCache[tokenAddress] = symbol;
-    return symbol;
+    // Fetch from la-tribu API
+    const metadata = await fetchTokenMetadata(tokenAddress);
+    tokenSymbolsCache[tokenAddress] = metadata.symbol;
+    return metadata.symbol;
   } catch (error) {
     console.warn(`Failed to fetch symbol for token ${tokenAddress}:`, error);
   }
