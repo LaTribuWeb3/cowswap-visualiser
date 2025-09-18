@@ -92,31 +92,13 @@ export class EthereumService {
       }
 
       console.log(
-        `🔍 Token ${tokenAddress} not in known list, fetching from blockchain...`
+        `🔍 Token ${tokenAddress} not in known list, fetching from la-tribu API...`
       );
 
-      // Try to fetch from contract
-      console.log(`🔍 Calling readContract for ${tokenAddress}...`);
-      const result = await this.client.readContract({
-        address: tokenAddress,
-        abi: [
-          {
-            constant: true,
-            inputs: [],
-            name: "symbol",
-            outputs: [{ name: "", type: "string" }],
-            payable: false,
-            stateMutability: "view",
-            type: "function",
-          },
-        ],
-        functionName: "symbol",
-      });
-
-      console.log(`🔍 readContract result:`, result);
-      const symbol = String(result);
-      console.log(`✅ Fetched symbol for ${tokenAddress}: ${symbol}`);
-      return symbol;
+      // Use the comprehensive metadata function
+      const metadata = await this.fetchTokenMetadata(tokenAddress);
+      console.log(`✅ Fetched symbol for ${tokenAddress}: ${metadata.symbol}`);
+      return metadata.symbol;
     } catch (error) {
       console.error(`❌ Error fetching symbol for ${tokenAddress}:`, error);
       // Fallback to generated symbol
@@ -645,7 +627,56 @@ export class EthereumService {
   }
 
   /**
-   * Get token decimals from the blockchain
+   * Fetch complete token metadata from la-tribu API
+   */
+  async fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{
+    address: string;
+    network: string;
+    name: string;
+    symbol: string;
+    decimals: number;
+    cached: boolean;
+    timestamp: string;
+  }> {
+    try {
+      console.log(`🔍 Fetching complete token metadata for: ${tokenAddress}`);
+      
+      const response = await fetch(`https://tokens-metadata.la-tribu.xyz/tokens/arbitrum/${tokenAddress}`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.symbol || !data.name) {
+        throw new Error('Invalid token metadata response');
+      }
+
+      console.log(`✅ Fetched token metadata: ${data.symbol} - ${data.name} (${data.decimals || 18} decimals)`);
+      
+      return {
+        address: data.address,
+        network: data.network,
+        name: data.name,
+        symbol: data.symbol,
+        decimals: data.decimals || 18,
+        cached: data.cached || false,
+        timestamp: data.timestamp
+      };
+    } catch (error) {
+      console.warn(`Failed to fetch token metadata for ${tokenAddress}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get token decimals from the la-tribu API
    */
   async getTokenDecimals(tokenAddress: `0x${string}`): Promise<number> {
     try {
@@ -664,29 +695,13 @@ export class EthereumService {
       }
 
       console.log(
-        `🔍 Token ${tokenAddress} not in known list, fetching from blockchain...`
+        `🔍 Token ${tokenAddress} not in known list, fetching from la-tribu API...`
       );
 
-      // Try to fetch from contract
-      console.log(`🔍 Calling readContract for ${tokenAddress}...`);
-      const result = await this.client.readContract({
-        address: tokenAddress,
-        abi: [
-          {
-            constant: true,
-            inputs: [],
-            name: "decimals",
-            outputs: [{ name: "", type: "uint8" }],
-            type: "function",
-          },
-        ],
-        functionName: "decimals",
-      });
-
-      console.log(`🔍 readContract result:`, result);
-      const decimals = Number(result);
-      console.log(`✅ Fetched decimals for ${tokenAddress}: ${decimals}`);
-      return decimals;
+      // Use the comprehensive metadata function
+      const metadata = await this.fetchTokenMetadata(tokenAddress);
+      console.log(`✅ Fetched decimals for ${tokenAddress}: ${metadata.decimals}`);
+      return metadata.decimals;
     } catch (error) {
       console.error(`❌ Error fetching decimals for ${tokenAddress}:`, error);
       // Return default decimals (18) for ERC20 tokens
