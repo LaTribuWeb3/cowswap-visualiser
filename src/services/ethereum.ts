@@ -15,6 +15,9 @@ const COW_PROTOCOL_ADDRESS = "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
 export class EthereumService {
   private client;
   private contract;
+  private blockCache: Map<number, number> = new Map(); // Cache for block number -> timestamp
+  private readonly CACHE_SIZE_LIMIT = 1000;
+  private readonly CACHE_INTERPOLATION_THRESHOLD = 10; // blocks
 
   constructor() {
     // Get RPC URL from environment variables
@@ -37,42 +40,177 @@ export class EthereumService {
     });
   }
 
-  async getBlockTimestamp(blockNumber: number): Promise<number> {
+  /**
+   * Find the closest cached block to the target block number
+   */
+  private findClosestCachedBlock(targetBlock: number): { blockNumber: number; timestamp: number } | null {
+    let closestBlock: number | null = null;
+    let minDistance = Infinity;
+
+    for (const cachedBlock of this.blockCache.keys()) {
+      const distance = Math.abs(cachedBlock - targetBlock);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestBlock = cachedBlock;
+      }
+    }
+
+    if (closestBlock !== null && minDistance <= this.CACHE_INTERPOLATION_THRESHOLD) {
+      return {
+        blockNumber: closestBlock,
+        timestamp: this.blockCache.get(closestBlock)!
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Add a block to cache and manage cache size
+   */
+  private addToCache(blockNumber: number, timestamp: number): void {
+    this.blockCache.set(blockNumber, timestamp);
+
+    // Remove oldest entries if cache exceeds limit
+    if (this.blockCache.size > this.CACHE_SIZE_LIMIT) {
+      const entries = Array.from(this.blockCache.entries());
+      // Sort by block number to remove oldest (lowest block numbers)
+      entries.sort((a, b) => a[0] - b[0]);
+      
+      // Remove the oldest 10% of entries
+      const entriesToRemove = Math.floor(this.CACHE_SIZE_LIMIT * 0.1);
+      for (let i = 0; i < entriesToRemove; i++) {
+        this.blockCache.delete(entries[i][0]);
+      }
+    }
+  }
+
+  /**
+   * Fetch block timestamp using viem (RPC call)
+   */
+  private async fetchBlockTimestampFromRPC(blockNumber: number): Promise<number> {
     try {
       const block = await this.client.getBlock({
         blockNumber: BigInt(blockNumber),
       });
       if (block) {
-        const timestamp = Number(block.timestamp); // Unix epoch timestamp in seconds
-        const date = new Date(timestamp * 1000); // Convert to Date object
-        console.log(`Timestamp for block ${blockNumber}: ${timestamp}`);
-        console.log(`Date and time (UTC): ${date.toUTCString()}`);
+        const timestamp = Number(block.timestamp);
+        this.addToCache(blockNumber, timestamp);
         return timestamp;
-      } else {
-        console.log(`Block ${blockNumber} not found.`);
       }
     } catch (error) {
-      console.error("Error fetching block:", error);
+      console.error(`Error fetching block ${blockNumber} from RPC:`, error);
     }
     return 0;
   }
 
+  async getBlockTimestamp(blockNumber: number): Promise<number> {
+    /*
+     * Get block timestamp with caching mechanism:
+     * - If block is cached, return cached timestamp
+     * - If block is within 10 blocks of a cached block, interpolate using 0.25s per block
+     * - If block is further than 10 blocks from any cached block, fetch from RPC
+     */
+    
+    // Validate input block number
+    if (isNaN(blockNumber) || blockNumber < 0) {
+      console.warn('Invalid block number provided to getBlockTimestamp:', blockNumber);
+      return 0;
+    }
+
+    // Check if block is already cached
+    if (this.blockCache.has(blockNumber)) {
+      const timestamp = this.blockCache.get(blockNumber)!;
+      console.log(`Using cached timestamp for block ${blockNumber}: ${timestamp}`);
+      return timestamp;
+    }
+
+    // Try to find a nearby cached block for interpolation
+    const closestCached = this.findClosestCachedBlock(blockNumber);
+    if (closestCached) {
+      const blockTimeSeconds = 0.25; // Arbitrum block time (~0.25 seconds)
+      const blockDifference = blockNumber - closestCached.blockNumber;
+      const timeDifference = blockDifference * blockTimeSeconds;
+      const timestamp = closestCached.timestamp + timeDifference;
+      
+      console.log(`Interpolated timestamp for block ${blockNumber} from cached block ${closestCached.blockNumber}: ${Math.floor(timestamp)}`);
+      return Math.floor(timestamp);
+    }
+
+    // No nearby cached block found, fetch from RPC
+    console.log(`Fetching block ${blockNumber} from RPC (no nearby cached block found)`);
+    return await this.fetchBlockTimestampFromRPC(blockNumber);
+  }
+
   async getBlockNumberFromDate(date: Date): Promise<number> {
     /*
-     * 1757929503 => 379365564
-     * 1757929504 => 379365568
-     * 
-     * 379365564 / 4 is number of seconds since startTimeStamp until timestamp 1757929503
-     * 
-     * startTimeStamp: 1757929503 - 379365564 / 4 = 1663088112
-     *                 1757929503 -      94841391 = 1663088112                      
-     * 
-     * Formula: (timestamp - startTimeStamp) * 4
+     * Get block number from date with caching mechanism:
+     * - First calculate approximate block number using genesis timing
+     * - Check if we have a cached block nearby (within 10 blocks)
+     * - If nearby cached block exists, interpolate from it
+     * - Otherwise, use the calculated approximation
      */
-    const startTimeStamp = 1663088112;
-    const nowInSeconds = date.getTime() / 1000;
-    const blockNumber = Math.floor((nowInSeconds - startTimeStamp) * 4);
-    return Number(blockNumber);
+    const genesisTimestamp = 1622240000; // May 28, 2021, 10:13:20 PM
+    const blockTimeSeconds = 0.25; // Arbitrum block time (~0.25 seconds)
+    const targetTimestamp = Math.floor(date.getTime() / 1000);
+    
+    // Validate input date
+    if (isNaN(targetTimestamp) || targetTimestamp < 0) {
+      console.warn('Invalid date provided to getBlockNumberFromDate:', date);
+      return 0;
+    }
+    
+    // Calculate approximate block number based on time elapsed since genesis
+    const timeElapsed = targetTimestamp - genesisTimestamp;
+    
+    // Handle dates before genesis
+    if (timeElapsed < 0) {
+      console.warn(`Date ${date.toISOString()} is before Arbitrum genesis (${new Date(genesisTimestamp * 1000).toISOString()})`);
+      return 0;
+    }
+    
+    const approximateBlockNumber = Math.floor(timeElapsed / blockTimeSeconds);
+    
+    // Try to find a nearby cached block for more accurate calculation
+    const closestCached = this.findClosestCachedBlock(approximateBlockNumber);
+    if (closestCached) {
+      const blockDifference = Math.floor((targetTimestamp - closestCached.timestamp) / blockTimeSeconds);
+      const accurateBlockNumber = closestCached.blockNumber + blockDifference;
+      
+      console.log(`Calculated block number for ${date.toISOString()} using cached block ${closestCached.blockNumber}: ${accurateBlockNumber}`);
+      return accurateBlockNumber;
+    }
+    
+    // No nearby cached block found, use approximation
+    console.log(`Calculated approximate block number for ${date.toISOString()}: ${approximateBlockNumber}`);
+    return approximateBlockNumber;
+  }
+
+  /**
+   * Manually add a block to the cache (useful for seeding the cache)
+   */
+  public addBlockToCache(blockNumber: number, timestamp: number): void {
+    this.addToCache(blockNumber, timestamp);
+    console.log(`Added block ${blockNumber} with timestamp ${timestamp} to cache`);
+  }
+
+  /**
+   * Get cache statistics
+   */
+  public getCacheStats(): { size: number; limit: number; blocks: number[] } {
+    return {
+      size: this.blockCache.size,
+      limit: this.CACHE_SIZE_LIMIT,
+      blocks: Array.from(this.blockCache.keys()).sort((a, b) => a - b)
+    };
+  }
+
+  /**
+   * Clear the cache
+   */
+  public clearCache(): void {
+    this.blockCache.clear();
+    console.log('Block cache cleared');
   }
 
   async fetchTokenSymbol(tokenAddress: `0x${string}`): Promise<string> {
