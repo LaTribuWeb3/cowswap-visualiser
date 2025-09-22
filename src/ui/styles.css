@@ -235,9 +235,13 @@ body {
     font-size: 0.9em;
     color: #007bff;
     background: white;
-    padding: 6px 10px;
+    padding: 8px 12px;
     border-radius: 6px;
     border: 1px solid #e9ecef;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.3;
 }
 
 .market-comparison {
@@ -1556,9 +1560,38 @@ body {
     animation: spin 1s linear infinite;
 }
 
+/* Loading with retry animation - pulsing effect */
+.info-value.loading {
+    position: relative;
+    color: #667eea;
+    font-weight: 500;
+}
+
+.info-value.loading::after {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #667eea;
+    border-radius: 50%;
+    margin-left: 8px;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { 
+        opacity: 0.3;
+        transform: scale(0.8);
+    }
+    50% { 
+        opacity: 1;
+        transform: scale(1.2);
+    }
 }
 
 /* Scrollbar styling */
@@ -1861,6 +1894,11 @@ body {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   text-align: center;
   line-height: 1.3;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .rate-difference-cell {

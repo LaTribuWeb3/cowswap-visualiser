@@ -125,12 +125,12 @@ async function fetchAndDisplayBinancePrices(
       `🔍 Fetching Binance prices for ${sellToken.symbol}/${buyToken.symbol} pair`
     );
 
-    // Show initial loading state
+    // Show initial loading state with retry information
     await updateBinanceUIElements(
       trade.hash,
       sellToken.symbol,
       buyToken,
-      "Loading...",
+      "Loading... (with retry)",
       "Loading..."
     );
 
@@ -186,11 +186,16 @@ async function fetchAndDisplayBinancePrices(
   } catch (error) {
     console.error("❌ Error fetching Binance prices:", error);
 
-    // Show error toast notification
-    showToast(
-      `Failed to fetch Binance prices for ${sellToken.symbol}/${buyToken.symbol} pair`,
-      "error"
-    );
+    // Check if it's a "Pair not found" error to show appropriate message
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const isPairNotFound = errorMessage.includes('Pair not found');
+    
+    // Show error toast notification with more specific message
+    const toastMessage = isPairNotFound 
+      ? `Token pair ${sellToken.symbol}/${buyToken.symbol} not found on Binance`
+      : `Failed to fetch Binance prices for ${sellToken.symbol}/${buyToken.symbol} pair after retries`;
+    
+    showToast(toastMessage, "error");
 
     // Show error message in UI
     await updateBinanceUIElements(
@@ -244,7 +249,8 @@ async function updateBinanceUIElements(
       if (isError || binanceRate === null) {
         binanceRateElement.innerHTML = "No price on Binance for this pair";
         binanceRateElement.className = "info-value no-price-available";
-      } else if (binanceRate === "Loading...") {
+      } else if (binanceRate === "Loading..." || binanceRate === "Loading... (with retry)") {
+        binanceRateElement.innerHTML = binanceRate;
         binanceRateElement.className = "info-value loading";
       } else {
         binanceRateElement.innerHTML = `1 ${sellSymbol} = ${binanceRate} ${buyToken.symbol}`;
@@ -2311,13 +2317,15 @@ async function createTradeInfoFrameOverlay(
     }
 
     // Fetch Binance prices
-    let binanceRateAToB = "No price on Binance for this pair";
-    let binanceRateBToA = "No price on Binance for this pair";
-    let priceDifference = "-";
+    let binanceRateAToB = "Loading... (with retry)";
+    let binanceRateBToA = "Loading... (with retry)";
+    let priceDifference = "Loading...";
     const timestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
     console.log('🕐 Block timestamp for overlay:', timestamp);
 
     try {
+      console.log(`🔍 Fetching Binance prices for overlay: ${sellToken.symbol}/${buyToken.symbol} pair`);
+      
       const binanceData = await fetchBinancePrice(
         sellToken.symbol,
         buyToken.symbol,
@@ -2338,9 +2346,28 @@ async function createTradeInfoFrameOverlay(
           2
         );
         priceDifference = `${diff}%`;
+        
+        console.log(`✅ Successfully loaded Binance prices for overlay: ${sellToken.symbol}/${buyToken.symbol}`);
+      } else {
+        binanceRateAToB = "No price on Binance for this pair";
+        binanceRateBToA = "No price on Binance for this pair";
+        priceDifference = "-";
       }
     } catch (error) {
-      console.error("Error fetching Binance price:", error);
+      console.error("❌ Error fetching Binance price for overlay:", error);
+      
+      // Check if it's a "Pair not found" error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const isPairNotFound = errorMessage.includes('Pair not found');
+      
+      if (isPairNotFound) {
+        binanceRateAToB = `Token pair ${sellToken.symbol}/${buyToken.symbol} not found on Binance`;
+        binanceRateBToA = `Token pair ${sellToken.symbol}/${buyToken.symbol} not found on Binance`;
+      } else {
+        binanceRateAToB = "Failed to fetch price after retries";
+        binanceRateBToA = "Failed to fetch price after retries";
+      }
+      priceDifference = "-";
     }
 
     overlay.innerHTML = `

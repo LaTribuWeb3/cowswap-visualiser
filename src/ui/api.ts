@@ -310,68 +310,93 @@ export async function fetchSolverCompetition(txHash: string): Promise<any> {
 }
 
 /**
- * Fetch Binance price data for token pair via secure proxy
+ * Fetch Binance price data for token pair via secure proxy with retry logic
  */
 export async function fetchBinancePrice(inputToken: string, outputToken: string, timestamp?: number): Promise<BinancePriceData> {
-  try {
-    // First, check if the API token is available
-    const configResponse = await fetch(`${API_BASE_URL}/api/config`);
-    if (!configResponse.ok) {
-      throw new Error('Failed to fetch configuration');
-    }
-    
-    const configData = await configResponse.json() as any;
-    const tokenAvailable = configData.data?.pairApiTokenAvailable;
-    
-    console.log('🔑 API Token available:', tokenAvailable ? 'Yes' : 'No');
-    
-    if (!tokenAvailable) {
-      throw new Error('PAIR_API_TOKEN not configured');
-    }
-    
-    // Use the secure proxy endpoint instead of direct API calls
-    const url = new URL(`${API_BASE_URL}/api/binance-price`);
-    url.searchParams.append('inputToken', inputToken);
-    url.searchParams.append('outputToken', outputToken);
-    
-    console.log('⏰ Timestamp parameter:', timestamp);
-    if (timestamp) {
-      url.searchParams.append('timestamp', timestamp.toString());
-      console.log('✅ Timestamp added to URL');
-    } else {
-      console.log('⚠️ No timestamp provided');
-    }
-    
-    console.log('🌐 Making request to secure proxy:', url.toString());
-    
-    const response = await fetch(url.toString(), {
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      // Increase timeout to handle job polling (30 seconds + buffer)
-      signal: AbortSignal.timeout(35000) // 35 second timeout
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-
-      if (errorData.error && errorData.error.includes('Pair not found')) {
-        throw new Error('Pair not found');
+  const maxRetries = 3;
+  const baseDelay = 1000; // 1 second base delay
+  const maxDelay = 10000; // 10 seconds max delay
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Attempt ${attempt + 1}/${maxRetries} to fetch Binance price for ${inputToken}/${outputToken}`);
+      
+      // First, check if the API token is available
+      const configResponse = await fetch(`${API_BASE_URL}/api/config`);
+      if (!configResponse.ok) {
+        throw new Error('Failed to fetch configuration');
       }
+      
+      const configData = await configResponse.json() as any;
+      const tokenAvailable = configData.data?.pairApiTokenAvailable;
+      
+      console.log('🔑 API Token available:', tokenAvailable ? 'Yes' : 'No');
+      
+      if (!tokenAvailable) {
+        throw new Error('PAIR_API_TOKEN not configured');
+      }
+      
+      // Use the secure proxy endpoint instead of direct API calls
+      const url = new URL(`${API_BASE_URL}/api/binance-price`);
+      url.searchParams.append('inputToken', inputToken);
+      url.searchParams.append('outputToken', outputToken);
+      
+      console.log('⏰ Timestamp parameter:', timestamp);
+      if (timestamp) {
+        url.searchParams.append('timestamp', timestamp.toString());
+        console.log('✅ Timestamp added to URL');
+      } else {
+        console.log('⚠️ No timestamp provided');
+      }
+      
+      console.log('🌐 Making request to secure proxy:', url.toString());
+      
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        // Increase timeout to handle job polling (30 seconds + buffer)
+        signal: AbortSignal.timeout(35000) // 35 second timeout
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
 
-      throw new Error(`HTTP error! status: ${response.status} - ${errorData.error || 'Unknown error'}`);
+        if (errorData.error && errorData.error.includes('Pair not found')) {
+          throw new Error('Pair not found');
+        }
+
+        throw new Error(`HTTP error! status: ${response.status} - ${errorData.error || 'Unknown error'}`);
+      }
+      
+      const responseData = await response.json();
+      
+      if (!responseData.success) {
+        throw new Error(responseData.error || 'Unknown error from proxy');
+      }
+      
+      console.log(`✅ Successfully fetched Binance price on attempt ${attempt + 1}`);
+      return responseData.data as BinancePriceData;
+      
+    } catch (error) {
+      console.error(`❌ Attempt ${attempt + 1} failed:`, error);
+      
+      // If this is the last attempt, throw the error
+      if (attempt === maxRetries - 1) {
+        console.error('🚫 All retry attempts exhausted for Binance price fetch');
+        throw error;
+      }
+      
+      // Calculate delay with exponential backoff
+      const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+      console.log(`⏳ Retrying in ${delay}ms...`);
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-    
-    const responseData = await response.json();
-    
-    if (!responseData.success) {
-      throw new Error(responseData.error || 'Unknown error from proxy');
-    }
-    
-    return responseData.data as BinancePriceData;
-  } catch (error) {
-    console.error('Error fetching Binance price:', error);
-    throw error;
   }
+  
+  // This should never be reached, but just in case
+  throw new Error('Unexpected error in retry logic');
 }
 
