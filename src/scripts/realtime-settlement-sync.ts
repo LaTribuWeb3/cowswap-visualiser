@@ -38,8 +38,22 @@ class RealtimeSettlementSync {
   private progress: SyncProgress;
   private isRunning: boolean = false;
   private pollingInterval: number = 5000; // 5 seconds
+  
+  // Backoff configuration for RPC errors
+  private readonly MAX_RETRIES: number;
+  private readonly BASE_DELAY: number;
+  private readonly MAX_DELAY: number;
+  private readonly BACKOFF_MULTIPLIER: number;
+  private readonly RPC_TIMEOUT_DELAY: number;
 
   constructor() {
+    // Initialize backoff configuration from environment variables
+    this.MAX_RETRIES = parseInt(process.env.RPC_BACKOFF_MAX_RETRIES || "5");
+    this.BASE_DELAY = parseInt(process.env.RPC_BACKOFF_BASE_DELAY || "2000");
+    this.MAX_DELAY = parseInt(process.env.RPC_BACKOFF_MAX_DELAY || "60000");
+    this.BACKOFF_MULTIPLIER = parseFloat(process.env.RPC_BACKOFF_MULTIPLIER || "2");
+    this.RPC_TIMEOUT_DELAY = parseInt(process.env.RPC_TIMEOUT_DELAY || "600000"); // 10 minutes
+
     this.ethereumService = new EthereumService();
     this.progress = {
       totalEvents: 0,
@@ -50,6 +64,89 @@ class RealtimeSettlementSync {
       lastProcessedBlock: 0,
       isWaitingForTimeout: false,
     };
+
+    console.log(`🔄 RealtimeSync backoff config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}, timeoutDelay=${this.RPC_TIMEOUT_DELAY}ms`);
+  }
+
+  /**
+   * Calculate delay for exponential backoff
+   */
+  private calculateBackoffDelay(attempt: number): number {
+    const delay = this.BASE_DELAY * Math.pow(this.BACKOFF_MULTIPLIER, attempt);
+    return Math.min(delay, this.MAX_DELAY);
+  }
+
+  /**
+   * Sleep for specified milliseconds
+   */
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Execute operation with exponential backoff retry logic
+   */
+  private async executeWithBackoff<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries: number = this.MAX_RETRIES
+  ): Promise<T> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delay = this.calculateBackoffDelay(attempt - 1);
+          console.log(`🔄 Retrying ${operationName} (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms delay...`);
+          await this.sleep(delay);
+        }
+        
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Check if it's a retryable error
+        const isRetryableError = this.isRetryableRpcError(errorMessage);
+        
+        if (!isRetryableError || attempt === maxRetries) {
+          console.error(`❌ ${operationName} failed after ${attempt + 1} attempts:`, errorMessage);
+          throw error;
+        }
+        
+        console.warn(`⚠️ ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}):`, errorMessage);
+      }
+    }
+    
+    throw lastError || new Error(`${operationName} failed after ${maxRetries + 1} attempts`);
+  }
+
+  /**
+   * Check if an RPC error is retryable
+   */
+  private isRetryableRpcError(errorMessage: string): boolean {
+    const retryableErrors = [
+      'timeout',
+      'connection',
+      'network',
+      'rate limit',
+      'too many requests',
+      'service unavailable',
+      'internal server error',
+      'bad gateway',
+      'gateway timeout',
+      'request timeout',
+      'socket hang up',
+      'ECONNRESET',
+      'ENOTFOUND',
+      'ETIMEDOUT',
+      'ECONNREFUSED',
+      'RPC error',
+      'block range'
+    ];
+    
+    const lowerErrorMessage = errorMessage.toLowerCase();
+    return retryableErrors.some(error => lowerErrorMessage.includes(error));
   }
 
   async initialize(): Promise<void> {
@@ -71,7 +168,10 @@ class RealtimeSettlementSync {
       }
 
       // Get the latest block number to start from
-      const latestBlock = await this.ethereumService.getLatestBlockNumber();
+      const latestBlock = await this.executeWithBackoff(
+        () => this.ethereumService.getLatestBlockNumber(),
+        'getLatestBlockNumber(initialize)'
+      );
       this.progress.lastProcessedBlock = Number(latestBlock);
       console.log(
         `📦 Starting from block: ${this.progress.lastProcessedBlock}`
@@ -110,7 +210,10 @@ class RealtimeSettlementSync {
   private async processNewBlocks(): Promise<void> {
     try {
       // Get current latest block
-      const latestBlock = await this.ethereumService.getLatestBlockNumber();
+      const latestBlock = await this.executeWithBackoff(
+        () => this.ethereumService.getLatestBlockNumber(),
+        'getLatestBlockNumber(processNewBlocks)'
+      );
       const currentBlock = Number(latestBlock);
 
       if (currentBlock <= this.progress.lastProcessedBlock) {
@@ -133,13 +236,14 @@ class RealtimeSettlementSync {
       ) {
         await this.processBlock(BigInt(blockNumber));
         
-        // Add 10-minute timeout between block fetches to prevent RPC limits
+        // Add timeout between block fetches to prevent RPC limits
         // Skip timeout for the last block to avoid unnecessary delay
         if (blockNumber < currentBlock) {
           this.progress.isWaitingForTimeout = true;
           this.progress.timeoutStartTime = new Date();
-          console.log("⏳ Waiting 10 minutes before fetching next block to prevent RPC limits...");
-          await this.delay(10 * 60 * 1000); // 10 minutes = 600,000ms
+          const timeoutMinutes = this.RPC_TIMEOUT_DELAY / (60 * 1000);
+          console.log(`⏳ Waiting ${timeoutMinutes} minutes before fetching next block to prevent RPC limits...`);
+          await this.delay(this.RPC_TIMEOUT_DELAY);
           this.progress.isWaitingForTimeout = false;
           this.progress.timeoutStartTime = undefined;
           console.log("✅ Timeout completed, continuing with next block...");
@@ -156,10 +260,13 @@ class RealtimeSettlementSync {
   private async processBlock(blockNumber: bigint): Promise<void> {
     try {
       // Get block with transactions
-      const block = await this.ethereumService["client"].getBlock({
-        blockNumber,
-        includeTransactions: true,
-      });
+      const block = await this.executeWithBackoff(
+        () => this.ethereumService["client"].getBlock({
+          blockNumber,
+          includeTransactions: true,
+        }),
+        `getBlock(${blockNumber})`
+      );
 
       if (!block || !block.transactions) {
         return;
@@ -272,12 +379,15 @@ class RealtimeSettlementSync {
 
       console.log(`📡 Fetching order details from: ${apiUrl}`);
 
-      const response = await fetch(apiUrl, {
-        method: "GET",
-        headers: {
-          accept: "application/json",
-        },
-      });
+      const response = await this.executeWithBackoff(
+        () => fetch(apiUrl, {
+          method: "GET",
+          headers: {
+            accept: "application/json",
+          },
+        }),
+        `fetchOrderDetailsFromCowApi(${transactionHash})`
+      );
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -316,7 +426,7 @@ class RealtimeSettlementSync {
     
     if (this.progress.isWaitingForTimeout && this.progress.timeoutStartTime) {
       const timeoutElapsed = Date.now() - this.progress.timeoutStartTime.getTime();
-      const timeoutRemaining = Math.max(0, (10 * 60 * 1000) - timeoutElapsed);
+      const timeoutRemaining = Math.max(0, this.RPC_TIMEOUT_DELAY - timeoutElapsed);
       const remainingTime = this.formatTime(timeoutRemaining);
       console.log(`⏳ RPC Timeout: ${remainingTime} remaining`);
     } else {

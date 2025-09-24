@@ -25,6 +25,13 @@ module.exports = {
   COW_PROTOCOL_API_URL: 'https://api.cow.fi/mainnet',
   
   // Binance Price API Settings
-  PAIR_API_TOKEN: process.env.PAIR_API_TOKEN || 'your_jwt_token_here'
+  PAIR_API_TOKEN: process.env.PAIR_API_TOKEN || 'your_jwt_token_here',
+  
+  // RPC Backoff Configuration
+  RPC_BACKOFF_MAX_RETRIES: parseInt(process.env.RPC_BACKOFF_MAX_RETRIES) || 5,
+  RPC_BACKOFF_BASE_DELAY: parseInt(process.env.RPC_BACKOFF_BASE_DELAY) || 1000,
+  RPC_BACKOFF_MAX_DELAY: parseInt(process.env.RPC_BACKOFF_MAX_DELAY) || 30000,
+  RPC_BACKOFF_MULTIPLIER: parseFloat(process.env.RPC_BACKOFF_MULTIPLIER) || 2,
+  RPC_TIMEOUT_DELAY: parseInt(process.env.RPC_TIMEOUT_DELAY) || 600000, // 10 minutes
 };
 

@@ -18,13 +18,26 @@ export class EthereumService {
   private blockCache: Map<number, number> = new Map(); // Cache for block number -> timestamp
   private readonly CACHE_SIZE_LIMIT = 1000;
   private readonly CACHE_INTERPOLATION_THRESHOLD = 10; // blocks
+  
+  // Backoff configuration
+  private readonly MAX_RETRIES: number;
+  private readonly BASE_DELAY: number;
+  private readonly MAX_DELAY: number;
+  private readonly BACKOFF_MULTIPLIER: number;
 
   constructor() {
     // Get RPC URL from environment variables
     const rpcUrl =
       process.env.RPC_URL || "https://arb-mainnet.g.alchemy.com/v2/demo"; 
 
+    // Initialize backoff configuration from environment variables
+    this.MAX_RETRIES = parseInt(process.env.RPC_BACKOFF_MAX_RETRIES || "5");
+    this.BASE_DELAY = parseInt(process.env.RPC_BACKOFF_BASE_DELAY || "1000");
+    this.MAX_DELAY = parseInt(process.env.RPC_BACKOFF_MAX_DELAY || "30000");
+    this.BACKOFF_MULTIPLIER = parseFloat(process.env.RPC_BACKOFF_MULTIPLIER || "2");
+
     console.log(`🔗 Using RPC URL: ${rpcUrl}`);
+    console.log(`🔄 Backoff config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}`);
 
     // Create public client for Arbitrum
     this.client = createPublicClient({
@@ -38,6 +51,85 @@ export class EthereumService {
       abi: GPv2SettlementABI,
       client: this.client,
     });
+  }
+
+  /**
+   * Calculate delay for exponential backoff
+   */
+  private calculateBackoffDelay(attempt: number): number {
+    const delay = this.BASE_DELAY * Math.pow(this.BACKOFF_MULTIPLIER, attempt);
+    return Math.min(delay, this.MAX_DELAY);
+  }
+
+  /**
+   * Sleep for specified milliseconds
+   */
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Execute RPC call with exponential backoff retry logic
+   */
+  private async executeWithBackoff<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries: number = this.MAX_RETRIES
+  ): Promise<T> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delay = this.calculateBackoffDelay(attempt - 1);
+          console.log(`🔄 Retrying ${operationName} (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms delay...`);
+          await this.sleep(delay);
+        }
+        
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Check if it's a retryable error
+        const isRetryableError = this.isRetryableRpcError(errorMessage);
+        
+        if (!isRetryableError || attempt === maxRetries) {
+          console.error(`❌ ${operationName} failed after ${attempt + 1} attempts:`, errorMessage);
+          throw error;
+        }
+        
+        console.warn(`⚠️ ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}):`, errorMessage);
+      }
+    }
+    
+    throw lastError || new Error(`${operationName} failed after ${maxRetries + 1} attempts`);
+  }
+
+  /**
+   * Check if an RPC error is retryable
+   */
+  private isRetryableRpcError(errorMessage: string): boolean {
+    const retryableErrors = [
+      'timeout',
+      'connection',
+      'network',
+      'rate limit',
+      'too many requests',
+      'service unavailable',
+      'internal server error',
+      'bad gateway',
+      'gateway timeout',
+      'request timeout',
+      'socket hang up',
+      'ECONNRESET',
+      'ENOTFOUND',
+      'ETIMEDOUT',
+      'ECONNREFUSED'
+    ];
+    
+    const lowerErrorMessage = errorMessage.toLowerCase();
+    return retryableErrors.some(error => lowerErrorMessage.includes(error));
   }
 
   /**
@@ -89,19 +181,20 @@ export class EthereumService {
    * Fetch block timestamp using viem (RPC call)
    */
   private async fetchBlockTimestampFromRPC(blockNumber: number): Promise<number> {
-    try {
-      const block = await this.client.getBlock({
-        blockNumber: BigInt(blockNumber),
-      });
-      if (block) {
-        const timestamp = Number(block.timestamp);
-        this.addToCache(blockNumber, timestamp);
-        return timestamp;
-      }
-    } catch (error) {
-      console.error(`Error fetching block ${blockNumber} from RPC:`, error);
-    }
-    return 0;
+    return await this.executeWithBackoff(
+      async () => {
+        const block = await this.client.getBlock({
+          blockNumber: BigInt(blockNumber),
+        });
+        if (block) {
+          const timestamp = Number(block.timestamp);
+          this.addToCache(blockNumber, timestamp);
+          return timestamp;
+        }
+        return 0;
+      },
+      `fetchBlockTimestampFromRPC(${blockNumber})`
+    );
   }
 
   async getBlockTimestamp(blockNumber: number): Promise<number> {
@@ -263,7 +356,10 @@ export class EthereumService {
   }
 
   async getLatestBlockNumber() {
-    return await this.client.getBlockNumber();
+    return await this.executeWithBackoff(
+      () => this.client.getBlockNumber(),
+      'getLatestBlockNumber'
+    );
   }
 
   /**
@@ -286,10 +382,13 @@ export class EthereumService {
 
       while (count < limit && blockNumber > 0) {
         try {
-          const block = await this.client.getBlock({
-            blockNumber,
-            includeTransactions: true,
-          });
+          const block = await this.executeWithBackoff(
+            () => this.client.getBlock({
+              blockNumber,
+              includeTransactions: true,
+            }),
+            `getBlock(${blockNumber})`
+          );
 
           // Debug: Check if the returned block is more recent than our hardcoded limit
           if (block.number > latestBlock) {
@@ -627,47 +726,56 @@ export class EthereumService {
       try {
         [orderPlacements, orderCancellations, orderFulfillments] =
           await Promise.all([
-            this.client.getLogs({
-              address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-              event: {
-                type: "event",
-                name: "OrderPlacement",
-                inputs: [
-                  { type: "bytes", name: "orderUid", indexed: true },
-                  { type: "address", name: "owner", indexed: true },
-                  { type: "address", name: "sender", indexed: true },
-                ],
-              },
-              fromBlock,
-              toBlock: latestBlock,
-            }),
-            this.client.getLogs({
-              address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-              event: {
-                type: "event",
-                name: "OrderCancellation",
-                inputs: [
-                  { type: "bytes", name: "orderUid", indexed: true },
-                  { type: "address", name: "owner", indexed: true },
-                ],
-              },
-              fromBlock,
-              toBlock: latestBlock,
-            }),
-            this.client.getLogs({
-              address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-              event: {
-                type: "event",
-                name: "OrderFulfillment",
-                inputs: [
-                  { type: "bytes", name: "orderUid", indexed: true },
-                  { type: "address", name: "owner", indexed: true },
-                  { type: "address", name: "sender", indexed: true },
-                ],
-              },
-              fromBlock,
-              toBlock: latestBlock,
-            }),
+            this.executeWithBackoff(
+              () => this.client.getLogs({
+                address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                event: {
+                  type: "event",
+                  name: "OrderPlacement",
+                  inputs: [
+                    { type: "bytes", name: "orderUid", indexed: true },
+                    { type: "address", name: "owner", indexed: true },
+                    { type: "address", name: "sender", indexed: true },
+                  ],
+                },
+                fromBlock,
+                toBlock: latestBlock,
+              }),
+              'getLogs(OrderPlacement)'
+            ),
+            this.executeWithBackoff(
+              () => this.client.getLogs({
+                address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                event: {
+                  type: "event",
+                  name: "OrderCancellation",
+                  inputs: [
+                    { type: "bytes", name: "orderUid", indexed: true },
+                    { type: "address", name: "owner", indexed: true },
+                  ],
+                },
+                fromBlock,
+                toBlock: latestBlock,
+              }),
+              'getLogs(OrderCancellation)'
+            ),
+            this.executeWithBackoff(
+              () => this.client.getLogs({
+                address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                event: {
+                  type: "event",
+                  name: "OrderFulfillment",
+                  inputs: [
+                    { type: "bytes", name: "orderUid", indexed: true },
+                    { type: "address", name: "owner", indexed: true },
+                    { type: "address", name: "sender", indexed: true },
+                  ],
+                },
+                fromBlock,
+                toBlock: latestBlock,
+              }),
+              'getLogs(OrderFulfillment)'
+            ),
           ]);
       } catch (error: any) {
         console.warn("⚠️ RPC provider limitation detected:", error.message);
@@ -680,47 +788,56 @@ export class EthereumService {
           try {
             [orderPlacements, orderCancellations, orderFulfillments] =
               await Promise.all([
-                this.client.getLogs({
-                  address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-                  event: {
-                    type: "event",
-                    name: "OrderPlacement",
-                    inputs: [
-                      { type: "bytes", name: "orderUid", indexed: true },
-                      { type: "address", name: "owner", indexed: true },
-                      { type: "address", name: "sender", indexed: true },
-                    ],
-                  },
-                  fromBlock: smallerFromBlock,
-                  toBlock: latestBlock,
-                }),
-                this.client.getLogs({
-                  address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-                  event: {
-                    type: "event",
-                    name: "OrderCancellation",
-                    inputs: [
-                      { type: "bytes", name: "orderUid", indexed: true },
-                      { type: "address", name: "owner", indexed: true },
-                    ],
-                  },
-                  fromBlock: smallerFromBlock,
-                  toBlock: latestBlock,
-                }),
-                this.client.getLogs({
-                  address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-                  event: {
-                    type: "event",
-                    name: "OrderFulfillment",
-                    inputs: [
-                      { type: "bytes", name: "orderUid", indexed: true },
-                      { type: "address", name: "owner", indexed: true },
-                      { type: "address", name: "sender", indexed: true },
-                    ],
-                  },
-                  fromBlock: smallerFromBlock,
-                  toBlock: latestBlock,
-                }),
+                this.executeWithBackoff(
+                  () => this.client.getLogs({
+                    address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                    event: {
+                      type: "event",
+                      name: "OrderPlacement",
+                      inputs: [
+                        { type: "bytes", name: "orderUid", indexed: true },
+                        { type: "address", name: "owner", indexed: true },
+                        { type: "address", name: "sender", indexed: true },
+                      ],
+                    },
+                    fromBlock: smallerFromBlock,
+                    toBlock: latestBlock,
+                  }),
+                  'getLogs(OrderPlacement-retry)'
+                ),
+                this.executeWithBackoff(
+                  () => this.client.getLogs({
+                    address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                    event: {
+                      type: "event",
+                      name: "OrderCancellation",
+                      inputs: [
+                        { type: "bytes", name: "orderUid", indexed: true },
+                        { type: "address", name: "owner", indexed: true },
+                      ],
+                    },
+                    fromBlock: smallerFromBlock,
+                    toBlock: latestBlock,
+                  }),
+                  'getLogs(OrderCancellation-retry)'
+                ),
+                this.executeWithBackoff(
+                  () => this.client.getLogs({
+                    address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                    event: {
+                      type: "event",
+                      name: "OrderFulfillment",
+                      inputs: [
+                        { type: "bytes", name: "orderUid", indexed: true },
+                        { type: "address", name: "owner", indexed: true },
+                        { type: "address", name: "sender", indexed: true },
+                      ],
+                    },
+                    fromBlock: smallerFromBlock,
+                    toBlock: latestBlock,
+                  }),
+                  'getLogs(OrderFulfillment-retry)'
+                ),
               ]);
             console.log(
               "✅ Successfully fetched events with smaller block range"
