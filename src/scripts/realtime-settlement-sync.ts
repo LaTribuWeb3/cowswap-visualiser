@@ -52,7 +52,7 @@ class RealtimeSettlementSync {
     this.BASE_DELAY = parseInt(process.env.RPC_BACKOFF_BASE_DELAY || "2000");
     this.MAX_DELAY = parseInt(process.env.RPC_BACKOFF_MAX_DELAY || "60000");
     this.BACKOFF_MULTIPLIER = parseFloat(process.env.RPC_BACKOFF_MULTIPLIER || "2");
-    this.RPC_TIMEOUT_DELAY = parseInt(process.env.RPC_TIMEOUT_DELAY || "600000"); // 10 minutes
+    this.RPC_TIMEOUT_DELAY = parseInt(process.env.RPC_TIMEOUT_DELAY || "10000"); // 10 seconds
 
     this.ethereumService = new EthereumService();
     this.progress = {
@@ -210,23 +210,28 @@ class RealtimeSettlementSync {
   private async processNewBlocks(): Promise<void> {
     try {
       // Get current latest block
+      console.log(`🔍 Checking for new blocks...`);
       const latestBlock = await this.executeWithBackoff(
         () => this.ethereumService.getLatestBlockNumber(),
         'getLatestBlockNumber(processNewBlocks)'
       );
       const currentBlock = Number(latestBlock);
 
+      console.log(`📦 Current latest block: ${currentBlock}`);
+      console.log(`📦 Last processed block: ${this.progress.lastProcessedBlock}`);
+
       if (currentBlock <= this.progress.lastProcessedBlock) {
-        // No new blocks
+        console.log(`✅ No new blocks to process`);
         return;
       }
 
+      const newBlocksCount = currentBlock - this.progress.lastProcessedBlock;
       console.log(
-        `📦 Processing new blocks: ${
+        `🆕 Found ${newBlocksCount} new blocks to process: ${
           this.progress.lastProcessedBlock + 1
         } to ${currentBlock}`
       );
-      console.log("⏰ Adding 10-minute timeout between block fetches to prevent RPC limits");
+      console.log("⏰ Adding 10-second timeout between block fetches to prevent RPC limits");
 
       // Process each new block
       for (
@@ -234,6 +239,10 @@ class RealtimeSettlementSync {
         blockNumber <= currentBlock;
         blockNumber++
       ) {
+        const blockProgress = blockNumber - this.progress.lastProcessedBlock;
+        console.log(`\n🔍 PROCESSING BLOCK ${blockNumber} (${blockProgress}/${newBlocksCount})`);
+        console.log(`   ⏰ Processing at: ${new Date().toISOString()}`);
+        
         await this.processBlock(BigInt(blockNumber));
         
         // Add timeout between block fetches to prevent RPC limits
@@ -241,15 +250,16 @@ class RealtimeSettlementSync {
         if (blockNumber < currentBlock) {
           this.progress.isWaitingForTimeout = true;
           this.progress.timeoutStartTime = new Date();
-          const timeoutMinutes = this.RPC_TIMEOUT_DELAY / (60 * 1000);
-          console.log(`⏳ Waiting ${timeoutMinutes} minutes before fetching next block to prevent RPC limits...`);
+          const timeoutSeconds = this.RPC_TIMEOUT_DELAY / 1000;
+          console.log(`   ⏳ Waiting ${timeoutSeconds} seconds before processing block ${blockNumber + 1}...`);
           await this.delay(this.RPC_TIMEOUT_DELAY);
           this.progress.isWaitingForTimeout = false;
           this.progress.timeoutStartTime = undefined;
-          console.log("✅ Timeout completed, continuing with next block...");
+          console.log(`   ✅ Timeout completed, ready for next block`);
         }
       }
 
+      console.log(`✅ Completed processing ${newBlocksCount} new blocks`);
       this.progress.lastProcessedBlock = currentBlock;
     } catch (error) {
       console.error("❌ Error processing new blocks:", error);
@@ -259,6 +269,8 @@ class RealtimeSettlementSync {
 
   private async processBlock(blockNumber: bigint): Promise<void> {
     try {
+      console.log(`   🔄 Fetching block ${blockNumber} from RPC...`);
+      
       // Get block with transactions
       const block = await this.executeWithBackoff(
         () => this.ethereumService["client"].getBlock({
@@ -269,8 +281,11 @@ class RealtimeSettlementSync {
       );
 
       if (!block || !block.transactions) {
+        console.log(`   ⚠️  Block ${blockNumber}: No block data or transactions found`);
         return;
       }
+
+      console.log(`   📦 Block ${blockNumber}: Found ${block.transactions.length} total transactions`);
 
       // Filter transactions to CoW Protocol settlement contract
       const settlementTransactions = block.transactions.filter(
@@ -280,31 +295,37 @@ class RealtimeSettlementSync {
             "0x9008d19f58aabd9ed0d60971565aa8510560ab41".toLowerCase()
       );
 
+      console.log(`   🎯 Block ${blockNumber}: Found ${settlementTransactions.length} CoW Protocol transactions`);
+
       if (settlementTransactions.length === 0) {
+        console.log(`   ✅ Block ${blockNumber}: No CoW Protocol transactions, skipping`);
         return;
       }
 
-      console.log(
-        `🔍 Block ${blockNumber}: Found ${settlementTransactions.length} settlement transactions`
-      );
+      console.log(`   🔍 Block ${blockNumber}: Processing ${settlementTransactions.length} settlement transactions`);
 
       // Process each settlement transaction
-      for (const tx of settlementTransactions) {
+      for (let i = 0; i < settlementTransactions.length; i++) {
+        const tx = settlementTransactions[i];
         if (typeof tx === "object") {
+          console.log(`   🔄 Processing transaction ${i + 1}/${settlementTransactions.length}: ${tx.hash}`);
           try {
             await this.processSettlementTransaction(tx, blockNumber);
             this.progress.processedEvents++;
+            console.log(`   ✅ Transaction ${tx.hash} processed successfully`);
           } catch (error) {
             console.error(
-              `❌ Error processing settlement transaction ${tx.hash}:`,
+              `   ❌ Error processing settlement transaction ${tx.hash}:`,
               error
             );
             this.progress.errors++;
           }
         }
       }
+      
+      console.log(`   ✅ Block ${blockNumber} completed successfully`);
     } catch (error) {
-      console.error(`❌ Error fetching block ${blockNumber}:`, error);
+      console.error(`   ❌ Error fetching block ${blockNumber}:`, error);
       this.progress.errors++;
     }
   }
@@ -314,18 +335,22 @@ class RealtimeSettlementSync {
     blockNumber: bigint
   ): Promise<void> {
     try {
-      console.log(`🔄 Processing settlement transaction: ${tx.hash}`);
+      console.log(`      🔄 Processing settlement transaction: ${tx.hash}`);
 
       // Fetch order details from CoW API
+      console.log(`      📡 Fetching order details from CoW API for ${tx.hash}...`);
       const orderData = await this.fetchOrderDetailsFromCowApi(tx.hash);
 
       if (orderData && orderData.length > 0) {
         console.log(
-          `📋 Found ${orderData.length} orders for transaction ${tx.hash}`
+          `      📋 Found ${orderData.length} orders for transaction ${tx.hash}`
         );
 
         // Process each order
-        for (const order of orderData) {
+        for (let i = 0; i < orderData.length; i++) {
+          const order = orderData[i];
+          console.log(`      🔄 Processing order ${i + 1}/${orderData.length}: ${order.kind} ${order.sellAmount} → ${order.buyAmount}`);
+          
           const processedOrder: CowOrderData = {
             hash: tx.hash,
             executedBuyAmount: parseInt(order.executedBuyAmount),
@@ -342,21 +367,22 @@ class RealtimeSettlementSync {
             blockNumber: Number(blockNumber),
           };
 
+          console.log(`      💾 Saving order to database...`);
           // Save to database
           await this.databaseService.saveTransaction(processedOrder);
           this.progress.savedOrders++;
           this.progress.totalEvents++;
 
           console.log(
-            `💾 Saved order: ${order.kind} ${order.sellAmount} → ${order.buyAmount} (Block: ${blockNumber})`
+            `      ✅ Saved order: ${order.kind} ${order.sellAmount} → ${order.buyAmount} (Block: ${blockNumber})`
           );
         }
       } else {
-        console.log(`⚠️ No order data found for transaction ${tx.hash}`);
+        console.log(`      ⚠️ No order data found for transaction ${tx.hash}`);
       }
     } catch (error) {
       console.error(
-        `❌ Error processing settlement transaction ${tx.hash}:`,
+        `      ❌ Error processing settlement transaction ${tx.hash}:`,
         error
       );
       throw error;
@@ -371,7 +397,7 @@ class RealtimeSettlementSync {
       let apiBaseUrl = process.env.COW_PROTOCOL_API_URL || "";
       const apiUrl = `${apiBaseUrl}/transactions/${transactionHash}/orders`;
 
-      console.log(`📡 Fetching order details from: ${apiUrl}`);
+      console.log(`         📡 API Request: ${apiUrl}`);
 
       const response = await this.executeWithBackoff(
         () => fetch(apiUrl, {
@@ -383,20 +409,24 @@ class RealtimeSettlementSync {
         `fetchOrderDetailsFromCowApi(${transactionHash})`
       );
 
+      console.log(`         📊 API Response: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
         if (response.status === 404) {
-          console.log(`⚠️ No orders found for transaction ${transactionHash} (404)`);
+          console.log(`         ⚠️ No orders found for transaction ${transactionHash} (404)`);
           return [];
         }
-        console.error(`❌ HTTP error! status: ${response.status} for URL: ${apiUrl}`);
+        console.error(`         ❌ HTTP error! status: ${response.status} for URL: ${apiUrl}`);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      const result = Array.isArray(data) ? data : [];
+      console.log(`         ✅ API returned ${result.length} orders`);
+      return result;
     } catch (error) {
       console.error(
-        `❌ Error fetching order details for ${transactionHash}:`,
+        `         ❌ Error fetching order details for ${transactionHash}:`,
         error
       );
       return [];

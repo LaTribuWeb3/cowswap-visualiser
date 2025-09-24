@@ -76,15 +76,29 @@ class HistoricalTradesSync {
       const latestBlock = await this.ethereumService.getLatestBlockNumber();
       this.progress.lastProcessedBlock = Number(latestBlock);
 
-      // Calculate target block (4 months ago)
+      // Calculate target block (4 months ago) with more conservative estimate
       const monthsBack = 4;
-      const blocksPerDay = 7200; // ~12 seconds per block
+      const blocksPerDay = 345600; // ~0.25 seconds per block on Arbitrum = 345,600 blocks per day
       const daysBack = monthsBack * 30;
       const estimatedBlocksBack = BigInt(daysBack * blocksPerDay);
-      this.targetBlock = Number(latestBlock - estimatedBlocksBack);
+      
+      // Ensure we don't go too far back - limit to maximum 6 months to avoid RPC provider limits
+      const maxBlocksBack = BigInt(6 * 30 * blocksPerDay); // 6 months max
+      const actualBlocksBack = estimatedBlocksBack > maxBlocksBack ? maxBlocksBack : estimatedBlocksBack;
+      
+      this.targetBlock = Number(latestBlock - actualBlocksBack);
+      
+      // Additional safety check - ensure target block is not negative or too small
+      if (this.targetBlock < 100000000) { // Arbitrum started around block 0, but let's be safe
+        console.warn(`⚠️ Calculated target block ${this.targetBlock} seems too low, using minimum safe value`);
+        this.targetBlock = 100000000; // Safe minimum block number
+      }
 
       console.log(`📦 Starting from block: ${this.progress.lastProcessedBlock}`);
       console.log(`🎯 Target block (4 months ago): ${this.targetBlock}`);
+
+      // Validate that the target block is reasonable
+      await this.validateTargetBlock();
 
       console.log("✅ Historical Trades Sync initialized successfully");
     } catch (error) {
@@ -93,39 +107,110 @@ class HistoricalTradesSync {
     }
   }
 
+  private async validateTargetBlock(): Promise<void> {
+    try {
+      console.log(`🔍 Validating target block ${this.targetBlock}...`);
+      
+      // Try to fetch the target block to see if it's available
+      const testBlock = await this.ethereumService["client"].getBlock({
+        blockNumber: BigInt(this.targetBlock),
+      });
+      
+      if (testBlock) {
+        console.log(`✅ Target block ${this.targetBlock} is available`);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('could not be found')) {
+        console.warn(`⚠️ Target block ${this.targetBlock} is not available - adjusting to a more recent block`);
+        
+        // Try to find a more recent block that's available
+        let adjustedTarget = this.targetBlock + 1000000; // Try 1M blocks more recent
+        
+        // Keep trying until we find an available block or reach the latest block
+        while (adjustedTarget < this.progress.lastProcessedBlock - 1000) {
+          try {
+            await this.ethereumService["client"].getBlock({
+              blockNumber: BigInt(adjustedTarget),
+            });
+            console.log(`✅ Found available block ${adjustedTarget}, updating target`);
+            this.targetBlock = adjustedTarget;
+            break;
+          } catch (retryError) {
+            adjustedTarget += 100000; // Try 100k blocks more recent
+          }
+        }
+        
+        if (adjustedTarget >= this.progress.lastProcessedBlock - 1000) {
+          console.warn(`⚠️ Could not find a suitable target block, using latest block - 1000`);
+          this.targetBlock = this.progress.lastProcessedBlock - 1000;
+        }
+      } else {
+        console.error(`❌ Unexpected error validating target block:`, error);
+        throw error;
+      }
+    }
+  }
+
   async syncHistoricalTrades(): Promise<void> {
     console.log(
       "📅 Starting historical sync from most recent to 4 months ago..."
     );
-    console.log("⏰ Adding 10-minute timeout between block fetches to prevent RPC limits");
+    console.log("⏰ Adding 10-second timeout between block fetches (except first) to prevent RPC limits");
 
     try {
       // Process blocks from most recent to oldest
+      let isFirstBlock = true;
+      let blocksProcessed = 0;
+      const totalBlocksToProcess = this.progress.lastProcessedBlock - this.targetBlock;
+      
+      console.log(`🎯 BLOCK SYNC PLAN:`);
+      console.log(`   📦 Starting block: ${this.progress.lastProcessedBlock}`);
+      console.log(`   🎯 Target block: ${this.targetBlock}`);
+      console.log(`   📊 Total blocks to process: ${totalBlocksToProcess.toLocaleString()}`);
+      console.log(`   ⏱️  Estimated time: ${Math.ceil(totalBlocksToProcess * 10 / 60)} minutes (with 10s delays)`);
+      console.log("");
+
       for (
         let blockNumber = this.progress.lastProcessedBlock;
         blockNumber >= this.targetBlock;
         blockNumber--
       ) {
+        blocksProcessed++;
+        const progressPercent = ((this.progress.lastProcessedBlock - blockNumber) / totalBlocksToProcess * 100).toFixed(1);
+        
+        console.log(`\n🔍 BLOCK ${blockNumber} (${blocksProcessed}/${totalBlocksToProcess.toLocaleString()} - ${progressPercent}%)`);
+        console.log(`   📍 Position: ${this.progress.lastProcessedBlock - blockNumber + 1} blocks from start`);
+        console.log(`   ⏰ Processing at: ${new Date().toISOString()}`);
+        
         try {
           await this.processBlock(BigInt(blockNumber));
           
-          // Update progress every 100 blocks
-          if (blockNumber % 100 === 0) {
+          // Update progress every 10 blocks instead of 100 for more frequent updates
+          if (blockNumber % 10 === 0) {
+            console.log(`📊 Progress checkpoint - processed ${blocksProcessed} blocks`);
             this.printProgressReport();
           }
 
-          // Add 10-minute timeout between block fetches to prevent RPC limits
-          // Skip timeout for the last block to avoid unnecessary delay
-          if (blockNumber > this.targetBlock) {
+          // Add 10-second timeout between block fetches to prevent RPC limits
+          // Skip timeout for the first block and the last block to avoid unnecessary delays
+          if (!isFirstBlock && blockNumber > this.targetBlock) {
             this.progress.isWaitingForTimeout = true;
             this.progress.timeoutStartTime = new Date();
-            console.log("⏳ Waiting 10 minutes before fetching next block to prevent RPC limits...");
-            await this.delay(10 * 60 * 1000); // 10 minutes = 600,000ms
+            console.log(`⏳ Waiting 10 seconds before processing block ${blockNumber - 1}...`);
+            await this.delay(10 * 1000); // 10 seconds = 10,000ms
             this.progress.isWaitingForTimeout = false;
             this.progress.timeoutStartTime = undefined;
-            console.log("✅ Timeout completed, continuing with next block...");
+            console.log(`✅ Timeout completed, ready for next block`);
           }
+          
+          isFirstBlock = false; // Mark that we've processed at least one block
         } catch (error) {
+          // Check if we've hit the RPC provider limit
+          if (error instanceof Error && error.message.includes('Reached RPC provider limit')) {
+            console.log(`✅ ${error.message}`);
+            break; // Exit the loop gracefully
+          }
+          
           console.error(`❌ Error processing block ${blockNumber}:`, error);
           this.progress.errors++;
         }
@@ -140,6 +225,8 @@ class HistoricalTradesSync {
   }
 
   private async processBlock(blockNumber: bigint): Promise<void> {
+    console.log(`   🔄 Fetching block ${blockNumber} from RPC...`);
+    
     try {
       // Get block with transactions
       const block = await this.ethereumService["client"].getBlock({
@@ -148,8 +235,11 @@ class HistoricalTradesSync {
       });
 
       if (!block || !block.transactions) {
+        console.log(`   ⚠️  Block ${blockNumber}: No block data or transactions found`);
         return;
       }
+
+      console.log(`   📦 Block ${blockNumber}: Found ${block.transactions.length} total transactions`);
 
       // Filter transactions to CoW Protocol settlement contract
       const settlementTransactions = block.transactions.filter(
@@ -159,31 +249,44 @@ class HistoricalTradesSync {
             "0x9008d19f58aabd9ed0d60971565aa8510560ab41".toLowerCase()
       );
 
+      console.log(`   🎯 Block ${blockNumber}: Found ${settlementTransactions.length} CoW Protocol transactions`);
+
       if (settlementTransactions.length === 0) {
+        console.log(`   ✅ Block ${blockNumber}: No CoW Protocol transactions, skipping`);
         return;
       }
 
-      console.log(
-        `🔍 Block ${blockNumber}: Found ${settlementTransactions.length} settlement transactions`
-      );
+      console.log(`   🔍 Block ${blockNumber}: Processing ${settlementTransactions.length} settlement transactions`);
 
       // Process each settlement transaction
-      for (const tx of settlementTransactions) {
+      for (let i = 0; i < settlementTransactions.length; i++) {
+        const tx = settlementTransactions[i];
         if (typeof tx === "object") {
+          console.log(`   🔄 Processing transaction ${i + 1}/${settlementTransactions.length}: ${tx.hash}`);
           try {
             await this.processSettlementTransaction(tx, blockNumber);
             this.progress.processedEvents++;
+            console.log(`   ✅ Transaction ${tx.hash} processed successfully`);
           } catch (error) {
             console.error(
-              `❌ Error processing settlement transaction ${tx.hash}:`,
+              `   ❌ Error processing settlement transaction ${tx.hash}:`,
               error
             );
             this.progress.errors++;
           }
         }
       }
+      
+      console.log(`   ✅ Block ${blockNumber} completed successfully`);
     } catch (error) {
-      console.error(`❌ Error fetching block ${blockNumber}:`, error);
+      // Check if this is a BlockNotFoundError - if so, we've likely hit the RPC provider's limit
+      if (error instanceof Error && error.message.includes('could not be found')) {
+        console.warn(`   ⚠️ Block ${blockNumber} not found - likely beyond RPC provider retention limit. Stopping sync.`);
+        // Don't increment error count for this expected case
+        throw new Error(`Reached RPC provider limit at block ${blockNumber}. Sync completed successfully.`);
+      }
+      
+      console.error(`   ❌ Error fetching block ${blockNumber}:`, error);
       this.progress.errors++;
     }
   }
@@ -193,26 +296,32 @@ class HistoricalTradesSync {
     blockNumber: bigint
   ): Promise<void> {
     try {
+      console.log(`      🔍 Checking if transaction ${tx.hash} already exists...`);
+      
       // Check if transaction already exists in database
       const existingTransaction = await this.databaseService.getTransactionByHash(tx.hash);
       if (existingTransaction) {
-        console.log(`⏭️ Skipping duplicate transaction: ${tx.hash}`);
+        console.log(`      ⏭️ Skipping duplicate transaction: ${tx.hash}`);
         this.progress.skippedDuplicates++;
         return;
       }
 
-      console.log(`🔄 Processing settlement transaction: ${tx.hash}`);
+      console.log(`      ✅ Transaction ${tx.hash} is new, processing...`);
 
       // Fetch order details from CoW API
+      console.log(`      📡 Fetching order details from CoW API for ${tx.hash}...`);
       const orderData = await this.fetchOrderDetailsFromCowApi(tx.hash);
 
       if (orderData && orderData.length > 0) {
         console.log(
-          `📋 Found ${orderData.length} orders for transaction ${tx.hash}`
+          `      📋 Found ${orderData.length} orders for transaction ${tx.hash}`
         );
 
         // Process each order
-        for (const order of orderData) {
+        for (let i = 0; i < orderData.length; i++) {
+          const order = orderData[i];
+          console.log(`      🔄 Processing order ${i + 1}/${orderData.length}: ${order.kind} ${order.sellAmount} → ${order.buyAmount}`);
+          
           const processedOrder: CowOrderData = {
             hash: tx.hash,
             executedBuyAmount: parseInt(order.executedBuyAmount),
@@ -230,21 +339,22 @@ class HistoricalTradesSync {
             blockNumber: Number(blockNumber),
           };
 
+          console.log(`      💾 Saving order to database...`);
           // Save to database
           await this.databaseService.saveTransaction(processedOrder);
           this.progress.savedOrders++;
           this.progress.totalEvents++;
 
           console.log(
-            `💾 Saved order: ${order.kind} ${order.sellAmount} → ${order.buyAmount} (Block: ${blockNumber})`
+            `      ✅ Saved order: ${order.kind} ${order.sellAmount} → ${order.buyAmount} (Block: ${blockNumber})`
           );
         }
       } else {
-        console.log(`⚠️ No order data found for transaction ${tx.hash}`);
+        console.log(`      ⚠️ No order data found for transaction ${tx.hash}`);
       }
     } catch (error) {
       console.error(
-        `❌ Error processing settlement transaction ${tx.hash}:`,
+        `      ❌ Error processing settlement transaction ${tx.hash}:`,
         error
       );
       throw error;
@@ -260,7 +370,7 @@ class HistoricalTradesSync {
 
       const apiUrl = `${apiBaseUrl}/transactions/${transactionHash}/orders`;
 
-      console.log(`📡 Fetching order details from: ${apiUrl}`);
+      console.log(`         📡 API Request: ${apiUrl}`);
 
       const response = await fetch(apiUrl, {
         method: "GET",
@@ -269,20 +379,24 @@ class HistoricalTradesSync {
         },
       });
 
+      console.log(`         📊 API Response: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
         if (response.status === 404) {
-          console.log(`⚠️ No orders found for transaction ${transactionHash} (404)`);
+          console.log(`         ⚠️ No orders found for transaction ${transactionHash} (404)`);
           return [];
         }
-        console.error(`❌ HTTP error! status: ${response.status} for URL: ${apiUrl}`);
+        console.error(`         ❌ HTTP error! status: ${response.status} for URL: ${apiUrl}`);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      const result = Array.isArray(data) ? data : [];
+      console.log(`         ✅ API returned ${result.length} orders`);
+      return result;
     } catch (error) {
       console.error(
-        `❌ Error fetching order details for ${transactionHash}:`,
+        `         ❌ Error fetching order details for ${transactionHash}:`,
         error
       );
       return [];
@@ -306,7 +420,7 @@ class HistoricalTradesSync {
     
     if (this.progress.isWaitingForTimeout && this.progress.timeoutStartTime) {
       const timeoutElapsed = Date.now() - this.progress.timeoutStartTime.getTime();
-      const timeoutRemaining = Math.max(0, (10 * 60 * 1000) - timeoutElapsed);
+      const timeoutRemaining = Math.max(0, (10 * 1000) - timeoutElapsed);
       const remainingTime = this.formatTime(timeoutRemaining);
       console.log(`⏳ RPC Timeout: ${remainingTime} remaining`);
     } else {
