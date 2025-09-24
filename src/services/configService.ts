@@ -73,27 +73,32 @@ export interface ConfigResponse {
   tradingPairs: string[];
 }
 
+import { getApiBaseUrl, getCurrentNetwork } from './networkService';
+
 class ConfigService {
   private config: ConfigResponse | null = null;
   private lastFetch: number = 0;
+  private cachedForNetwork: string | null = null;
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   async getConfig(): Promise<ConfigResponse> {
     const now = Date.now();
     
     // Return cached config if it's still fresh
-    if (this.config && (now - this.lastFetch) < this.CACHE_DURATION) {
+    const currentNetwork = getCurrentNetwork();
+    if (this.config && this.cachedForNetwork === currentNetwork && (now - this.lastFetch) < this.CACHE_DURATION) {
       return this.config;
     }
 
     try {
-      const response = await fetch('https://prod.arbitrum.cowswap.la-tribu.xyz/api/config');
+      const response = await fetch(`${getApiBaseUrl()}/api/config`);
       if (!response.ok) {
         throw new Error(`Failed to fetch config: ${response.statusText}`);
       }
       
       this.config = await response.json();
       this.lastFetch = now;
+      this.cachedForNetwork = currentNetwork;
       return this.config!;
     } catch (error) {
       console.error('Error fetching config:', error);
@@ -132,7 +137,7 @@ class ConfigService {
 
   async getWethUsdcOrders(): Promise<unknown[]> {
     try {
-      const response = await fetch('https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders-weth-usdc?limit=5000');
+      const response = await fetch(`${getApiBaseUrl()}/api/orders-weth-usdc?limit=5000`);
       if (!response.ok) {
         throw new Error(`Failed to fetch WETH/USDC orders: ${response.statusText}`);
       }

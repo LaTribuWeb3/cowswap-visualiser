@@ -1,4 +1,6 @@
 import { arbitrumTokens } from './arbitrumTokens';
+import { ethereumTokens } from './ethereumTokens';
+import { getCurrentNetwork } from '../services/networkService';
 
 export interface TokenInfo {
   name: string;
@@ -19,7 +21,11 @@ export interface TokenInfo {
  * @returns TokenInfo object or null if not found
  */
 export function getTokenMetadata(tokenAddress: string): TokenInfo | null {
-  const tokenData = arbitrumTokens[tokenAddress.toLowerCase()];
+  const network = getCurrentNetwork();
+  const lower = tokenAddress.toLowerCase();
+  const tokenData = network === 'arbitrum'
+    ? arbitrumTokens[lower]
+    : ethereumTokens[lower];
   
   if (tokenData) {
     return {
@@ -41,7 +47,7 @@ export function getTokenMetadata(tokenAddress: string): TokenInfo | null {
  * @param metadata - Optional existing token metadata
  * @returns Display string (symbol or shortened address)
  */
-export function getTokenDisplaySymbol(tokenAddress: string, metadata?: TokenInfo): string {
+export function getTokenDisplaySymbol(tokenAddress: string, metadata?: Partial<TokenInfo>): string {
   if (metadata?.symbol) {
     return metadata.symbol;
   }
@@ -61,7 +67,7 @@ export function getTokenDisplaySymbol(tokenAddress: string, metadata?: TokenInfo
  * @param metadata - Optional existing token metadata
  * @returns Display string (name or null)
  */
-export function getTokenDisplayName(tokenAddress: string, metadata?: TokenInfo): string | null {
+export function getTokenDisplayName(tokenAddress: string, metadata?: Partial<TokenInfo>): string | null {
   if (metadata?.name) {
     return metadata.name;
   }

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import type { OrderWithMetadata, OrdersResponse } from '../types/OrderTypes';
+import type { TokenInfo } from '../utils/tokenMapping';
 import { getTokenDisplaySymbol, getTokenMetadata } from '../utils/tokenMapping';
 import { getSolverName } from '../utils/solversMapping';
 import { calculateCompetitorDeltas } from '../utils/deltaCalculations';
 import { configService } from '../services/configService';
+import { useNetwork } from '../context/NetworkContext';
 
 
 const OrdersTable: React.FC = () => {
@@ -29,6 +31,7 @@ const OrdersTable: React.FC = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const itemsPerPage = 20;
+  const { apiBaseUrl, explorerOrderBaseUrl } = useNetwork();
 
   // Timeframe options
   const timeframeOptions = [
@@ -49,12 +52,13 @@ const OrdersTable: React.FC = () => {
           start: new Date(now.getTime() - 24 * 60 * 60 * 1000),
           end: now
         };
-      case 'yesterday':
+      case 'yesterday': {
         const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
         return {
           start: startOfYesterday,
           end: startOfToday
         };
+      }
       case 'last-week':
         return {
           start: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
@@ -143,7 +147,7 @@ const OrdersTable: React.FC = () => {
   // Fetch data from API once when component loads
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [apiBaseUrl]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -151,9 +155,7 @@ const OrdersTable: React.FC = () => {
   }, [filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken, filterOrderId, filterTimeframe, sortBy, sortOrder]);
 
   // Apply client-side filtering and pagination (when filters or page change)
-  useEffect(() => {
-    applyFiltersAndPagination();
-  }, [allOrders, page, sortBy, sortOrder, filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken, filterOrderId, filterTimeframe]);
+  // (effect placed after function definition below)
 
   // Update search display when token selection changes
   useEffect(() => {
@@ -173,7 +175,7 @@ const OrdersTable: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch('https://prod.arbitrum.cowswap.la-tribu.xyz/api/orders-bulk?limit=10000');
+      const response = await fetch(`${apiBaseUrl}/api/orders-bulk?limit=10000`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to fetch orders');
@@ -230,7 +232,7 @@ const OrdersTable: React.FC = () => {
   };
 
 
-  const applyFiltersAndPagination = () => {
+  const applyFiltersAndPagination = React.useCallback(() => {
     let filteredOrders = [...allOrders];
     const ourSolverAddress = configService.getOurSolverAddress();
 
@@ -319,7 +321,8 @@ const OrdersTable: React.FC = () => {
 
     // Apply sorting
     filteredOrders.sort((a, b) => {
-      let aValue: any, bValue: any;
+      let aValue: number;
+      let bValue: number;
       
       switch (sortBy) {
         case 'timestamp':
@@ -366,7 +369,11 @@ const OrdersTable: React.FC = () => {
     console.log('Setting orders state with', paginatedOrders.length, 'orders');
     setOrders(paginatedOrders);
     setTotalPages(totalPages);
-  };
+  }, [allOrders, page, sortBy, sortOrder, filterIncluded, filterValidSolutions, filterSellToken, filterBuyToken, filterOrderId, filterTimeframe]);
+
+  useEffect(() => {
+    applyFiltersAndPagination();
+  }, [applyFiltersAndPagination]);
 
   const handleSort = (field: 'timestamp' | 'markup' | 'livePrice') => {
     if (sortBy === field) {
@@ -378,7 +385,7 @@ const OrdersTable: React.FC = () => {
     setPage(1); // Reset to first page when sorting
   };
 
-  const formatTokenAmount = (amount: string, tokenInfo?: any, tokenAddress?: string) => {
+  const formatTokenAmount = (amount: string, tokenInfo?: Partial<TokenInfo>, tokenAddress?: string) => {
     const num = parseFloat(amount);
     if (isNaN(num)) return amount;
 
@@ -407,7 +414,7 @@ const OrdersTable: React.FC = () => {
     }
   };
 
-  const getTokenSymbol = (tokenAddress: string, tokenInfo?: any) => {
+  const getTokenSymbol = (tokenAddress: string, tokenInfo?: Partial<TokenInfo>) => {
     return getTokenDisplaySymbol(tokenAddress, tokenInfo);
   };
 
@@ -788,7 +795,7 @@ const OrdersTable: React.FC = () => {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900 w-32">
                           <a
-                            href={`https://explorer.cow.fi/arb1/orders/${order._id}`}
+                            href={`${explorerOrderBaseUrl}${order._id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800 hover:underline"

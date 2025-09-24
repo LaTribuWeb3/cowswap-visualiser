@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { getTokenMetadata, getTokenDisplaySymbol, getTokenDisplayName } from '../utils/tokenMapping';
 import type { OrderStats, TokenInfo } from '../types/OrderTypes';
 import { configService, type SolverConfig, type MarginConfig, type PricingConfig } from '../services/configService';
+import { useNetwork } from '../context/NetworkContext';
 
 // Order interface removed as it's not used in this component
 
@@ -14,48 +15,42 @@ const Dashboard: React.FC = () => {
   const [solverConfig, setSolverConfig] = useState<SolverConfig | null>(null);
   const [marginConfig, setMarginConfig] = useState<MarginConfig | null>(null);
   const [pricingConfig, setPricingConfig] = useState<PricingConfig | null>(null);
+  const { apiBaseUrl } = useNetwork();
 
   useEffect(() => {
     fetchDashboardData();
     fetchConfigData();
-  }, []);
+  }, [apiBaseUrl]);
 
   useEffect(() => {
-    if (stats?.topTokens) {
-      fetchTokenMetadata();
-    }
-  }, [stats?.topTokens]);
-
-  const fetchTokenMetadata = async () => {
     if (!stats?.topTokens) return;
+    (async () => {
+      try {
+        const tokensNeedingMetadata = stats.topTokens
+          .filter(token => !token.tokenInfo?.symbol)
+          .map(token => token.token);
 
-    try {
-      // Extract unique token addresses that don't have metadata
-      const tokensNeedingMetadata = stats.topTokens
-        .filter(token => !token.tokenInfo?.symbol)
-        .map(token => token.token);
+        if (tokensNeedingMetadata.length === 0) return;
 
-      if (tokensNeedingMetadata.length === 0) return;
+        const newMetadata = new Map<string, TokenInfo>();
+        tokensNeedingMetadata.forEach(tokenAddress => {
+          const tokenInfo = getTokenMetadata(tokenAddress);
+          if (tokenInfo) {
+            newMetadata.set(tokenAddress.toLowerCase(), tokenInfo);
+          }
+        });
 
-      const newMetadata = new Map<string, TokenInfo>();
-      
-      tokensNeedingMetadata.forEach(tokenAddress => {
-        const tokenInfo = getTokenMetadata(tokenAddress);
-        if (tokenInfo) {
-          newMetadata.set(tokenAddress.toLowerCase(), tokenInfo);
-        }
-      });
-
-      setTokenMetadata(prev => new Map([...prev, ...newMetadata]));
-    } catch (error) {
-      console.warn('Failed to fetch token metadata:', error);
-    }
-  };
+        setTokenMetadata(prev => new Map([...prev, ...newMetadata]));
+      } catch (error) {
+        console.warn('Failed to fetch token metadata:', error);
+      }
+    })();
+  }, [stats?.topTokens]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('https://prod.arbitrum.cowswap.la-tribu.xyz/api/dashboard-stats');
+      const response = await fetch(`${apiBaseUrl}/api/dashboard-stats`);
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.details || errorData.error || 'Failed to fetch dashboard data');

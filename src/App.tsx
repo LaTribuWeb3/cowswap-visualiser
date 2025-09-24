@@ -2,9 +2,11 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import Dashboard from './components/Dashboard';
 import OrdersTable from './components/OrdersTable';
 import './App.css';
+import { useNetwork } from './context/NetworkContext';
 
 function Navigation() {
   const location = useLocation();
+  const { network, setNetwork } = useNetwork();
   
   return (
     <nav className="bg-white shadow-sm border-b">
@@ -36,6 +38,18 @@ function Navigation() {
                 Orders Table
               </Link>
             </div>
+          </div>
+          <div className="flex items-center">
+            <label htmlFor="network-select" className="mr-2 text-sm text-gray-600">Network</label>
+            <select
+              id="network-select"
+              value={network}
+              onChange={(e) => setNetwork(e.target.value as any)}
+              className="px-2 py-1 border border-gray-300 rounded-md text-sm bg-white"
+            >
+              <option value="arbitrum">Arbitrum</option>
+              <option value="ethereum">Ethereum</option>
+            </select>
           </div>
         </div>
       </div>
