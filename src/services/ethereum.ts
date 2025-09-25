@@ -11,7 +11,7 @@ import { arbitrum } from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
 
 // CoW Protocol contract address (Arbitrum)
-const COW_PROTOCOL_ADDRESS = "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
+const COW_PROTOCOL_ADDRESS = process.env.COW_PROTOCOL_CONTRACT || "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
 
 export class EthereumService {
   private client;
@@ -1044,7 +1044,7 @@ export class EthereumService {
     try {
       console.log(`🔍 Fetching complete token metadata for: ${tokenAddress}`);
       
-      const response = await fetch(`https://tokens-metadata.la-tribu.xyz/tokens/arbitrum/${tokenAddress}`, {
+      const response = await fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/arbitrum/${tokenAddress}`, {
         headers: {
           'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
           'Content-Type': 'application/json'

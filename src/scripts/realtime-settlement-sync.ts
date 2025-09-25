@@ -363,7 +363,7 @@ class RealtimeSettlementSync {
         (tx) =>
           typeof tx === "object" &&
           tx.to?.toLowerCase() ===
-            "0x9008d19f58aabd9ed0d60971565aa8510560ab41".toLowerCase()
+            (process.env.COW_PROTOCOL_CONTRACT || "0x9008d19f58aabd9ed0d60971565aa8510560ab41").toLowerCase()
       );
 
       console.log(`   🎯 Block ${blockNumber}: Found ${settlementTransactions.length} CoW Protocol transactions`);

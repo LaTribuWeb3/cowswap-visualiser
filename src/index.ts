@@ -59,7 +59,14 @@ const configFile = {
     'http://127.0.0.1:5001',
     'http://localhost:8080'
   ],
-  PAIR_API_TOKEN: process.env.PAIR_API_TOKEN
+  PAIR_API_TOKEN: process.env.PAIR_API_TOKEN,
+  // External API endpoints
+  TOKENS_METADATA_API_URL: process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz',
+  PAIR_PRICING_API_URL: process.env.PAIR_PRICING_API_URL || 'https://pair-pricing.la-tribu.xyz',
+  COW_PROTOCOL_API_URL: process.env.COW_PROTOCOL_API_URL || 'https://api.cow.fi/mainnet',
+  BLOCKCHAIN_EXPLORER_URL: process.env.BLOCKCHAIN_EXPLORER_URL || 'https://etherscan.io',
+  // Contract addresses
+  COW_PROTOCOL_CONTRACT: process.env.COW_PROTOCOL_CONTRACT || '0x9008D19f58AAbD9eD0d60971565AA8510560ab41'
 };
 
 // Initialize database service
@@ -417,7 +424,7 @@ app.get('/api/token/:address/decimals', async (req, res) => {
     console.log(`📡 Fetching decimals for token: ${address}`);
     
     // Fetch token metadata from la-tribu API
-    const response = await fetch(`https://tokens-metadata.la-tribu.xyz/tokens/arbitrum/${address}`, {
+    const response = await fetch(`${configFile.TOKENS_METADATA_API_URL}/tokens/arbitrum/${address}`, {
       headers: {
         'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
         'Content-Type': 'application/json'
@@ -455,7 +462,7 @@ app.get('/api/token/:address/symbol', async (req, res) => {
     console.log(`📡 Fetching symbol for token: ${address}`);
     
     // Fetch token metadata from la-tribu API
-    const response = await fetch(`https://tokens-metadata.la-tribu.xyz/tokens/arbitrum/${address}`, {
+    const response = await fetch(`${configFile.TOKENS_METADATA_API_URL}/tokens/arbitrum/${address}`, {
       headers: {
         'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
         'Content-Type': 'application/json'
@@ -613,7 +620,7 @@ app.get('/api/binance-price', async (req, res) => {
     }
     
     // Build the external API URL
-    const url = new URL('https://pair-pricing.la-tribu.xyz/api/price');
+    const url = new URL(`${configFile.PAIR_PRICING_API_URL}/api/price`);
     url.searchParams.append('inputToken', inputToken as string);
     url.searchParams.append('outputToken', outputToken as string);
     
@@ -671,7 +678,7 @@ app.get('/api/binance-price', async (req, res) => {
         
         try {
           // Check job status
-          const statusUrl = `https://pair-pricing.la-tribu.xyz/api/job/${data.jobId}`;
+          const statusUrl = `${configFile.PAIR_PRICING_API_URL}/api/job/${data.jobId}`;
           const statusResponse = await fetch(statusUrl, {
             headers: {
               'Authorization': `Bearer ${configFile.PAIR_API_TOKEN}`,

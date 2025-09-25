@@ -21,8 +21,13 @@ module.exports = {
   ETHEREUM_CHAIN_ID: 1,
   
   // CoW Protocol Settings
-  COW_PROTOCOL_CONTRACT: '0x9008D19f58AAbD9eD0d60971565AA8510560ab41',
-  COW_PROTOCOL_API_URL: 'https://api.cow.fi/mainnet',
+  COW_PROTOCOL_CONTRACT: process.env.COW_PROTOCOL_CONTRACT || '0x9008D19f58AAbD9eD0d60971565AA8510560ab41',
+  COW_PROTOCOL_API_URL: process.env.COW_PROTOCOL_API_URL || 'https://api.cow.fi/mainnet',
+  
+  // External API Endpoints
+  TOKENS_METADATA_API_URL: process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz',
+  PAIR_PRICING_API_URL: process.env.PAIR_PRICING_API_URL || 'https://pair-pricing.la-tribu.xyz',
+  BLOCKCHAIN_EXPLORER_URL: process.env.BLOCKCHAIN_EXPLORER_URL || 'https://etherscan.io',
   
   // Binance Price API Settings
   PAIR_API_TOKEN: process.env.PAIR_API_TOKEN || 'your_jwt_token_here',

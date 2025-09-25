@@ -29,6 +29,15 @@ export default defineConfig(({ mode }) => {
       "process.env.BLOCKCHAIN_EXPLORER_URL": JSON.stringify(
         env.BLOCKCHAIN_EXPLORER_URL || "https://etherscan.io"
       ),
+      "process.env.TOKENS_METADATA_API_URL": JSON.stringify(
+        env.TOKENS_METADATA_API_URL || "https://tokens-metadata.la-tribu.xyz"
+      ),
+      "process.env.PAIR_PRICING_API_URL": JSON.stringify(
+        env.PAIR_PRICING_API_URL || "https://pair-pricing.la-tribu.xyz"
+      ),
+      "process.env.COW_PROTOCOL_CONTRACT": JSON.stringify(
+        env.COW_PROTOCOL_CONTRACT || "0x9008D19f58AAbD9eD0d60971565AA8510560ab41"
+      ),
     },
     optimizeDeps: {
       esbuildOptions: {
