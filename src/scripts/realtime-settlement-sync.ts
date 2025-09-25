@@ -45,6 +45,10 @@ class RealtimeSettlementSync {
   private readonly MAX_DELAY: number;
   private readonly BACKOFF_MULTIPLIER: number;
   private readonly RPC_TIMEOUT_DELAY: number;
+  
+  // Batch processing configuration
+  private readonly MAX_BATCH_SIZE: number;
+  private readonly BATCH_DELAY_MS: number;
 
   constructor() {
     // Initialize backoff configuration from environment variables
@@ -53,6 +57,14 @@ class RealtimeSettlementSync {
     this.MAX_DELAY = parseInt(process.env.RPC_BACKOFF_MAX_DELAY || "60000");
     this.BACKOFF_MULTIPLIER = parseFloat(process.env.RPC_BACKOFF_MULTIPLIER || "2");
     this.RPC_TIMEOUT_DELAY = parseInt(process.env.RPC_TIMEOUT_DELAY || "10000"); // 10 seconds
+    
+    // Initialize batch processing configuration
+    this.MAX_BATCH_SIZE = parseInt(process.env.BATCH_SIZE || "100");
+    this.BATCH_DELAY_MS = parseInt(process.env.BATCH_DELAY_MS || "1000");
+    
+    // Set polling interval based on block time (Arbitrum ~0.25s blocks)
+    // Poll every 1 second to stay current with new blocks
+    this.pollingInterval = parseInt(process.env.REALTIME_POLLING_INTERVAL || "1000");
 
     this.ethereumService = new EthereumService();
     this.progress = {
@@ -65,7 +77,9 @@ class RealtimeSettlementSync {
       isWaitingForTimeout: false,
     };
 
-    console.log(`🔄 RealtimeSync backoff config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}, timeoutDelay=${this.RPC_TIMEOUT_DELAY}ms`);
+    console.log(`🔄 RealtimeSync config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}, timeoutDelay=${this.RPC_TIMEOUT_DELAY}ms`);
+    console.log(`🚀 Batch config: maxBatchSize=${this.MAX_BATCH_SIZE}, batchDelay=${this.BATCH_DELAY_MS}ms`);
+    console.log(`⏱️ Polling interval: ${this.pollingInterval}ms (optimized for Arbitrum's ~0.25s block time)`);
   }
 
   /**
@@ -231,32 +245,18 @@ class RealtimeSettlementSync {
           this.progress.lastProcessedBlock + 1
         } to ${currentBlock}`
       );
-      console.log("⏰ Adding 10-second timeout between block fetches to prevent RPC limits");
 
-      // Process each new block
-      for (
-        let blockNumber = this.progress.lastProcessedBlock + 1;
-        blockNumber <= currentBlock;
-        blockNumber++
-      ) {
-        const blockProgress = blockNumber - this.progress.lastProcessedBlock;
-        console.log(`\n🔍 PROCESSING BLOCK ${blockNumber} (${blockProgress}/${newBlocksCount})`);
-        console.log(`   ⏰ Processing at: ${new Date().toISOString()}`);
-        
-        await this.processBlock(BigInt(blockNumber));
-        
-        // Add timeout between block fetches to prevent RPC limits
-        // Skip timeout for the last block to avoid unnecessary delay
-        if (blockNumber < currentBlock) {
-          this.progress.isWaitingForTimeout = true;
-          this.progress.timeoutStartTime = new Date();
-          const timeoutSeconds = this.RPC_TIMEOUT_DELAY / 1000;
-          console.log(`   ⏳ Waiting ${timeoutSeconds} seconds before processing block ${blockNumber + 1}...`);
-          await this.delay(this.RPC_TIMEOUT_DELAY);
-          this.progress.isWaitingForTimeout = false;
-          this.progress.timeoutStartTime = undefined;
-          console.log(`   ✅ Timeout completed, ready for next block`);
-        }
+      // Use batch processing for efficiency
+      if (newBlocksCount > 1) {
+        console.log(`🚀 Using batch processing for ${newBlocksCount} blocks`);
+        await this.processBlocksInBatch(
+          BigInt(this.progress.lastProcessedBlock + 1),
+          BigInt(currentBlock)
+        );
+      } else {
+        // Single block - use individual processing
+        console.log(`🔍 Processing single block ${this.progress.lastProcessedBlock + 1}`);
+        await this.processBlock(BigInt(this.progress.lastProcessedBlock + 1));
       }
 
       console.log(`✅ Completed processing ${newBlocksCount} new blocks`);
@@ -264,6 +264,77 @@ class RealtimeSettlementSync {
     } catch (error) {
       console.error("❌ Error processing new blocks:", error);
       throw error;
+    }
+  }
+
+  private async processBlocksInBatch(fromBlock: bigint, toBlock: bigint): Promise<void> {
+    try {
+      console.log(`📡 Fetching batch events from block ${fromBlock} to ${toBlock}...`);
+      
+      // Use the new batch event fetching method
+      const events = await this.ethereumService.getBatchEvents(fromBlock, toBlock);
+      
+      console.log(`📋 Found ${events.length} events in batch`);
+      
+      if (events.length === 0) {
+        console.log(`✅ No CoW Protocol events found in batch ${fromBlock}-${toBlock}`);
+        return;
+      }
+
+      // Group events by transaction hash for processing
+      const eventsByTransaction = new Map<string, any[]>();
+      
+      for (const event of events) {
+        const txHash = event.transactionHash || event.hash;
+        if (!eventsByTransaction.has(txHash)) {
+          eventsByTransaction.set(txHash, []);
+        }
+        eventsByTransaction.get(txHash)!.push(event);
+      }
+
+      console.log(`🔄 Processing ${eventsByTransaction.size} unique transactions...`);
+
+      // Process each transaction
+      let processedTransactions = 0;
+      for (const [txHash, txEvents] of eventsByTransaction) {
+        processedTransactions++;
+        console.log(`   🔄 Processing transaction ${processedTransactions}/${eventsByTransaction.size}: ${txHash}`);
+        
+        try {
+          // Get the transaction details from the first event
+          const firstEvent = txEvents[0];
+          const blockNumber = firstEvent.blockNumber;
+          
+          // Create a mock transaction object for compatibility
+          const mockTransaction = {
+            hash: txHash,
+            blockNumber: blockNumber,
+            // Add other fields as needed
+          };
+          
+          await this.processSettlementTransaction(mockTransaction, BigInt(blockNumber));
+          this.progress.processedEvents++;
+          console.log(`   ✅ Transaction ${txHash} processed successfully`);
+        } catch (error) {
+          console.error(`   ❌ Error processing transaction ${txHash}:`, error);
+          this.progress.errors++;
+        }
+      }
+      
+      console.log(`✅ Batch processing completed: ${processedTransactions} transactions processed`);
+    } catch (error) {
+      console.error(`❌ Error in batch processing (${fromBlock}-${toBlock}):`, error);
+      
+      // Fall back to individual block processing if batch fails
+      console.log(`🔄 Falling back to individual block processing...`);
+      for (let blockNum = fromBlock; blockNum <= toBlock; blockNum++) {
+        try {
+          await this.processBlock(blockNum);
+        } catch (blockError) {
+          console.error(`❌ Error processing block ${blockNum}:`, blockError);
+          this.progress.errors++;
+        }
+      }
     }
   }
 

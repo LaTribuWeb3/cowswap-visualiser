@@ -39,6 +39,10 @@ class HistoricalTradesSync {
   private isDatabaseConnected: boolean = false;
   private progress: SyncProgress;
   private targetBlock: number = 0;
+  
+  // Batch processing configuration
+  private readonly MAX_BATCH_SIZE: number;
+  private readonly BATCH_DELAY_MS: number;
 
   constructor() {
     this.ethereumService = new EthereumService();
@@ -52,6 +56,10 @@ class HistoricalTradesSync {
       lastProcessedBlock: 0,
       isWaitingForTimeout: false,
     };
+    
+    // Initialize batch processing configuration
+    this.MAX_BATCH_SIZE = parseInt(process.env.BATCH_SIZE || "100");
+    this.BATCH_DELAY_MS = parseInt(process.env.BATCH_DELAY_MS || "2000");
   }
 
   async initialize(): Promise<void> {
@@ -155,55 +163,48 @@ class HistoricalTradesSync {
     console.log(
       "📅 Starting historical sync from most recent to 4 months ago..."
     );
-    console.log("⏰ Adding 10-second timeout between block fetches (except first) to prevent RPC limits");
+    console.log("🚀 Using batch processing for much faster historical sync");
 
     try {
-      // Process blocks from most recent to oldest
-      let isFirstBlock = true;
-      let blocksProcessed = 0;
       const totalBlocksToProcess = this.progress.lastProcessedBlock - this.targetBlock;
       
-      console.log(`🎯 BLOCK SYNC PLAN:`);
+      console.log(`🎯 BATCH SYNC PLAN:`);
       console.log(`   📦 Starting block: ${this.progress.lastProcessedBlock}`);
       console.log(`   🎯 Target block: ${this.targetBlock}`);
       console.log(`   📊 Total blocks to process: ${totalBlocksToProcess.toLocaleString()}`);
-      console.log(`   ⏱️  Estimated time: ${Math.ceil(totalBlocksToProcess * 10 / 60)} minutes (with 10s delays)`);
+      console.log(`   🚀 Using batch size: ${this.MAX_BATCH_SIZE} blocks per batch`);
+      console.log(`   ⏱️  Estimated time: ${Math.ceil(totalBlocksToProcess / this.MAX_BATCH_SIZE / 6)} minutes (with batch processing)`);
       console.log("");
 
-      for (
-        let blockNumber = this.progress.lastProcessedBlock;
-        blockNumber >= this.targetBlock;
-        blockNumber--
-      ) {
-        blocksProcessed++;
-        const progressPercent = ((this.progress.lastProcessedBlock - blockNumber) / totalBlocksToProcess * 100).toFixed(1);
+      // Process in batches from most recent to oldest
+      let currentBlock = this.progress.lastProcessedBlock;
+      let batchNumber = 1;
+      const batchSize = this.MAX_BATCH_SIZE;
+      
+      while (currentBlock > this.targetBlock) {
+        const batchStartBlock = currentBlock;
+        const batchEndBlock = Math.max(currentBlock - batchSize + 1, this.targetBlock);
+        const actualBatchSize = batchStartBlock - batchEndBlock + 1;
         
-        console.log(`\n🔍 BLOCK ${blockNumber} (${blocksProcessed}/${totalBlocksToProcess.toLocaleString()} - ${progressPercent}%)`);
-        console.log(`   📍 Position: ${this.progress.lastProcessedBlock - blockNumber + 1} blocks from start`);
+        console.log(`\n🔄 BATCH ${batchNumber} - Processing blocks ${batchStartBlock} to ${batchEndBlock} (${actualBatchSize} blocks)`);
+        console.log(`   📍 Progress: ${((this.progress.lastProcessedBlock - batchStartBlock) / totalBlocksToProcess * 100).toFixed(1)}%`);
         console.log(`   ⏰ Processing at: ${new Date().toISOString()}`);
         
         try {
-          await this.processBlock(BigInt(blockNumber));
+          await this.processBatch(BigInt(batchEndBlock), BigInt(batchStartBlock));
           
-          // Update progress every 10 blocks instead of 100 for more frequent updates
-          if (blockNumber % 10 === 0) {
-            console.log(`📊 Progress checkpoint - processed ${blocksProcessed} blocks`);
-            this.printProgressReport();
-          }
-
-          // Add 10-second timeout between block fetches to prevent RPC limits
-          // Skip timeout for the first block and the last block to avoid unnecessary delays
-          if (!isFirstBlock && blockNumber > this.targetBlock) {
-            this.progress.isWaitingForTimeout = true;
-            this.progress.timeoutStartTime = new Date();
-            console.log(`⏳ Waiting 10 seconds before processing block ${blockNumber - 1}...`);
-            await this.delay(10 * 1000); // 10 seconds = 10,000ms
-            this.progress.isWaitingForTimeout = false;
-            this.progress.timeoutStartTime = undefined;
-            console.log(`✅ Timeout completed, ready for next block`);
+          // Update progress after each batch
+          console.log(`📊 Batch ${batchNumber} completed`);
+          this.printProgressReport();
+          
+          // Configurable delay between batches to avoid overwhelming the RPC
+          if (batchEndBlock > this.targetBlock) {
+            console.log(`⏳ Brief pause between batches...`);
+            await this.delay(this.BATCH_DELAY_MS);
           }
           
-          isFirstBlock = false; // Mark that we've processed at least one block
+          currentBlock = batchEndBlock - 1;
+          batchNumber++;
         } catch (error) {
           // Check if we've hit the RPC provider limit
           if (error instanceof Error && error.message.includes('Reached RPC provider limit')) {
@@ -211,8 +212,12 @@ class HistoricalTradesSync {
             break; // Exit the loop gracefully
           }
           
-          console.error(`❌ Error processing block ${blockNumber}:`, error);
+          console.error(`❌ Error processing batch ${batchNumber}:`, error);
           this.progress.errors++;
+          
+          // Move to next batch even if current batch failed
+          currentBlock = batchEndBlock - 1;
+          batchNumber++;
         }
       }
 
@@ -221,6 +226,85 @@ class HistoricalTradesSync {
     } catch (error) {
       console.error("❌ Error during historical sync:", error);
       throw error;
+    }
+  }
+
+  private async processBatch(fromBlock: bigint, toBlock: bigint): Promise<void> {
+    try {
+      console.log(`   📡 Fetching batch events from block ${fromBlock} to ${toBlock}...`);
+      
+      // Use the new batch event fetching method
+      const events = await this.ethereumService.getBatchEvents(fromBlock, toBlock);
+      
+      console.log(`   📋 Found ${events.length} events in batch`);
+      
+      if (events.length === 0) {
+        console.log(`   ✅ No CoW Protocol events found in batch ${fromBlock}-${toBlock}`);
+        return;
+      }
+
+      // Group events by transaction hash for processing
+      const eventsByTransaction = new Map<string, any[]>();
+      
+      for (const event of events) {
+        const txHash = event.transactionHash || event.hash;
+        if (!eventsByTransaction.has(txHash)) {
+          eventsByTransaction.set(txHash, []);
+        }
+        eventsByTransaction.get(txHash)!.push(event);
+      }
+
+      console.log(`   🔄 Processing ${eventsByTransaction.size} unique transactions...`);
+
+      // Process each transaction
+      let processedTransactions = 0;
+      for (const [txHash, txEvents] of eventsByTransaction) {
+        processedTransactions++;
+        console.log(`      🔄 Processing transaction ${processedTransactions}/${eventsByTransaction.size}: ${txHash}`);
+        
+        try {
+          // Check if transaction already exists in database
+          const existingTransaction = await this.databaseService.getTransactionByHash(txHash);
+          if (existingTransaction) {
+            console.log(`      ⏭️ Skipping duplicate transaction: ${txHash}`);
+            this.progress.skippedDuplicates++;
+            continue;
+          }
+
+          // Get the transaction details from the first event
+          const firstEvent = txEvents[0];
+          const blockNumber = firstEvent.blockNumber;
+          
+          // Create a mock transaction object for compatibility
+          const mockTransaction = {
+            hash: txHash,
+            blockNumber: blockNumber,
+            // Add other fields as needed
+          };
+          
+          await this.processSettlementTransaction(mockTransaction, BigInt(blockNumber));
+          this.progress.processedEvents++;
+          console.log(`      ✅ Transaction ${txHash} processed successfully`);
+        } catch (error) {
+          console.error(`      ❌ Error processing transaction ${txHash}:`, error);
+          this.progress.errors++;
+        }
+      }
+      
+      console.log(`   ✅ Batch processing completed: ${processedTransactions} transactions processed`);
+    } catch (error) {
+      console.error(`   ❌ Error in batch processing (${fromBlock}-${toBlock}):`, error);
+      
+      // Fall back to individual block processing if batch fails
+      console.log(`   🔄 Falling back to individual block processing...`);
+      for (let blockNum = fromBlock; blockNum <= toBlock; blockNum++) {
+        try {
+          await this.processBlock(blockNum);
+        } catch (blockError) {
+          console.error(`   ❌ Error processing block ${blockNum}:`, blockError);
+          this.progress.errors++;
+        }
+      }
     }
   }
 

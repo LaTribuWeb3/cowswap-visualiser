@@ -5,6 +5,7 @@ import {
   decodeFunctionData,
   formatEther,
   formatUnits,
+  parseAbiItem,
 } from "viem";
 import { arbitrum } from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
@@ -24,6 +25,10 @@ export class EthereumService {
   private readonly BASE_DELAY: number;
   private readonly MAX_DELAY: number;
   private readonly BACKOFF_MULTIPLIER: number;
+  
+  // Batch processing configuration
+  private readonly MAX_BATCH_SIZE: number;
+  private readonly BATCH_DELAY_MS: number;
 
   constructor() {
     // Get RPC URL from environment variables
@@ -35,9 +40,14 @@ export class EthereumService {
     this.BASE_DELAY = parseInt(process.env.RPC_BACKOFF_BASE_DELAY || "1000");
     this.MAX_DELAY = parseInt(process.env.RPC_BACKOFF_MAX_DELAY || "30000");
     this.BACKOFF_MULTIPLIER = parseFloat(process.env.RPC_BACKOFF_MULTIPLIER || "2");
+    
+    // Initialize batch processing configuration
+    this.MAX_BATCH_SIZE = parseInt(process.env.BATCH_SIZE || "100");
+    this.BATCH_DELAY_MS = parseInt(process.env.BATCH_DELAY_MS || "1000");
 
     console.log(`🔗 Using RPC URL: ${rpcUrl}`);
     console.log(`🔄 Backoff config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}`);
+    console.log(`🚀 Batch config: maxBatchSize=${this.MAX_BATCH_SIZE}, batchDelay=${this.BATCH_DELAY_MS}ms`);
 
     // Create public client for Arbitrum
     this.client = createPublicClient({
@@ -698,6 +708,144 @@ export class EthereumService {
     } catch (error) {
       console.error("❌ Error fetching contract info:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Fetch events from multiple blocks at once using batch processing
+   * This is much more efficient than processing blocks individually
+   */
+  async getBatchEvents(
+    fromBlock: bigint,
+    toBlock: bigint,
+    eventName?: string
+  ): Promise<any[]> {
+    try {
+      console.log(
+        `📡 Fetching batch events from block ${fromBlock} to ${toBlock}${eventName ? ` for event ${eventName}` : ''}...`
+      );
+
+      const blockRange = Number(toBlock - fromBlock);
+      console.log(`📦 Block range: ${blockRange} blocks`);
+
+      // If the range is too large, split it into smaller chunks
+      if (blockRange > this.MAX_BATCH_SIZE) {
+        console.log(`⚠️ Block range too large (${blockRange} blocks), splitting into chunks of ${this.MAX_BATCH_SIZE}`);
+        
+        const allEvents: any[] = [];
+        let currentFromBlock = fromBlock;
+        
+        while (currentFromBlock < toBlock) {
+          const currentToBlock = BigInt(Math.min(Number(currentFromBlock) + this.MAX_BATCH_SIZE - 1, Number(toBlock)));
+          
+          console.log(`🔄 Processing chunk: blocks ${currentFromBlock} to ${currentToBlock}`);
+          const chunkEvents = await this.getBatchEvents(currentFromBlock, currentToBlock, eventName);
+          allEvents.push(...chunkEvents);
+          
+          currentFromBlock = currentToBlock + 1n;
+          
+          // Add a configurable delay between chunks to avoid overwhelming the RPC
+          if (currentFromBlock < toBlock) {
+            await this.sleep(this.BATCH_DELAY_MS);
+          }
+        }
+        
+        return allEvents;
+      }
+
+      // Use getLogs to fetch all CoW Protocol events efficiently in a single call
+      // This is much more efficient than multiple getLogs calls or fetching all blocks
+      const allLogs = await this.executeWithBackoff(
+        () => this.client.getLogs({
+          address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+          fromBlock,
+          toBlock,
+        }),
+        `getLogs(${fromBlock}-${toBlock})`
+      );
+
+      console.log(`📋 Total logs fetched: ${allLogs.length}`);
+
+      // Group logs by transaction hash to process them as settlement transactions
+      const logsByTransaction = new Map<string, any[]>();
+      
+      for (const log of allLogs) {
+        const txHash = log.transactionHash;
+        if (!logsByTransaction.has(txHash)) {
+          logsByTransaction.set(txHash, []);
+        }
+        logsByTransaction.get(txHash)!.push(log);
+      }
+
+      console.log(`🎯 Unique settlement transactions: ${logsByTransaction.size}`);
+
+      // Convert to event-like objects for compatibility with existing processing logic
+      const allEvents = Array.from(logsByTransaction.entries()).map(([txHash, logs]) => ({
+        type: "SettlementTransaction",
+        transactionHash: txHash,
+        blockNumber: logs[0].blockNumber,
+        logs: logs,
+        // Add other fields for compatibility
+        hash: txHash,
+        blockHash: logs[0].blockHash,
+      })).sort((a, b) => Number(a.blockNumber) - Number(b.blockNumber));
+
+      console.log(`✅ Batch fetch completed: ${allEvents.length} events from ${blockRange} blocks`);
+      return allEvents;
+    } catch (error) {
+      console.error(`❌ Error in batch event fetch (${fromBlock}-${toBlock}):`, error);
+      
+      // If batch fails, fall back to individual block processing
+      console.log(`🔄 Falling back to individual block processing...`);
+      const allEvents: any[] = [];
+      
+      for (let blockNum = fromBlock; blockNum <= toBlock; blockNum++) {
+        try {
+          const blockEvents = await this.getEventsFromSingleBlock(blockNum);
+          allEvents.push(...blockEvents);
+        } catch (blockError) {
+          console.error(`❌ Error fetching events from block ${blockNum}:`, blockError);
+        }
+      }
+      
+      return allEvents;
+    }
+  }
+
+  /**
+   * Get events from a single block (fallback method)
+   */
+  async getEventsFromSingleBlock(blockNumber: bigint): Promise<any[]> {
+    try {
+      const block = await this.executeWithBackoff(
+        () => this.client.getBlock({
+          blockNumber,
+          includeTransactions: true,
+        }),
+        `getBlock(${blockNumber})`
+      );
+
+      if (!block || !block.transactions) {
+        return [];
+      }
+
+      // Filter transactions to CoW Protocol settlement contract
+      const settlementTransactions = block.transactions.filter(
+        (tx) =>
+          typeof tx === "object" &&
+          tx.to?.toLowerCase() === COW_PROTOCOL_ADDRESS.toLowerCase()
+      );
+
+      // Convert transactions to event-like objects
+      return settlementTransactions.map((tx) => ({
+        type: "SettlementTransaction",
+        blockNumber,
+        transactionHash: tx.hash,
+        transaction: tx,
+      }));
+    } catch (error) {
+      console.error(`❌ Error fetching events from single block ${blockNumber}:`, error);
+      return [];
     }
   }
 
