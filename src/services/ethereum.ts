@@ -16,10 +16,10 @@ const COW_PROTOCOL_ADDRESS = process.env.COW_PROTOCOL_CONTRACT || "0x9008d19f58a
 export class EthereumService {
   private client;
   private contract;
-  private blockCache: Map<number, number> = new Map(); // Cache for block number -> timestamp
+  private blockCache: Map<number, number> = new Map();
   private readonly CACHE_SIZE_LIMIT = 1000;
-  private readonly CACHE_INTERPOLATION_THRESHOLD = 10; // blocks
-  
+  private readonly dateToBlockNumber: Map<number, number> = new Map();
+
   // Backoff configuration
   private readonly MAX_RETRIES: number;
   private readonly BASE_DELAY: number;
@@ -143,31 +143,6 @@ export class EthereumService {
   }
 
   /**
-   * Find the closest cached block to the target block number
-   */
-  private findClosestCachedBlock(targetBlock: number): { blockNumber: number; timestamp: number } | null {
-    let closestBlock: number | null = null;
-    let minDistance = Infinity;
-
-    for (const cachedBlock of this.blockCache.keys()) {
-      const distance = Math.abs(cachedBlock - targetBlock);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestBlock = cachedBlock;
-      }
-    }
-
-    if (closestBlock !== null && minDistance <= this.CACHE_INTERPOLATION_THRESHOLD) {
-      return {
-        blockNumber: closestBlock,
-        timestamp: this.blockCache.get(closestBlock)!
-      };
-    }
-
-    return null;
-  }
-
-  /**
    * Add a block to cache and manage cache size
    */
   private addToCache(blockNumber: number, timestamp: number): void {
@@ -208,85 +183,40 @@ export class EthereumService {
   }
 
   async getBlockTimestamp(blockNumber: number): Promise<number> {
-    /*
-     * Get block timestamp with caching mechanism:
-     * - If block is cached, return cached timestamp
-     * - If block is within 10 blocks of a cached block, interpolate using 0.25s per block
-     * - If block is further than 10 blocks from any cached block, fetch from RPC
-     */
-    
-    // Validate input block number
-    if (isNaN(blockNumber) || blockNumber < 0) {
-      console.warn('Invalid block number provided to getBlockTimestamp:', blockNumber);
-      return 0;
-    }
-
-    // Check if block is already cached
-    if (this.blockCache.has(blockNumber)) {
-      const timestamp = this.blockCache.get(blockNumber)!;
-      console.log(`Using cached timestamp for block ${blockNumber}: ${timestamp}`);
-      return timestamp;
-    }
-
-    // Try to find a nearby cached block for interpolation
-    const closestCached = this.findClosestCachedBlock(blockNumber);
-    if (closestCached) {
-      const blockTimeSeconds = 0.25; // Arbitrum block time (~0.25 seconds)
-      const blockDifference = blockNumber - closestCached.blockNumber;
-      const timeDifference = blockDifference * blockTimeSeconds;
-      const timestamp = closestCached.timestamp + timeDifference;
-      
-      console.log(`Interpolated timestamp for block ${blockNumber} from cached block ${closestCached.blockNumber}: ${Math.floor(timestamp)}`);
-      return Math.floor(timestamp);
-    }
-
-    // No nearby cached block found, fetch from RPC
-    console.log(`Fetching block ${blockNumber} from RPC (no nearby cached block found)`);
     return await this.fetchBlockTimestampFromRPC(blockNumber);
   }
 
   async getBlockNumberFromDate(date: Date): Promise<number> {
-    /*
-     * Get block number from date with caching mechanism:
-     * - First calculate approximate block number using genesis timing
-     * - Check if we have a cached block nearby (within 10 blocks)
-     * - If nearby cached block exists, interpolate from it
-     * - Otherwise, use the calculated approximation
+    /**
+     * Queries https://api.etherscan.io/v2/api
+     * ?chainid=42161
+     * &module=block
+     * &action=getblocknobytime
+     * &timestamp=1578638524
+     * &closest=before
+     * &apikey=YourApiKeyToken
+     * 
+     * to get the block number from a date
      */
-    const genesisTimestamp = 1622240000; // May 28, 2021, 10:13:20 PM
-    const blockTimeSeconds = 0.25; // Arbitrum block time (~0.25 seconds)
-    const targetTimestamp = Math.floor(date.getTime() / 1000);
-    
-    // Validate input date
-    if (isNaN(targetTimestamp) || targetTimestamp < 0) {
-      console.warn('Invalid date provided to getBlockNumberFromDate:', date);
-      return 0;
+    const timestamp = date.getTime() / 1000;
+    if(this.dateToBlockNumber.has(timestamp)) {
+      return this.dateToBlockNumber.get(timestamp)!;
+    } else {
+      const blockNumber = await this.executeWithBackoff(
+        async () => {
+          const response = await fetch(`https://api.etherscan.io/v2/api?chainid=42161&module=block&action=getblocknobytime&timestamp=${timestamp}&closest=before&apikey=${process.env.ETHERSCAN_API_KEY}`);
+          const data = await response.json();
+          if (data.status !== "1") {
+            throw new Error(`Failed to get block number from date: ${data.result}`);
+          }
+          return data.result;
+        },
+        `getBlockNumberFromDate(${date})`
+      );
+      const blockNum = Number(blockNumber);
+      this.dateToBlockNumber.set(timestamp, blockNum);
+      return blockNum;
     }
-    
-    // Calculate approximate block number based on time elapsed since genesis
-    const timeElapsed = targetTimestamp - genesisTimestamp;
-    
-    // Handle dates before genesis
-    if (timeElapsed < 0) {
-      console.warn(`Date ${date.toISOString()} is before Arbitrum genesis (${new Date(genesisTimestamp * 1000).toISOString()})`);
-      return 0;
-    }
-    
-    const approximateBlockNumber = Math.floor(timeElapsed / blockTimeSeconds);
-    
-    // Try to find a nearby cached block for more accurate calculation
-    const closestCached = this.findClosestCachedBlock(approximateBlockNumber);
-    if (closestCached) {
-      const blockDifference = Math.floor((targetTimestamp - closestCached.timestamp) / blockTimeSeconds);
-      const accurateBlockNumber = closestCached.blockNumber + blockDifference;
-      
-      console.log(`Calculated block number for ${date.toISOString()} using cached block ${closestCached.blockNumber}: ${accurateBlockNumber}`);
-      return accurateBlockNumber;
-    }
-    
-    // No nearby cached block found, use approximation
-    console.log(`Calculated approximate block number for ${date.toISOString()}: ${approximateBlockNumber}`);
-    return approximateBlockNumber;
   }
 
   /**
