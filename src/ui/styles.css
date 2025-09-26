@@ -1549,7 +1549,7 @@ body {
     }
 }
 
-/* Loading animation */
+/* Loading animation for spinner elements */
 .loading {
     display: inline-block;
     width: 20px;
@@ -1560,11 +1560,12 @@ body {
     animation: spin 1s linear infinite;
 }
 
-/* Loading with retry animation - pulsing effect */
+/* Loading with retry animation - pulsing effect for text content */
 .info-value.loading {
     position: relative;
     color: #667eea;
     font-weight: 500;
+    animation: none; /* Override any inherited animations */
 }
 
 .info-value.loading::after {
