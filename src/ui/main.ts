@@ -134,7 +134,7 @@ async function fetchAndDisplayBinancePrices(
       "Loading...",
       false,
       'fetch-failed',
-      null
+      undefined
     );
 
     // Try to fetch Binance price data
@@ -153,7 +153,7 @@ async function fetchAndDisplayBinancePrices(
         "Loading...",
         false,
         'fetch-failed',
-        null
+        undefined
       );
     };
 
@@ -206,7 +206,7 @@ async function fetchAndDisplayBinancePrices(
         null,
         false,
         'fetch-failed',
-        null
+        undefined
       );
     }
   } catch (error) {
@@ -242,7 +242,7 @@ async function fetchAndDisplayBinancePrices(
       null,
       true,
       errorType,
-      null
+      undefined
     );
   }
 }
@@ -256,7 +256,7 @@ async function updateBinanceUIElements(
   priceDiff: string | null,
   isError: boolean = false,
   errorType: string = 'fetch-failed',
-  pivotDetails?: any
+  pivotDetails?: BinancePriceData
 ): Promise<void> {
   const maxRetries = 5;
   const retryDelay = 100; // 100ms between retries
@@ -337,15 +337,25 @@ async function updateBinanceUIElements(
         // Always show the pivot details section for now to test if elements are found
         pivotDetailsElement.style.display = "block";
         
-        if (pivotDetails && pivotDetails.intermediatePairs && pivotDetails.intermediatePairs.length > 0) {
-          console.log("✅ Found intermediate pairs:", pivotDetails.intermediatePairs);
+        if (pivotDetails && pivotDetails.result && pivotDetails.result.intermediatePairs && pivotDetails.result.intermediatePairs.length > 0) {
+          console.log("✅ Found intermediate pairs:", pivotDetails.result.intermediatePairs);
           
           // Generate pivot details content
           let pivotContent = "";
-          pivotDetails.intermediatePairs.forEach((pair: any, index: number) => {
+          pivotDetails.result.intermediatePairs.forEach((pair: any, index: number) => {
             const price = pair.price.close.toFixed(6);
             const direction = pair.direction === "forward" ? "→" : "←";
             const stepNumber = pair.stepNumber;
+            
+            // For reverse direction pairs, we need to show the inverse price
+            let displayPrice;
+            if (pair.direction === "reverse") {
+              // For reverse pairs like PENDLE/BTC, show BTC price in terms of PENDLE
+              displayPrice = `1 ${pair.quoteAsset} = ${price} ${pair.baseAsset}`;
+            } else {
+              // For forward pairs like AAVE/BTC, show normal price
+              displayPrice = `1 ${pair.baseAsset} = ${price} ${pair.quoteAsset}`;
+            }
             
             pivotContent += `
               <div class="pivot-step">
@@ -355,11 +365,27 @@ async function updateBinanceUIElements(
                 </div>
                 <div class="pivot-pair-info">
                   <span class="pivot-symbol">${pair.symbol}</span>
-                  <span class="pivot-price">1 ${pair.baseAsset} = ${price} ${pair.quoteAsset}</span>
+                  <span class="pivot-price">${displayPrice}</span>
                 </div>
               </div>
             `;
           });
+
+          let prices = pivotDetails.result.intermediatePairs.map((pair: any, index: number) => pair.price.close.toFixed(6));
+
+          let result = prices.reduce((acc: number, price: number) => acc * price, 1);
+            
+          pivotContent += `
+            <div class="pivot-step">
+                <div class="pivot-step-header">
+                  <span class="pivot-step-number">Calculation</span>
+                </div>
+                <div class="pivot-pair-info">
+                  <span class="pivot-symbol">${pivotDetails.result.calculationPath?.[0]}${pivotDetails.result.calculationPath?.[pivotDetails.result.calculationPath?.length - 1]}</span>
+                  <span class="pivot-price">${prices.join(" x ")} = ${result.toFixed(6)}</span>
+                </div>
+            </div>
+          `;
           
           pivotDetailsContentElement.innerHTML = pivotContent;
         } else {
@@ -368,22 +394,7 @@ async function updateBinanceUIElements(
           pivotDetailsContentElement.innerHTML = `
             <div class="pivot-step">
               <div class="pivot-step-header">
-                <span class="pivot-step-number">Test</span>
-                <span class="pivot-direction">→</span>
-              </div>
-              <div class="pivot-pair-info">
-                <span class="pivot-symbol">AAVE/BTC</span>
-                <span class="pivot-price">1 AAVE = 0.002626 BTC</span>
-              </div>
-            </div>
-            <div class="pivot-step">
-              <div class="pivot-step-header">
-                <span class="pivot-step-number">Test</span>
-                <span class="pivot-direction">→</span>
-              </div>
-              <div class="pivot-pair-info">
-                <span class="pivot-symbol">PENDLE/BTC</span>
-                <span class="pivot-price">1 PENDLE = 22376.370553 BTC</span>
+                <span class="pivot-step-number">Error on computation</span>
               </div>
             </div>
           `;

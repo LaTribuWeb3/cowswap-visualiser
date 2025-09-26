@@ -122,30 +122,31 @@ export interface BinancePriceData {
     close: number;
     volume: number;
     exactMatch: boolean;
+    intermediatePairs?: Array<{
+      symbol: string;
+      baseAsset: string;
+      quoteAsset: string;
+      status: string;
+      isActive: boolean;
+      price: {
+        timestamp: number;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+        exactMatch: boolean;
+      };
+      direction: string;
+      stepNumber: number;
+    }>;
+    calculationSteps?: number;
+    isDirect?: boolean;
+    calculationPath?: string[];
   };
   message?: string;
   completedAt?: string;
   cached?: boolean;
-  intermediatePairs?: Array<{
-    symbol: string;
-    baseAsset: string;
-    quoteAsset: string;
-    status: string;
-    isActive: boolean;
-    price: {
-      timestamp: number;
-      open: number;
-      high: number;
-      low: number;
-      close: number;
-      volume: number;
-      exactMatch: boolean;
-    };
-    direction: string;
-    stepNumber: number;
-  }>;
-  calculationSteps?: number;
-  isDirect?: boolean;
 }
 
 // DOM Element Types
