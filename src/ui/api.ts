@@ -309,90 +309,143 @@ export async function fetchSolverCompetition(txHash: string): Promise<any> {
   }
 }
 
+// Simple in-memory cache for Binance prices
+const binancePriceCache = new Map<string, { data: BinancePriceData; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
+
 /**
- * Fetch Binance price data for token pair via secure proxy with retry logic
+ * Generate cache key for Binance price request
  */
-export async function fetchBinancePrice(inputToken: string, outputToken: string, timestamp?: number): Promise<BinancePriceData> {
-  const maxRetries = 3;
-  const baseDelay = 1000; // 1 second base delay
-  const maxDelay = 10000; // 10 seconds max delay
+function generateCacheKey(inputToken: string, outputToken: string, timestamp?: number): string {
+  return `${inputToken}/${outputToken}${timestamp ? `@${timestamp}` : ''}`;
+}
+
+/**
+ * Check if cached data is still valid
+ */
+function isCacheValid(cacheEntry: { data: BinancePriceData; timestamp: number }): boolean {
+  return Date.now() - cacheEntry.timestamp < CACHE_DURATION;
+}
+
+/**
+ * Fetch Binance price data for token pair via secure proxy with retry logic and caching
+ */
+export async function fetchBinancePrice(inputToken: string, outputToken: string, timestamp?: number, progressCallback?: () => Promise<void>): Promise<BinancePriceData> {
+  // Check cache first
+  const cacheKey = generateCacheKey(inputToken, outputToken, timestamp);
+  const cachedEntry = binancePriceCache.get(cacheKey);
   
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  if (cachedEntry && isCacheValid(cachedEntry)) {
+    console.log(`📦 Using cached Binance price for ${cacheKey}`);
+    return cachedEntry.data;
+  }
+
+  // First, check if the API token is available
+  const configResponse = await fetch(`${API_BASE_URL}/api/config`);
+  if (!configResponse.ok) {
+    throw new Error('Failed to fetch configuration');
+  }
+  
+  const configData = await configResponse.json() as any;
+  const tokenAvailable = configData.data?.pairApiTokenAvailable;
+  
+  console.log('🔑 API Token available:', tokenAvailable ? 'Yes' : 'No');
+  
+  if (!tokenAvailable) {
+    throw new Error('PAIR_API_TOKEN not configured');
+  }
+  
+  // Use the secure proxy endpoint instead of direct API calls
+  const url = new URL(`${API_BASE_URL}/api/binance-price`);
+  url.searchParams.append('inputToken', inputToken);
+  url.searchParams.append('outputToken', outputToken);
+  
+  console.log('⏰ Timestamp parameter:', timestamp);
+  if (timestamp) {
+    url.searchParams.append('timestamp', timestamp.toString());
+    console.log('✅ Timestamp added to URL');
+  } else {
+    console.log('⚠️ No timestamp provided');
+  }
+  
+  console.log('🌐 Making request to secure proxy:', url.toString());
+  
+  // Poll for completion with 202 handling
+  const maxPollingAttempts = 30; // Maximum 30 attempts (30 seconds)
+  const pollingInterval = 1000; // 1 second between attempts
+  
+  for (let attempt = 0; attempt < maxPollingAttempts; attempt++) {
     try {
-      console.log(`🔄 Attempt ${attempt + 1}/${maxRetries} to fetch Binance price for ${inputToken}/${outputToken}`);
-      
-      // First, check if the API token is available
-      const configResponse = await fetch(`${API_BASE_URL}/api/config`);
-      if (!configResponse.ok) {
-        throw new Error('Failed to fetch configuration');
-      }
-      
-      const configData = await configResponse.json() as any;
-      const tokenAvailable = configData.data?.pairApiTokenAvailable;
-      
-      console.log('🔑 API Token available:', tokenAvailable ? 'Yes' : 'No');
-      
-      if (!tokenAvailable) {
-        throw new Error('PAIR_API_TOKEN not configured');
-      }
-      
-      // Use the secure proxy endpoint instead of direct API calls
-      const url = new URL(`${API_BASE_URL}/api/binance-price`);
-      url.searchParams.append('inputToken', inputToken);
-      url.searchParams.append('outputToken', outputToken);
-      
-      console.log('⏰ Timestamp parameter:', timestamp);
-      if (timestamp) {
-        url.searchParams.append('timestamp', timestamp.toString());
-        console.log('✅ Timestamp added to URL');
-      } else {
-        console.log('⚠️ No timestamp provided');
-      }
-      
-      console.log('🌐 Making request to secure proxy:', url.toString());
+      console.log(`🔄 Polling attempt ${attempt + 1}/${maxPollingAttempts} for Binance price`);
       
       const response = await fetch(url.toString(), {
         headers: {
           'Content-Type': 'application/json'
         },
-        // Increase timeout to handle job polling (30 seconds + buffer)
-        signal: AbortSignal.timeout(35000) // 35 second timeout
+        signal: AbortSignal.timeout(5000) // 5 second timeout per request
       });
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-
-        if (errorData.error && errorData.error.includes('Pair not found')) {
-          throw new Error('Pair not found');
+      if (response.status === 200) {
+        // Success - price data received
+        const responseData = await response.json();
+        
+        if (!responseData.success) {
+          throw new Error(responseData.error || 'Unknown error from proxy');
         }
-
+        
+        console.log(`✅ Successfully fetched Binance price on attempt ${attempt + 1}`);
+        
+        // Cache the successful result
+        const priceData = responseData.data as BinancePriceData;
+        binancePriceCache.set(cacheKey, {
+          data: priceData,
+          timestamp: Date.now()
+        });
+        
+        return priceData;
+        
+      } else if (response.status === 202) {
+        // Processing - continue polling
+        const responseData = await response.json();
+        console.log(`⏳ Job ${responseData.jobId} is still processing, continuing to poll...`);
+        
+        // Update progress if callback provided
+        if (progressCallback) {
+          await progressCallback();
+        }
+        
+        // Wait before next poll (except on first attempt)
+        if (attempt < maxPollingAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, pollingInterval));
+        }
+        continue;
+        
+      } else if (response.status === 404) {
+        // Pair not found - return error immediately
+        throw new Error('Pair not found');
+        
+      } else {
+        // Other error status
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(`HTTP error! status: ${response.status} - ${errorData.error || 'Unknown error'}`);
       }
       
-      const responseData = await response.json();
-      
-      if (!responseData.success) {
-        throw new Error(responseData.error || 'Unknown error from proxy');
-      }
-      
-      console.log(`✅ Successfully fetched Binance price on attempt ${attempt + 1}`);
-      return responseData.data as BinancePriceData;
-      
     } catch (error) {
-      console.error(`❌ Attempt ${attempt + 1} failed:`, error);
+      console.error(`❌ Polling attempt ${attempt + 1} failed:`, error);
       
-      // If this is the last attempt, throw the error
-      if (attempt === maxRetries - 1) {
-        console.error('🚫 All retry attempts exhausted for Binance price fetch');
+      // If it's a "Pair not found" error, throw immediately
+      if (error instanceof Error && error.message.includes('Pair not found')) {
         throw error;
       }
       
-      // Calculate delay with exponential backoff
-      const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-      console.log(`⏳ Retrying in ${delay}ms...`);
+      // If this is the last attempt, throw the error
+      if (attempt === maxPollingAttempts - 1) {
+        console.error('🚫 All polling attempts exhausted for Binance price fetch');
+        throw error;
+      }
       
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, delay));
+      // Wait before retrying on error
+      await new Promise(resolve => setTimeout(resolve, pollingInterval));
     }
   }
   

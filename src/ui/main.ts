@@ -125,12 +125,12 @@ async function fetchAndDisplayBinancePrices(
       `🔍 Fetching Binance prices for ${sellToken.symbol}/${buyToken.symbol} pair`
     );
 
-    // Show initial loading state with retry information
+    // Show initial loading state with more informative message
     await updateBinanceUIElements(
       trade.hash,
       sellToken.symbol,
       buyToken,
-      "Loading... (with retry)",
+      "Requesting Binance price...",
       "Loading..."
     );
 
@@ -138,10 +138,24 @@ async function fetchAndDisplayBinancePrices(
     const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
     console.log('🕐 Block timestamp for trade:', blockTimestamp);
     
+    // Create a polling progress updater
+    let pollingAttempt = 0;
+    const updatePollingProgress = async () => {
+      pollingAttempt++;
+      await updateBinanceUIElements(
+        trade.hash,
+        sellToken.symbol,
+        buyToken,
+        `Processing Binance price... (${pollingAttempt}/30)`,
+        "Loading..."
+      );
+    };
+
     const binanceData = await fetchBinancePrice(
       sellToken.symbol,
       buyToken.symbol,
-      blockTimestamp
+      blockTimestamp,
+      updatePollingProgress
     );
 
     if (
@@ -189,22 +203,33 @@ async function fetchAndDisplayBinancePrices(
     // Check if it's a "Pair not found" error to show appropriate message
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     const isPairNotFound = errorMessage.includes('Pair not found');
+    const isTimeoutError = errorMessage.includes('timeout') || errorMessage.includes('Timeout');
+    const isRateLimitError = errorMessage.includes('Rate limit') || errorMessage.includes('429');
     
     // Show error toast notification with more specific message
-    const toastMessage = isPairNotFound 
-      ? `Token pair ${sellToken.symbol}/${buyToken.symbol} not found on Binance`
-      : `Failed to fetch Binance prices for ${sellToken.symbol}/${buyToken.symbol} pair after retries`;
+    let toastMessage: string;
+    if (isPairNotFound) {
+      toastMessage = `Token pair ${sellToken.symbol}/${buyToken.symbol} not found on Binance`;
+    } else if (isTimeoutError) {
+      toastMessage = `Request timeout for ${sellToken.symbol}/${buyToken.symbol} - please try again`;
+    } else if (isRateLimitError) {
+      toastMessage = `Rate limit exceeded for ${sellToken.symbol}/${buyToken.symbol} - please wait a moment`;
+    } else {
+      toastMessage = `Failed to fetch Binance prices for ${sellToken.symbol}/${buyToken.symbol} pair after retries`;
+    }
     
     showToast(toastMessage, "error");
 
-    // Show error message in UI
+    // Show error message in UI with specific error type
+    const errorType = isPairNotFound ? 'pair-not-found' : 'fetch-failed';
     await updateBinanceUIElements(
       trade.hash,
       sellToken.symbol,
       buyToken,
       null,
       null,
-      true
+      true,
+      errorType
     );
   }
 }
@@ -216,7 +241,8 @@ async function updateBinanceUIElements(
   buyToken: any,
   binanceRate: string | null,
   priceDiff: string | null,
-  isError: boolean = false
+  isError: boolean = false,
+  errorType: string = 'fetch-failed'
 ): Promise<void> {
   const maxRetries = 5;
   const retryDelay = 100; // 100ms between retries
@@ -247,9 +273,14 @@ async function updateBinanceUIElements(
     if (binanceRateElement && priceDiffElement) {
       // Elements found, update them
       if (isError || binanceRate === null) {
-        binanceRateElement.innerHTML = "No price on Binance for this pair";
+        // Show different messages based on error type
+        if (errorType === 'pair-not-found') {
+          binanceRateElement.innerHTML = `Token pair ${sellSymbol}/${buyToken.symbol} not found on Binance`;
+        } else {
+          binanceRateElement.innerHTML = "No price on Binance for this pair";
+        }
         binanceRateElement.className = "info-value no-price-available";
-      } else if (binanceRate === "Loading..." || binanceRate === "Loading... (with retry)") {
+      } else if (binanceRate === "Loading..." || binanceRate === "Loading... (with retry)" || binanceRate === "Loading Binance price..." || binanceRate === "Requesting Binance price..." || binanceRate.startsWith("Processing Binance price...")) {
         binanceRateElement.innerHTML = binanceRate;
         binanceRateElement.className = "info-value loading";
       } else {
