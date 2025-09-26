@@ -394,6 +394,8 @@ export async function fetchBinancePrice(inputToken: string, outputToken: string,
         }
         
         console.log(`✅ Successfully fetched Binance price on attempt ${attempt + 1}`);
+        console.log("🔍 Full API response:", responseData);
+        console.log("🔍 API response data:", responseData.data);
         
         // Cache the successful result
         const priceData = responseData.data as BinancePriceData;

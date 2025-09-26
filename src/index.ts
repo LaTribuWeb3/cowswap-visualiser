@@ -636,7 +636,7 @@ app.get('/api/binance-price', async (req, res) => {
     }
     
     // Build the external API URL
-    const url = new URL(`${configFile.PAIR_PRICING_API_URL}/api/price`);
+    const url = new URL(`${configFile.PAIR_PRICING_API_URL}/api/price/enhanced`);
     url.searchParams.append('inputToken', inputToken as string);
     url.searchParams.append('outputToken', outputToken as string);
     

@@ -131,7 +131,10 @@ async function fetchAndDisplayBinancePrices(
       sellToken.symbol,
       buyToken,
       "Requesting Binance price...",
-      "Loading..."
+      "Loading...",
+      false,
+      'fetch-failed',
+      null
     );
 
     // Try to fetch Binance price data
@@ -147,7 +150,10 @@ async function fetchAndDisplayBinancePrices(
         sellToken.symbol,
         buyToken,
         `Processing Binance price... (${pollingAttempt}/30)`,
-        "Loading..."
+        "Loading...",
+        false,
+        'fetch-failed',
+        null
       );
     };
 
@@ -175,7 +181,10 @@ async function fetchAndDisplayBinancePrices(
         sellToken.symbol,
         buyToken,
         binanceRate,
-        priceDiff
+        priceDiff,
+        false,
+        'fetch-failed',
+        binanceData
       );
 
       // Show success toast
@@ -194,6 +203,9 @@ async function fetchAndDisplayBinancePrices(
         sellToken.symbol,
         buyToken,
         null,
+        null,
+        false,
+        'fetch-failed',
         null
       );
     }
@@ -229,7 +241,8 @@ async function fetchAndDisplayBinancePrices(
       null,
       null,
       true,
-      errorType
+      errorType,
+      null
     );
   }
 }
@@ -242,7 +255,8 @@ async function updateBinanceUIElements(
   binanceRate: string | null,
   priceDiff: string | null,
   isError: boolean = false,
-  errorType: string = 'fetch-failed'
+  errorType: string = 'fetch-failed',
+  pivotDetails?: any
 ): Promise<void> {
   const maxRetries = 5;
   const retryDelay = 100; // 100ms between retries
@@ -252,9 +266,11 @@ async function updateBinanceUIElements(
       `binance-rate-${tradeHash}`
     );
     let priceDiffElement = document.getElementById(`price-diff-${tradeHash}`);
+    let pivotDetailsElement = document.getElementById(`pivot-details-${tradeHash}`);
+    let pivotDetailsContentElement = document.getElementById(`pivot-details-content-${tradeHash}`);
 
     // If elements not found by ID, try to find them in the current overlay
-    if (!binanceRateElement || !priceDiffElement) {
+    if (!binanceRateElement || !priceDiffElement || !pivotDetailsElement || !pivotDetailsContentElement) {
       const currentOverlay = document.querySelector(".trade-info-overlay");
       if (currentOverlay) {
         if (!binanceRateElement) {
@@ -265,6 +281,16 @@ async function updateBinanceUIElements(
         if (!priceDiffElement) {
           priceDiffElement = currentOverlay.querySelector(
             `[id="price-diff-${tradeHash}"]`
+          ) as HTMLElement;
+        }
+        if (!pivotDetailsElement) {
+          pivotDetailsElement = currentOverlay.querySelector(
+            `[id="pivot-details-${tradeHash}"]`
+          ) as HTMLElement;
+        }
+        if (!pivotDetailsContentElement) {
+          pivotDetailsContentElement = currentOverlay.querySelector(
+            `[id="pivot-details-content-${tradeHash}"]`
           ) as HTMLElement;
         }
       }
@@ -300,6 +326,70 @@ async function updateBinanceUIElements(
       } else {
         priceDiffElement.innerHTML = "-";
         priceDiffElement.className = "info-value";
+      }
+
+      // Handle pivot details display
+      if (pivotDetailsElement && pivotDetailsContentElement) {
+        console.log("🔍 Pivot details data:", pivotDetails);
+        console.log("🔍 Pivot details element found:", !!pivotDetailsElement);
+        console.log("🔍 Pivot details content element found:", !!pivotDetailsContentElement);
+        
+        // Always show the pivot details section for now to test if elements are found
+        pivotDetailsElement.style.display = "block";
+        
+        if (pivotDetails && pivotDetails.intermediatePairs && pivotDetails.intermediatePairs.length > 0) {
+          console.log("✅ Found intermediate pairs:", pivotDetails.intermediatePairs);
+          
+          // Generate pivot details content
+          let pivotContent = "";
+          pivotDetails.intermediatePairs.forEach((pair: any, index: number) => {
+            const price = pair.price.close.toFixed(6);
+            const direction = pair.direction === "forward" ? "→" : "←";
+            const stepNumber = pair.stepNumber;
+            
+            pivotContent += `
+              <div class="pivot-step">
+                <div class="pivot-step-header">
+                  <span class="pivot-step-number">Step ${stepNumber}</span>
+                  <span class="pivot-direction">${direction}</span>
+                </div>
+                <div class="pivot-pair-info">
+                  <span class="pivot-symbol">${pair.symbol}</span>
+                  <span class="pivot-price">1 ${pair.baseAsset} = ${price} ${pair.quoteAsset}</span>
+                </div>
+              </div>
+            `;
+          });
+          
+          pivotDetailsContentElement.innerHTML = pivotContent;
+        } else {
+          console.log("❌ No intermediate pairs found, showing placeholder");
+          // Show placeholder content for testing
+          pivotDetailsContentElement.innerHTML = `
+            <div class="pivot-step">
+              <div class="pivot-step-header">
+                <span class="pivot-step-number">Test</span>
+                <span class="pivot-direction">→</span>
+              </div>
+              <div class="pivot-pair-info">
+                <span class="pivot-symbol">AAVE/BTC</span>
+                <span class="pivot-price">1 AAVE = 0.002626 BTC</span>
+              </div>
+            </div>
+            <div class="pivot-step">
+              <div class="pivot-step-header">
+                <span class="pivot-step-number">Test</span>
+                <span class="pivot-direction">→</span>
+              </div>
+              <div class="pivot-pair-info">
+                <span class="pivot-symbol">PENDLE/BTC</span>
+                <span class="pivot-price">1 PENDLE = 22376.370553 BTC</span>
+              </div>
+            </div>
+          `;
+        }
+      } else {
+        console.log("❌ Pivot details elements not found");
       }
 
       console.log(
@@ -2104,6 +2194,17 @@ async function createTradeInfoFrameOverlay(
                         </tr>
                       </tbody>
                     </table>
+                    
+                    <!-- Pivot Details Section -->
+                    <div class="pivot-details-section" id="pivot-details-${trade.hash}" style="display: none;">
+                      <div class="pivot-details-header">
+                        <i class="fas fa-exchange-alt"></i>
+                        <span>Pivot Details</span>
+                      </div>
+                      <div class="pivot-details-content" id="pivot-details-content-${trade.hash}">
+                        <!-- Pivot details will be populated here -->
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

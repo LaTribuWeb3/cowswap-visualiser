@@ -3663,3 +3663,80 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Pivot Details Styles */
+.pivot-details-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.pivot-details-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 14px;
+}
+
+.pivot-details-header i {
+  color: #f7931a;
+}
+
+.pivot-details-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pivot-step {
+  background: white;
+  border-radius: 6px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pivot-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.pivot-step-number {
+  font-size: 12px;
+  font-weight: 600;
+  color: #718096;
+  background: #edf2f7;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.pivot-direction {
+  font-size: 16px;
+  color: #f7931a;
+  font-weight: bold;
+}
+
+.pivot-pair-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pivot-symbol {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.pivot-price {
+  font-size: 12px;
+  color: #4a5568;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}

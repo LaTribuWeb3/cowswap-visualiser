@@ -112,9 +112,9 @@ export interface ConversionRate {
 }
 
 export interface BinancePriceData {
-  jobId: string;
-  status: string;
-  result: {
+  jobId?: string;
+  status?: string;
+  result?: {
     timestamp: number;
     open: number;
     high: number;
@@ -123,9 +123,29 @@ export interface BinancePriceData {
     volume: number;
     exactMatch: boolean;
   };
-  message: string;
-  completedAt: string;
-  cached: boolean;
+  message?: string;
+  completedAt?: string;
+  cached?: boolean;
+  intermediatePairs?: Array<{
+    symbol: string;
+    baseAsset: string;
+    quoteAsset: string;
+    status: string;
+    isActive: boolean;
+    price: {
+      timestamp: number;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+      exactMatch: boolean;
+    };
+    direction: string;
+    stepNumber: number;
+  }>;
+  calculationSteps?: number;
+  isDirect?: boolean;
 }
 
 // DOM Element Types
