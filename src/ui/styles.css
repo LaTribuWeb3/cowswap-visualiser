@@ -1549,8 +1549,8 @@ body {
     }
 }
 
-/* Loading animation for spinner elements */
-.loading {
+/* Loading animation for spinner elements - only for elements that don't have text content */
+.loading:not(.info-value):not(.rate-value) {
     display: inline-block;
     width: 20px;
     height: 20px;
@@ -1560,23 +1560,21 @@ body {
     animation: spin 1s linear infinite;
 }
 
-/* Loading with retry animation - pulsing effect for text content */
-.info-value.loading {
+/* Loading with animated three dots */
+.info-value.loading,
+.rate-value.loading {
     position: relative;
     color: #667eea;
     font-weight: 500;
     animation: none; /* Override any inherited animations */
 }
 
-.info-value.loading::after {
-    content: '';
+.info-value.loading::after,
+.rate-value.loading::after {
+    content: '...';
     display: inline-block;
-    width: 8px;
-    height: 8px;
-    background: #667eea;
-    border-radius: 50%;
-    margin-left: 8px;
-    animation: pulse 1.5s ease-in-out infinite;
+    margin-left: 4px;
+    animation: loadingDots 1.5s ease-in-out infinite;
 }
 
 @keyframes spin {
@@ -1592,6 +1590,18 @@ body {
     50% { 
         opacity: 1;
         transform: scale(1.2);
+    }
+}
+
+@keyframes loadingDots {
+    0%, 20% {
+        opacity: 0;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
     }
 }
 

@@ -125,12 +125,12 @@ async function fetchAndDisplayBinancePrices(
       `🔍 Fetching Binance prices for ${sellToken.symbol}/${buyToken.symbol} pair`
     );
 
-    // Show initial loading state with more informative message
+    // Show initial loading state with simple message
     await updateBinanceUIElements(
       trade.hash,
       sellToken.symbol,
       buyToken,
-      "Requesting Binance price...",
+      "Loading...",
       "Loading...",
       false,
       'fetch-failed',
@@ -149,7 +149,7 @@ async function fetchAndDisplayBinancePrices(
         trade.hash,
         sellToken.symbol,
         buyToken,
-        `Processing Binance price... (${pollingAttempt}/30)`,
+        "Loading...",
         "Loading...",
         false,
         'fetch-failed',
@@ -307,7 +307,7 @@ async function updateBinanceUIElements(
         }
         binanceRateElement.className = "info-value no-price-available";
       } else if (binanceRate === "Loading..." || binanceRate === "Loading... (with retry)" || binanceRate === "Loading Binance price..." || binanceRate === "Requesting Binance price..." || binanceRate.startsWith("Processing Binance price...")) {
-        binanceRateElement.innerHTML = binanceRate;
+        binanceRateElement.innerHTML = "Loading";
         binanceRateElement.className = "info-value loading";
       } else {
         binanceRateElement.innerHTML = `1 ${sellSymbol} = ${binanceRate} ${buyToken.symbol}`;
@@ -315,6 +315,7 @@ async function updateBinanceUIElements(
       }
 
       if (priceDiff === "Loading...") {
+        priceDiffElement.innerHTML = "Loading";
         priceDiffElement.className = "info-value loading";
       } else if (priceDiff && priceDiff !== "N/A") {
         priceDiffElement.innerHTML = priceDiff;
@@ -330,77 +331,107 @@ async function updateBinanceUIElements(
 
       // Handle pivot details display
       if (pivotDetailsElement && pivotDetailsContentElement) {
-        console.log("🔍 Pivot details data:", pivotDetails);
-        console.log("🔍 Pivot details element found:", !!pivotDetailsElement);
-        console.log("🔍 Pivot details content element found:", !!pivotDetailsContentElement);
-        
-        // Always show the pivot details section for now to test if elements are found
-        pivotDetailsElement.style.display = "block";
-        
         if (pivotDetails && pivotDetails.result && pivotDetails.result.intermediatePairs && pivotDetails.result.intermediatePairs.length > 0) {
-          console.log("✅ Found intermediate pairs:", pivotDetails.result.intermediatePairs);
           
-          // Generate pivot details content
-          let pivotContent = "";
-          pivotDetails.result.intermediatePairs.forEach((pair: any, index: number) => {
-            const price = pair.price.close.toFixed(6);
-            const direction = pair.direction === "forward" ? "→" : "←";
-            const stepNumber = pair.stepNumber;
-            
-            // For reverse direction pairs, we need to show the inverse price
-            let displayPrice;
-            if (pair.direction === "reverse") {
-              // For reverse pairs like PENDLE/BTC, show BTC price in terms of PENDLE
-              displayPrice = `1 ${pair.quoteAsset} = ${price} ${pair.baseAsset}`;
-            } else {
-              // For forward pairs like AAVE/BTC, show normal price
-              displayPrice = `1 ${pair.baseAsset} = ${price} ${pair.quoteAsset}`;
+          try {
+            // Validate pivot data structure before processing
+            const isValidPivotData = pivotDetails.result.intermediatePairs.every((pair: any) => 
+              pair && 
+              pair.price && 
+              typeof pair.price.close === 'number' && 
+              !isNaN(pair.price.close) &&
+              pair.symbol &&
+              pair.direction &&
+              pair.stepNumber !== undefined
+            );
+
+            if (!isValidPivotData) {
+              console.warn("Invalid pivot data structure, hiding pivot details section");
+              pivotDetailsElement.style.display = "none";
+              return;
             }
-            
-            pivotContent += `
-              <div class="pivot-step">
-                <div class="pivot-step-header">
-                  <span class="pivot-step-number">Step ${stepNumber}</span>
-                  <span class="pivot-direction">${direction}</span>
-                </div>
-                <div class="pivot-pair-info">
-                  <span class="pivot-symbol">${pair.symbol}</span>
-                  <span class="pivot-price">${displayPrice}</span>
-                </div>
-              </div>
-            `;
-          });
 
-          let prices = pivotDetails.result.intermediatePairs.map((pair: any, index: number) => pair.price.close.toFixed(6));
-
-          let result = prices.reduce((acc: number, price: number) => acc * price, 1);
+            // Show pivot details section only when we have valid data
+            pivotDetailsElement.style.display = "block";
             
-          pivotContent += `
-            <div class="pivot-step">
-                <div class="pivot-step-header">
-                  <span class="pivot-step-number">Calculation</span>
-                </div>
-                <div class="pivot-pair-info">
-                  <span class="pivot-symbol">${pivotDetails.result.calculationPath?.[0]}${pivotDetails.result.calculationPath?.[pivotDetails.result.calculationPath?.length - 1]}</span>
-                  <span class="pivot-price">${prices.join(" x ")} = ${result.toFixed(6)}</span>
-                </div>
-            </div>
-          `;
-          
-          pivotDetailsContentElement.innerHTML = pivotContent;
+            // Generate pivot details content
+            let pivotContent = "";
+            pivotDetails.result.intermediatePairs.forEach((pair: any, index: number) => {
+              try {
+                const price = pair.price.close.toFixed(6);
+                const direction = pair.direction === "forward" ? "→" : "←";
+                const stepNumber = pair.stepNumber;
+                
+                // For reverse direction pairs, we need to show the inverse price
+                let displayPrice;
+                if (pair.direction === "reverse") {
+                  // For reverse pairs like PENDLE/BTC, show BTC price in terms of PENDLE
+                  displayPrice = `1 ${pair.quoteAsset} = ${price} ${pair.baseAsset}`;
+                } else {
+                  // For forward pairs like AAVE/BTC, show normal price
+                  displayPrice = `1 ${pair.baseAsset} = ${price} ${pair.quoteAsset}`;
+                }
+                
+                pivotContent += `
+                  <div class="pivot-step">
+                    <div class="pivot-step-header">
+                      <span class="pivot-step-number">Step ${stepNumber}</span>
+                      <span class="pivot-direction">${direction}</span>
+                    </div>
+                    <div class="pivot-pair-info">
+                      <span class="pivot-symbol">${pair.symbol}</span>
+                      <span class="pivot-price">${displayPrice}</span>
+                    </div>
+                  </div>
+                `;
+              } catch (pairError) {
+                console.warn(`Error processing pivot pair ${index}:`, pairError);
+                // Skip this pair and continue with others
+              }
+            });
+
+            // Calculate final result with error handling
+            try {
+              let prices = pivotDetails.result.intermediatePairs
+                .filter((pair: any) => pair && pair.price && typeof pair.price.close === 'number' && !isNaN(pair.price.close))
+                .map((pair: any) => pair.price.close.toFixed(6));
+
+              if (prices.length === 0) {
+                throw new Error("No valid prices found for calculation");
+              }
+
+              let result = prices.reduce((acc: number, price: string) => acc * parseFloat(price), 1);
+              
+              // Only add calculation step if we have valid prices
+              if (prices.length > 0) {
+                pivotContent += `
+                  <div class="pivot-step">
+                      <div class="pivot-step-header">
+                        <span class="pivot-step-number">Calculation</span>
+                      </div>
+                      <div class="pivot-pair-info">
+                        <span class="pivot-symbol">${pivotDetails.result.calculationPath?.[0] || 'N/A'}${pivotDetails.result.calculationPath?.[pivotDetails.result.calculationPath?.length - 1] || 'N/A'}</span>
+                        <span class="pivot-price">${prices.join(" x ")} = ${result.toFixed(6)}</span>
+                      </div>
+                  </div>
+                `;
+              }
+              
+              pivotDetailsContentElement.innerHTML = pivotContent;
+            } catch (calcError) {
+              console.warn("Error in pivot calculation:", calcError);
+              // Hide pivot details section on calculation error
+              pivotDetailsElement.style.display = "none";
+            }
+          } catch (pivotError) {
+            console.warn("Error processing pivot details:", pivotError);
+            // Hide pivot details section on any error
+            pivotDetailsElement.style.display = "none";
+          }
         } else {
-          console.log("❌ No intermediate pairs found, showing placeholder");
-          // Show placeholder content for testing
-          pivotDetailsContentElement.innerHTML = `
-            <div class="pivot-step">
-              <div class="pivot-step-header">
-                <span class="pivot-step-number">Error on computation</span>
-              </div>
-            </div>
-          `;
+          // Hide pivot details section when no data
+          pivotDetailsElement.style.display = "none";
         }
-      } else {
-        console.log("❌ Pivot details elements not found");
       }
 
       console.log(
@@ -2178,9 +2209,9 @@ async function createTradeInfoFrameOverlay(
                         <tr>
                           <td>
                             <div class="rate-cell">
-                              <div class="rate-value" id="binance-rate-${
+                              <div class="rate-value loading" id="binance-rate-${
                                 trade.hash
-                              }">Loading...</div>
+                              }">Loading</div>
                             </div>
                           </td>
                           <td>
@@ -2460,8 +2491,8 @@ async function createTradeInfoFrameOverlay(
     }
 
     // Fetch Binance prices
-    let binanceRateAToB = "Loading... (with retry)";
-    let binanceRateBToA = "Loading... (with retry)";
+    let binanceRateAToB = "Loading...";
+    let binanceRateBToA = "Loading...";
     let priceDifference = "Loading...";
     const timestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
     console.log('🕐 Block timestamp for overlay:', timestamp);
