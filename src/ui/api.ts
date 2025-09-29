@@ -371,7 +371,7 @@ export async function fetchBinancePrice(inputToken: string, outputToken: string,
   console.log('🌐 Making request to secure proxy:', url.toString());
   
   // Poll for completion with 202 handling
-  const maxPollingAttempts = 30; // Maximum 30 attempts (30 seconds)
+  const maxPollingAttempts = 3; // Maximum 3 attempts (each call may take up to a few seconds in backend)
   const pollingInterval = 1000; // 1 second between attempts
   
   for (let attempt = 0; attempt < maxPollingAttempts; attempt++) {
@@ -437,6 +437,11 @@ export async function fetchBinancePrice(inputToken: string, outputToken: string,
       
       // If it's a "Pair not found" error, throw immediately
       if (error instanceof Error && error.message.includes('Pair not found')) {
+        throw error;
+      }
+
+      // If it's a 'outputToken must be 2-10 uppercase letters and numbers' error, throw immediately
+      if (error instanceof Error && error.message.includes('outputToken must be 2-10 uppercase letters and numbers')) {
         throw error;
       }
       

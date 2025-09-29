@@ -1059,8 +1059,6 @@ async function populateTradesList(): Promise<void> {
           <th>Amount</th>
           <th>Date</th>
           <th>Block</th>
-          <th>Details</th>
-          <th>Orders</th>
         </tr>
       </thead>
       <tbody>
@@ -1083,7 +1081,7 @@ async function populateTradesList(): Promise<void> {
   if (state.trades.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" class="no-trades-message">
+        <td colspan="5" class="no-trades-message">
           <div style="text-align: center; padding: 40px; color: #666;">
             <i class="fas fa-info-circle" style="font-size: 24px; margin-bottom: 16px;"></i>
             <p>No trades found in the database.</p>
@@ -1384,14 +1382,6 @@ async function createTradeTableRow(
         </td>
         <td class="trade-date">${localeString}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
-        <td class="trade-arrow">
-          <i class="fas fa-chevron-right"></i>
-        </td>
-        <td class="trade-unfold">
-          <button class="unfold-button" data-tx-hash="${trade.hash}">
-            <i class="fas fa-chevron-down"></i>
-          </button>
-        </td>
       `;
     } catch (error) {
       console.error(`❌ Error getting token info for trade ${index}:`, error);
@@ -1404,14 +1394,6 @@ async function createTradeTableRow(
           await getBlockTimestamp(parseInt(trade.blockNumber))
         )}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
-        <td class="trade-arrow">
-          <i class="fas fa-chevron-right"></i>
-        </td>
-        <td class="trade-unfold">
-          <button class="unfold-button" data-tx-hash="${trade.hash}">
-            <i class="fas fa-chevron-down"></i>
-          </button>
-        </td>
       `;
     }
 
@@ -1423,14 +1405,6 @@ async function createTradeTableRow(
       showTradeDetails(trade);
     });
 
-    // Add unfold button event listener
-    const unfoldButton = row.querySelector('.unfold-button') as HTMLButtonElement;
-    if (unfoldButton) {
-      unfoldButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent row click
-        toggleSolverCompetition(trade.hash, unfoldButton);
-      });
-    }
 
     console.log(`🔍 Trade row ${index} HTML content:`, row.innerHTML);
     console.log(`🔍 Trade row ${index} element:`, row);
@@ -1453,14 +1427,6 @@ async function createTradeTableRow(
         await getBlockTimestamp(parseInt(trade.blockNumber))
       )}</td>
       <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
-      <td class="trade-arrow">
-        <i class="fas fa-chevron-right"></i>
-      </td>
-      <td class="trade-unfold">
-        <button class="unfold-button" data-tx-hash="${trade.hash}">
-          <i class="fas fa-chevron-down"></i>
-        </button>
-      </td>
     `;
 
     console.log(`🔍 Adding click listener to trade row ${index} (no data)`);
@@ -1469,14 +1435,6 @@ async function createTradeTableRow(
       showTradeDetails(trade);
     });
 
-    // Add unfold button event listener
-    const unfoldButton = row.querySelector('.unfold-button') as HTMLButtonElement;
-    if (unfoldButton) {
-      unfoldButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent row click
-        toggleSolverCompetition(trade.hash, unfoldButton);
-      });
-    }
 
     return row;
   } else {
@@ -1502,24 +1460,8 @@ async function createTradeTableRow(
           await getBlockTimestamp(parseInt(trade.blockNumber))
         )}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
-        <td class="trade-arrow">
-          <i class="fas fa-chevron-right"></i>
-        </td>
-        <td class="trade-unfold">
-          <button class="unfold-button" data-tx-hash="${trade.hash}">
-            <i class="fas fa-chevron-down"></i>
-          </button>
-        </td>
       `;
       
-      // Add unfold button event listener
-      const unfoldButton = row.querySelector('.unfold-button') as HTMLButtonElement;
-      if (unfoldButton) {
-        unfoldButton.addEventListener('click', (e) => {
-          e.stopPropagation(); // Prevent row click
-          toggleSolverCompetition(trade.hash, unfoldButton);
-        });
-      }
       
       return row;
     }
@@ -1543,14 +1485,6 @@ async function createTradeTableRow(
         await getBlockTimestamp(parseInt(trade.blockNumber))
       )}</td>
       <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
-      <td class="trade-arrow">
-        <i class="fas fa-chevron-right"></i>
-      </td>
-      <td class="trade-unfold">
-        <button class="unfold-button" data-tx-hash="${trade.hash}">
-          <i class="fas fa-chevron-down"></i>
-        </button>
-      </td>
     `;
 
     console.log(`🔍 Adding click listener to trade row ${index} (with data)`);
@@ -1559,14 +1493,6 @@ async function createTradeTableRow(
       showTradeDetails(trade);
     });
 
-    // Add unfold button event listener
-    const unfoldButton = row.querySelector('.unfold-button') as HTMLButtonElement;
-    if (unfoldButton) {
-      unfoldButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent row click
-        toggleSolverCompetition(trade.hash, unfoldButton);
-      });
-    }
 
     return row;
   }
@@ -1574,7 +1500,9 @@ async function createTradeTableRow(
 
 /**
  * Toggle solver competition display
+ * NOTE: This function is no longer used since unfold buttons were removed
  */
+/*
 async function toggleSolverCompetition(txHash: string, button: HTMLButtonElement): Promise<void> {
   const row = button.closest('tr') as HTMLTableRowElement;
   if (!row) return;
@@ -1600,7 +1528,7 @@ async function toggleSolverCompetition(txHash: string, button: HTMLButtonElement
     const detailsRow = document.createElement('tr');
     detailsRow.className = 'solver-competition-details';
     detailsRow.innerHTML = `
-      <td colspan="7">
+      <td colspan="5">
         <div class="solver-competition-container">
           <div class="solver-competition-header">
             <h3><i class="fas fa-trophy"></i> Solver Competition</h3>
@@ -1702,7 +1630,7 @@ async function toggleSolverCompetition(txHash: string, button: HTMLButtonElement
     const detailsRow = document.createElement('tr');
     detailsRow.className = 'solver-competition-details error';
     detailsRow.innerHTML = `
-      <td colspan="7">
+      <td colspan="5">
         <div class="solver-competition-container error">
           <div class="error-message">
             <i class="fas fa-exclamation-triangle"></i>
@@ -1720,6 +1648,7 @@ async function toggleSolverCompetition(txHash: string, button: HTMLButtonElement
     button.disabled = false;
   }
 }
+*/
 
 /**
  * Show trade details
