@@ -23,7 +23,6 @@ module.exports = {
         // Ethereum Settings (Production)
         RPC_URL: "https://arb-mainnet.g.alchemy.com/v2/your-key",
         ETHEREUM_RPC_URL: "https://eth-mainnet.g.alchemy.com/v2/your-key",
-        ETHEREUM_CHAIN_ID: 1,
 
         // CoW Protocol Settings
         COW_PROTOCOL_CONTRACT: "0x9008D19f58AAbD9eD0d60971565AA8510560ab41",
@@ -67,7 +66,6 @@ module.exports = {
         // Ethereum Settings (Production)
         RPC_URL: "https://arb-mainnet.g.alchemy.com/v2/your-key",
         ETHEREUM_RPC_URL: "https://eth-mainnet.g.alchemy.com/v2/your-key",
-        ETHEREUM_CHAIN_ID: 1,
 
         // CoW Protocol Settings
         COW_PROTOCOL_CONTRACT: "0x9008D19f58AAbD9eD0d60971565AA8510560ab41",
@@ -110,7 +108,6 @@ module.exports = {
         // Ethereum Settings (Production)
         RPC_URL: "https://arb-mainnet.g.alchemy.com/v2/your-key",
         ETHEREUM_RPC_URL: "https://eth-mainnet.g.alchemy.com/v2/your-key",
-        ETHEREUM_CHAIN_ID: 1,
 
         // CoW Protocol Settings
         COW_PROTOCOL_CONTRACT: "0x9008D19f58AAbD9eD0d60971565AA8510560ab41",

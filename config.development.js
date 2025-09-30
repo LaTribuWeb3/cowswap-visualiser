@@ -18,7 +18,6 @@ module.exports = {
   
   // Ethereum Settings (Development)
   ETHEREUM_RPC_URL: process.env.RPC_URL || 'https://eth-mainnet.g.alchemy.com/v2/demo',
-  ETHEREUM_CHAIN_ID: 1,
   
   // CoW Protocol Settings
   COW_PROTOCOL_CONTRACT: process.env.COW_PROTOCOL_CONTRACT || '0x9008D19f58AAbD9eD0d60971565AA8510560ab41',
