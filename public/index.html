@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoW Protocol Trade Visualizer</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-chart-line"></i>
+                    <h1>CoW Protocol Trade Visualizer</h1>
+                </div>
+                <p class="subtitle">Real-time trade settlement visualization</p>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Trades List Card -->
+            <div class="card trades-list">
+                <div class="card-header">
+                    <h2><i class="fas fa-list"></i> Recent Trades</h2>
+                    <span class="trades-count" id="tradesCount">0 trades</span>
+                </div>
+                <div class="card-content">
+                    <div class="trades-grid" id="tradesGrid">
+                        <!-- Trades will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trade Details Section (Hidden by default) -->
+            <div class="trade-details-section" id="tradeDetailsSection" style="display: none;">
+                <!-- Back Button -->
+                <div class="back-button-container">
+                    <button class="back-button" id="backButton">
+                        <i class="fas fa-arrow-left"></i>
+                        Back to Trades List
+                    </button>
+                </div>
+
+                <!-- Trade Table -->
+                <div class="trade-table-container">
+                    <!-- Table Header with Transaction Hash -->
+                    <div class="trade-table-header">
+                        <div class="trade-table-title" id="tableTitle">-</div>
+                        <div class="trade-table-subtitle">Transaction Details</div>
+                    </div>
+                    
+                    <!-- Table Content -->
+                    <table class="trade-table">
+                        <tbody>
+                            <tr class="trade-table-row">
+                                <td class="trade-table-label">Block Number</td>
+                                <td class="trade-table-value" id="blockNumber">-</td>
+                            </tr>
+                            <tr class="trade-table-row">
+                                <td class="trade-table-label">Transaction Status</td>
+                                <td class="trade-table-value" id="status">-</td>
+                            </tr>
+                            <tr class="trade-table-row">
+                                <td class="trade-table-label">Gas Consumption</td>
+                                <td class="trade-table-value" id="gasUsed">-</td>
+                            </tr>
+                            <tr class="trade-table-row">
+                                <td class="trade-table-label">Trade Receiver</td>
+                                <td class="trade-table-value hash-value" id="receiver">-</td>
+                            </tr>
+                            <tr class="trade-table-row">
+                                <td class="trade-table-label">Valid Until</td>
+                                <td class="trade-table-value" id="validTo">-</td>
+                            </tr>
+                            <tr class="trade-table-row">
+                                <td class="trade-table-label">Application Data</td>
+                                <td class="trade-table-value hash-value" id="appData">-</td>
+                            </tr>
+                            <tr class="trade-table-row">
+                                <td class="trade-table-label">Trade Flags</td>
+                                <td class="trade-table-value" id="flags">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <!-- Trade Flow Section -->
+                    <div class="trade-flow-section">
+                        <div class="trade-flow-title">Trade Flow</div>
+                        <div class="trade-flow">
+                            <div class="trade-step sell">
+                                <div class="step-icon">
+                                    <i class="fas fa-arrow-down"></i>
+                                </div>
+                                <div class="step-content">
+                                    <h3>Sell Order</h3>
+                                    <div class="token-info" id="sellTokenInfo">
+                                        <!-- Sell token info -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="trade-arrow">
+                                <i class="fas fa-arrow-right"></i>
+                            </div>
+                            
+                            <div class="trade-step buy">
+                                <div class="step-icon">
+                                    <i class="fas fa-arrow-up"></i>
+                                </div>
+                                <div class="step-content">
+                                    <h3>Buy Order</h3>
+                                    <div class="token-info" id="buyTokenInfo">
+                                        <!-- Buy token info -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Trade Metrics Section -->
+                    <div class="trade-metrics-section">
+                        <div class="trade-metrics-title">Trade Metrics</div>
+                        <div class="trade-metrics">
+                            <div class="metric">
+                                <span class="metric-label">Exchange Rate</span>
+                                <span class="metric-value" id="exchangeRate">-</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Executed Amount</span>
+                                <span class="metric-value" id="executedAmount">-</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Protocol Fee</span>
+                                <span class="metric-value" id="feeAmount">-</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Actually Received</span>
+                                <span class="metric-value" id="actuallyReceived">-</span>
+                                <span class="metric-difference" id="difference">-</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Conversion Rates Section -->
+                    <div class="conversion-rates-section">
+                        <div class="conversion-rates-title">Conversion Rates</div>
+                        <div class="conversion-rates-grid" id="conversionRatesGrid">
+                            <!-- Conversion rates will be populated here -->
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Tokens and Prices Card -->
+                <div class="card tokens-prices">
+                    <div class="card-header">
+                        <h2><i class="fas fa-coins"></i> Token Prices & Clearing Data</h2>
+                        <div class="header-controls">
+                            <button class="collapse-toggle collapsed" id="tokensCollapseToggle">
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-content" id="tokensContent" style="display: none;">
+                        <div class="tokens-grid" id="tokensGrid">
+                            <!-- Tokens will be populated here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactions Card -->
+                <div class="card interactions">
+                    <div class="card-header">
+                        <h2><i class="fas fa-network-wired"></i> Smart Contract Interactions</h2>
+                        <div class="header-controls">
+                            <span class="interaction-count" id="interactionCount">0 groups</span>
+                            <button class="collapse-toggle" id="interactionsCollapseToggle">
+                                <i class="fas fa-chevron-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-content" id="interactionsContent">
+                        <div class="interactions-list" id="interactionsList">
+                            <!-- Interactions will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

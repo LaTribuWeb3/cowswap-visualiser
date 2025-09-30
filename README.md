@@ -1,115 +1,177 @@
-# CowSwap Orders Dashboard
+# CoW Swap Visualizer
 
-A comprehensive dashboard for visualizing and analyzing CowSwap orders from a MongoDB collection. This application provides:
+A TypeScript project to fetch and store CoW Protocol data for analysis and visualization.
 
-- **Dashboard Overview**: Key statistics, metrics, and charts about your orders
-- **Orders Table**: Detailed chronological view of all orders with filtering and sorting
-- **Real-time Data**: Live connection to your MongoDB orders collection
+## About CoW Protocol
 
-## Features
-
-- 📊 Interactive dashboard with key metrics
-- 📋 Sortable and filterable orders table
-- 🔍 Search and pagination
-- 📈 Visual charts and statistics
-- 🎨 Modern UI with Tailwind CSS
-- ⚡ Fast performance with React and TypeScript
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js 18+ 
-- MongoDB (local or Atlas)
-- npm or yarn
-
-### Installation
-
-1. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Set up environment variables**:
-   Create a `.env` file in the root directory:
-   ```env
-   MONGODB_URI=mongodb://localhost:27017/cowswap-orders
-   DB_NAME=cowswap-orders
-   PORT=3001
-   ```
-
-3. **Start the development servers**:
-   ```bash
-   # Start both frontend and backend
-   npm run dev:full
-   
-   # Or start them separately:
-   npm run dev:server  # Backend only (port 3001)
-   npm run dev         # Frontend only (port 5173)
-   ```
-
-4. **Open your browser**:
-   Navigate to `http://localhost:5173` to view the dashboard.
+[CoW Protocol](https://docs.cow.fi/) is a fully permissionless trading protocol that leverages batch auctions as its price finding mechanism. It uses batch auctions to maximize liquidity via Coincidence of Wants (CoWs) in addition to tapping all available on-chain liquidity whenever needed.
 
 ## Project Structure
 
 ```
 src/
-├── components/          # React components
-│   ├── Dashboard.tsx    # Main dashboard with statistics
-│   └── OrdersTable.tsx  # Orders table with filtering
-├── services/           # Backend services
-│   └── mongodb.ts      # MongoDB connection and queries
-├── types/              # TypeScript type definitions
-│   ├── OrderModel.ts   # Mongoose order schema
-│   └── Types.ts        # General type definitions
-├── App.tsx             # Main app with routing
-├── main.tsx           # React entry point
-└── server.ts          # Express server
+├── index.ts              # Main application entry point
+├── types/
+│   └── cow-protocol.ts   # TypeScript interfaces for CoW Protocol data
+├── services/
+│   ├── cow-api.ts        # Service for fetching CoW Protocol API data
+│   └── database.ts       # Database service interface and mock implementation
+└── utils/                # Utility functions (to be implemented)
 ```
 
-## Configuration
+## Features
 
-### MongoDB Setup
+- 🔄 Fetch orders and batches from CoW Protocol API
+- 💾 Store data in database (currently using mock implementation)
+- 📊 TypeScript interfaces for type safety
+- 🚀 Ready for development and extension
+- 📈 Binance price comparison for trade analysis
+- 🎯 Real-time price difference calculations
 
-The application expects a MongoDB collection named `orders` with documents matching the `IOrderDocument` interface. Key fields include:
+## Prerequisites
 
-- `_id`: Order UID (string)
-- `timestamp`: Order creation time
-- `sellToken`/`buyToken`: Trading pair tokens
-- `sellAmount`/`buyAmount`: Order amounts
-- `livePrice`: Market price at time of order
-- `markup`: Applied markup in basis points
-- `ourOffer.wasIncluded`: Whether order was included in solution
+- Node.js (v16 or higher)
+- npm or yarn
 
-### Environment Variables
+## Installation
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017/cowswap-orders` |
-| `DB_NAME` | Database name | `cowswap-orders` |
-| `PORT` | Backend server port | `3001` |
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd cow-swap-visualizer
+```
 
-## API Endpoints
+2. Install dependencies:
+```bash
+npm install
+```
 
-- `GET /api/health` - Health check
-- `GET /api/dashboard-stats` - Dashboard statistics
-- `GET /api/orders` - Paginated orders with filtering
+3. Create a `.env` file (required):
+```bash
+# Ethereum RPC Configuration (REQUIRED)
+RPC_URL=https://eth-mainnet.g.alchemy.com/v2/your-api-key
 
-## Development
+# CoW Protocol API configuration
+COW_API_URL=https://api.cow.fi
+COW_API_KEY=your_api_key_here
 
-### Available Scripts
+# Binance Price API JWT Token (for price comparison)
+PAIR_API_TOKEN=your_jwt_token_here
 
-- `npm run dev` - Start frontend development server
-- `npm run dev:server` - Start backend server
-- `npm run dev:full` - Start both frontend and backend
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
+# Database configuration (for future implementation)
+DATABASE_URL=your_database_url
+```
 
-### Adding New Features
+## Usage
 
-1. **New Dashboard Metrics**: Add aggregation queries in `src/services/mongodb.ts`
-2. **New Table Columns**: Update `src/components/OrdersTable.tsx`
-3. **New API Endpoints**: Add routes in `src/server.ts`
-4. **New Types**: Add to `src/types/Types.ts` or `src/types/OrderModel.ts`
+### Development Mode
+```bash
+npm run dev
+```
+
+### Build and Run
+```bash
+npm run build
+npm start
+```
+
+## Available Scripts
+
+- `npm run dev` - Start development server with hot reload
+- `npm run build` - Build TypeScript to JavaScript
+- `npm start` - Run the built application
+- `npm test` - Run tests (to be implemented)
+
+## Data Types
+
+The project includes TypeScript interfaces for:
+
+- **CowOrder**: Individual trading orders
+- **CowBatch**: Batch auctions containing multiple orders
+- **CowSolution**: Solutions for batch auctions
+- **CowTrade**: Executed trades
+- **CowToken**: Token information
+
+## API Integration
+
+The `CowApiService` class provides methods to:
+
+- Fetch orders with filtering options
+- Fetch batches with pagination
+- Retrieve specific orders by UID
+- Handle API responses with error handling
+
+## Database Integration
+
+Currently using a mock database service that stores data in memory. The `DatabaseService` interface is designed to be easily replaced with real database implementations (PostgreSQL, MongoDB, etc.).
+
+## Ethereum Integration
+
+The project uses viem to connect to Ethereum mainnet and interact with the CoW Protocol contract. You can configure the RPC endpoint by setting the `RPC_URL` environment variable in your `.env` file.
+
+### RPC Configuration
+
+- **Required**: You must set `RPC_URL` in your `.env` file
+- **Providers**: Any Ethereum mainnet RPC endpoint (Alchemy, Infura, etc.)
+- **Example**: `RPC_URL=https://eth-mainnet.g.alchemy.com/v2/your-api-key`
+
+### Blockchain Explorer Configuration
+
+- **Optional**: Set `BLOCKCHAIN_EXPLORER_URL` in your `.env` file to configure the blockchain explorer links
+- **Default**: `https://etherscan.io` (Ethereum mainnet)
+- **Examples**:
+  - Arbitrum: `BLOCKCHAIN_EXPLORER_URL=https://arbiscan.io`
+  - Polygon: `BLOCKCHAIN_EXPLORER_URL=https://polygonscan.com`
+  - BSC: `BLOCKCHAIN_EXPLORER_URL=https://bscscan.com`
+
+## Binance Price Comparison
+
+The application now includes Binance price comparison functionality to help analyze trade execution quality:
+
+### Features
+
+- **Real-time Price Data**: Fetches current Binance prices for token pairs
+- **Price Difference Calculation**: Shows percentage difference between executed rate and Binance rate
+- **Visual Indicators**: Color-coded price differences (green for better, red for worse)
+- **Historical Comparison**: Uses trade timestamp for accurate historical price comparison
+
+### Configuration
+
+To enable Binance price comparison:
+
+1. Set the `PAIR_API_TOKEN` environment variable in your `.env` file with your JWT token
+2. The JWT token should be obtained from the pair pricing service
+3. The application will automatically fetch and display Binance rates alongside CoW Protocol rates
+
+### API Endpoint
+
+The application uses the pair pricing API endpoint:
+```
+GET https://pair-pricing.la-tribu.xyz/api/price?inputToken=DOLO&outputToken=USDC&timestamp=1756301100
+```
+
+### Display
+
+The conversion rates section now shows:
+- Clearing Price Ratio (CoW Protocol)
+- Executed Rate (Actual trade)
+- Binance Rate (Market reference)
+- Price Difference (Percentage comparison)
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## License
+
+ISC
+
+## Resources
+
+- [CoW Protocol Documentation](https://docs.cow.fi/)
+- [CoW Protocol GitHub](https://github.com/cowprotocol)
+- [CoW Swap Frontend](https://swap.cow.fi/)
