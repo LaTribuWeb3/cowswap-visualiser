@@ -1,4 +1,3 @@
-import { CowApiService } from './services/cow-api';
 import { MockDatabaseService } from './services/database';
 
 /**
@@ -8,56 +7,32 @@ async function example() {
   console.log('🔍 CoW Protocol Data Fetcher Example');
   
   // Initialize services
-  const cowApi = new CowApiService();
   const database = new MockDatabaseService();
   
   try {
     // Connect to database
     await database.connect();
     
-    // Fetch recent orders
-    console.log('\n📥 Fetching recent orders...');
-    const ordersResponse = await cowApi.fetchOrders({
-      limit: 10,
-      status: 'fulfilled'
-    });
+    // Example: Store a sample transaction
+    console.log('\n📥 Storing sample transaction...');
+    const sampleTransaction = {
+      hash: '0x1234567890abcdef',
+      blockNumber: 19000000,
+      timestamp: new Date(),
+      from: '0xabcdef1234567890',
+      to: '0x0987654321fedcba',
+      value: '1000000000000000000',
+      status: 'success'
+    };
     
-    if (ordersResponse.success && ordersResponse.data) {
-      console.log(`✅ Fetched ${ordersResponse.data.length} orders`);
-      
-      // Store orders in database
-      for (const order of ordersResponse.data) {
-        await database.saveOrder(order);
-      }
-    } else {
-      console.log('❌ Failed to fetch orders:', ordersResponse.error);
-    }
-    
-    // Fetch recent batches
-    console.log('\n📥 Fetching recent batches...');
-    const batchesResponse = await cowApi.fetchBatches({
-      limit: 5,
-      status: 'executed'
-    });
-    
-    if (batchesResponse.success && batchesResponse.data) {
-      console.log(`✅ Fetched ${batchesResponse.data.length} batches`);
-      
-      // Store batches in database
-      for (const batch of batchesResponse.data) {
-        await database.saveBatch(batch);
-      }
-    } else {
-      console.log('❌ Failed to fetch batches:', batchesResponse.error);
-    }
+    await database.saveTransaction(sampleTransaction);
+    console.log('✅ Sample transaction stored');
     
     // Retrieve stored data
     console.log('\n📊 Retrieving stored data...');
-    const storedOrders = await database.getOrders({ limit: 5 });
-    const storedBatches = await database.getBatches({ limit: 3 });
+    const storedTransactions = await database.getLatestTransactions(5);
     
-    console.log(`📋 Stored orders: ${storedOrders.length}`);
-    console.log(`📋 Stored batches: ${storedBatches.length}`);
+    console.log(`📋 Stored transactions: ${storedTransactions.length}`);
     
     // Disconnect from database
     await database.disconnect();
