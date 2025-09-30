@@ -63,7 +63,6 @@ const configFile = {
   // External API endpoints
   TOKENS_METADATA_API_URL: process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz',
   PAIR_PRICING_API_URL: process.env.PAIR_PRICING_API_URL || 'https://pair-pricing.la-tribu.xyz',
-  COW_PROTOCOL_API_URL: process.env.COW_PROTOCOL_API_URL || 'https://api.cow.fi/mainnet',
   BLOCKCHAIN_EXPLORER_URL: process.env.BLOCKCHAIN_EXPLORER_URL || 'https://etherscan.io',
   // Contract addresses
   COW_PROTOCOL_CONTRACT: process.env.COW_PROTOCOL_CONTRACT || '0x9008D19f58AAbD9eD0d60971565AA8510560ab41'

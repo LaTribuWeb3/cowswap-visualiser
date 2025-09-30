@@ -17,7 +17,6 @@ I've successfully identified and moved all hardcoded addresses and external endp
 - Added new environment variables to `configFile`:
   - `TOKENS_METADATA_API_URL`
   - `PAIR_PRICING_API_URL` 
-  - `COW_PROTOCOL_API_URL`
   - `BLOCKCHAIN_EXPLORER_URL`
   - `COW_PROTOCOL_CONTRACT`
 - Updated all hardcoded URLs to use these variables
@@ -52,7 +51,6 @@ I've successfully identified and moved all hardcoded addresses and external endp
 ### External API Endpoints
 - `TOKENS_METADATA_API_URL` - La Tribu tokens metadata service
 - `PAIR_PRICING_API_URL` - La Tribu pair pricing service
-- `COW_PROTOCOL_API_URL` - CoW Protocol API endpoint
 - `BLOCKCHAIN_EXPLORER_URL` - Blockchain explorer (Etherscan)
 
 ### Contract Addresses

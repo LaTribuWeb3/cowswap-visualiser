@@ -23,17 +23,14 @@ module.exports = {
         // Ethereum Settings (Production)
         RPC_URL: "https://arb-mainnet.g.alchemy.com/v2/your-key",
         ETHEREUM_RPC_URL: "https://eth-mainnet.g.alchemy.com/v2/your-key",
-        ETHEREUM_CHAIN_ID: 1,
 
         // CoW Protocol Settings
         COW_PROTOCOL_CONTRACT: "0x9008D19f58AAbD9eD0d60971565AA8510560ab41",
-        COW_PROTOCOL_API_URL: "https://api.cow.fi/mainnet",
 
         // MongoDB Settings (from original ecosystem config)
         MONGODB_URI:
           "mongodb+srv://xxx:yyy@zzz/?retryWrites=true&w=majority&appName=Cluster0",
-        DB_NAME: "arb-visualiser",
-        COLLECTION_NAME: "transactions",
+        NETWORK: "arbitrum_one",
 
         // API Token
         PAIR_API_TOKEN: "xxx",
@@ -67,17 +64,14 @@ module.exports = {
         // Ethereum Settings (Production)
         RPC_URL: "https://arb-mainnet.g.alchemy.com/v2/your-key",
         ETHEREUM_RPC_URL: "https://eth-mainnet.g.alchemy.com/v2/your-key",
-        ETHEREUM_CHAIN_ID: 1,
 
         // CoW Protocol Settings
         COW_PROTOCOL_CONTRACT: "0x9008D19f58AAbD9eD0d60971565AA8510560ab41",
-        COW_PROTOCOL_API_URL: "https://api.cow.fi/mainnet",
 
         // MongoDB Settings (from original ecosystem config)
         MONGODB_URI:
           "mongodb+srv://xxx:yyy@zzz/?retryWrites=true&w=majority&appName=Cluster0",
-        DB_NAME: "arb-visualiser",
-        COLLECTION_NAME: "transactions",
+        NETWORK: "arbitrum_one",
 
         // API Token
         PAIR_API_TOKEN: "xxx",
@@ -110,17 +104,14 @@ module.exports = {
         // Ethereum Settings (Production)
         RPC_URL: "https://arb-mainnet.g.alchemy.com/v2/your-key",
         ETHEREUM_RPC_URL: "https://eth-mainnet.g.alchemy.com/v2/your-key",
-        ETHEREUM_CHAIN_ID: 1,
 
         // CoW Protocol Settings
         COW_PROTOCOL_CONTRACT: "0x9008D19f58AAbD9eD0d60971565AA8510560ab41",
-        COW_PROTOCOL_API_URL: "https://api.cow.fi/mainnet",
 
         // MongoDB Settings (from original ecosystem config)
         MONGODB_URI:
           "mongodb+srv://xxx:yyy@zzz/?retryWrites=true&w=majority&appName=Cluster0",
-        DB_NAME: "arb-visualiser",
-        COLLECTION_NAME: "transactions",
+        NETWORK: "arbitrum_one",
 
         // API Token
         PAIR_API_TOKEN: "xxx",

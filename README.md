@@ -52,7 +52,6 @@ npm install
 RPC_URL=https://eth-mainnet.g.alchemy.com/v2/your-api-key
 
 # CoW Protocol API configuration
-COW_API_URL=https://api.cow.fi
 COW_API_KEY=your_api_key_here
 
 # Binance Price API JWT Token (for price comparison)

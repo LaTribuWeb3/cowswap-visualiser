@@ -1,6 +1,15 @@
 import { MongoClient, Db, Collection } from 'mongodb';
 import { EthereumService } from './ethereum';
 
+export interface DatabaseConfig {
+  databases: {
+    [key: string]: {
+      name: string;
+      collection: string;
+    };
+  };
+}
+
 export class MongoDBDatabaseService {
   private ethereumService: EthereumService;
   private client: MongoClient;
@@ -21,11 +30,13 @@ export class MongoDBDatabaseService {
   async connect(): Promise<void> {
     try {
       await this.client.connect();
-      const dbName = process.env.DB_NAME || 'cow-visualiser';
+
+      const network = process.env.NETWORK || 'mainnet';
+
+      const dbName = network + "-visualiser";
       this.db = this.client.db(dbName);
       
-      const collectionName = process.env.COLLECTION_NAME || 'transactions';
-      this.transactionsCollection = this.db.collection(collectionName);
+      this.transactionsCollection = this.db.collection("transactions");
 
       // Create indexes for efficient querying
       await this.createIndexes();

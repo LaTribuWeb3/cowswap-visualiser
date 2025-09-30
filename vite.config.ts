@@ -22,9 +22,7 @@ export default defineConfig(({ mode }) => {
       "process.env.PAIR_API_TOKEN": JSON.stringify(env.PAIR_API_TOKEN || ""),
       "process.env.TOKEN_METADATA_API_TOKEN": JSON.stringify(env.TOKEN_METADATA_API_TOKEN || ""),
       "process.env.API_BASE_URL": JSON.stringify(env.API_BASE_URL || ""),
-      "process.env.COW_API_URL": JSON.stringify(
-        env.COW_API_URL || "https://api.cow.fi"
-      ),
+      "process.env.NETWORK": JSON.stringify(env.NETWORK || "mainnet"),
       "process.env.COW_API_KEY": JSON.stringify(env.COW_API_KEY || ""),
       "process.env.BLOCKCHAIN_EXPLORER_URL": JSON.stringify(
         env.BLOCKCHAIN_EXPLORER_URL || "https://etherscan.io"
