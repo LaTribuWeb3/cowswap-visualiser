@@ -1,26 +1,10 @@
-import { CowOrder, CowBatch } from '../types/cow-protocol';
 export { MongoDBDatabaseService } from './mongodb-database';
 
 export interface DatabaseService {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
-  saveOrder(order: CowOrder): Promise<void>;
-  saveBatch(batch: CowBatch): Promise<void>;
   saveTransaction(transaction: any): Promise<void>;
-  getOrder(uid: string): Promise<CowOrder | null>;
-  getBatch(id: string): Promise<CowBatch | null>;
   getTransactionByHash(hash: string): Promise<any | null>;
-  getOrders(params: {
-    limit?: number;
-    offset?: number;
-    status?: string;
-    owner?: string;
-  }): Promise<CowOrder[]>;
-  getBatches(params: {
-    limit?: number;
-    offset?: number;
-    status?: string;
-  }): Promise<CowBatch[]>;
   getTransactions(params: {
     limit?: number;
     offset?: number;
@@ -47,8 +31,6 @@ export interface DatabaseService {
 }
 
 export class MockDatabaseService implements DatabaseService {
-  private orders: Map<string, CowOrder> = new Map();
-  private batches: Map<string, CowBatch> = new Map();
   private transactions: Map<string, any> = new Map();
 
   async connect(): Promise<void> {
@@ -59,83 +41,17 @@ export class MockDatabaseService implements DatabaseService {
     console.log('🔌 Mock database disconnected');
   }
 
-  async saveOrder(order: CowOrder): Promise<void> {
-    this.orders.set(order.uid, order);
-    console.log(`💾 Order saved: ${order.uid}`);
-  }
-
-  async saveBatch(batch: CowBatch): Promise<void> {
-    // Use hash as the key since it's always present
-    const key = batch.hash;
-    this.batches.set(key, batch);
-    console.log(`💾 Batch saved: ${key}`);
-  }
 
   async saveTransaction(transaction: any): Promise<void> {
     this.transactions.set(transaction.hash, transaction);
     console.log(`💾 Transaction saved: ${transaction.hash}`);
   }
 
-  async getOrder(uid: string): Promise<CowOrder | null> {
-    return this.orders.get(uid) || null;
-  }
-
-  async getBatch(id: string): Promise<CowBatch | null> {
-    return this.batches.get(id) || null;
-  }
 
   async getTransactionByHash(hash: string): Promise<any | null> {
     return this.transactions.get(hash) || null;
   }
 
-  async getOrders(params: {
-    limit?: number;
-    offset?: number;
-    status?: string;
-    owner?: string;
-  }): Promise<CowOrder[]> {
-    let orders = Array.from(this.orders.values());
-
-    if (params.status) {
-      orders = orders.filter(order => order.status === params.status);
-    }
-
-    if (params.owner) {
-      orders = orders.filter(order => order.owner === params.owner);
-    }
-
-    if (params.offset) {
-      orders = orders.slice(params.offset);
-    }
-
-    if (params.limit) {
-      orders = orders.slice(0, params.limit);
-    }
-
-    return orders;
-  }
-
-  async getBatches(params: {
-    limit?: number;
-    offset?: number;
-    status?: string;
-  }): Promise<CowBatch[]> {
-    let batches = Array.from(this.batches.values());
-
-    if (params.status) {
-      batches = batches.filter(batch => batch.status === params.status);
-    }
-
-    if (params.offset) {
-      batches = batches.slice(params.offset);
-    }
-
-    if (params.limit) {
-      batches = batches.slice(0, params.limit);
-    }
-
-    return batches;
-  }
 
   async getTransactions(params: {
     limit?: number;

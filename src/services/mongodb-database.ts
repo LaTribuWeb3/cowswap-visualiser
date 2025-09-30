@@ -1,13 +1,10 @@
 import { MongoClient, Db, Collection } from 'mongodb';
-import { CowOrder, CowBatch } from '../types/cow-protocol';
 import { EthereumService } from './ethereum';
 
 export class MongoDBDatabaseService {
   private ethereumService: EthereumService;
   private client: MongoClient;
   private db: Db | null = null;
-  private ordersCollection: Collection | null = null;
-  private batchesCollection: Collection | null = null;
   private transactionsCollection: Collection | null = null;
 
   constructor() {
@@ -28,8 +25,6 @@ export class MongoDBDatabaseService {
       this.db = this.client.db(dbName);
       
       const collectionName = process.env.COLLECTION_NAME || 'transactions';
-      this.ordersCollection = this.db.collection('orders');
-      this.batchesCollection = this.db.collection('batches');
       this.transactionsCollection = this.db.collection(collectionName);
 
       // Create indexes for efficient querying
@@ -69,43 +64,7 @@ export class MongoDBDatabaseService {
     }
   }
 
-  async saveOrder(order: CowOrder): Promise<void> {
-    if (!this.ordersCollection) {
-      throw new Error('Database not connected');
-    }
 
-    try {
-      await this.ordersCollection.updateOne(
-        { uid: order.uid },
-        { $set: order },
-        { upsert: true }
-      );
-      console.log(`💾 Order saved to MongoDB: ${order.uid}`);
-    } catch (error) {
-      console.error('❌ Error saving order to MongoDB:', error);
-      throw error;
-    }
-  }
-
-  async saveBatch(batch: CowBatch): Promise<void> {
-    if (!this.batchesCollection) {
-      throw new Error('Database not connected');
-    }
-
-    try {
-      // Use hash as the unique identifier since it's always present
-      const identifier = batch.hash;
-      await this.batchesCollection.updateOne(
-        { hash: identifier },
-        { $set: batch },
-        { upsert: true }
-      );
-      console.log(`💾 Batch saved to MongoDB: ${identifier}`);
-    } catch (error) {
-      console.error('❌ Error saving batch to MongoDB:', error);
-      throw error;
-    }
-  }
 
   async saveTransaction(transaction: any): Promise<void> {
     if (!this.transactionsCollection) {
@@ -125,106 +84,9 @@ export class MongoDBDatabaseService {
     }
   }
 
-  async getOrder(uid: string): Promise<CowOrder | null> {
-    if (!this.ordersCollection) {
-      throw new Error('Database not connected');
-    }
 
-    try {
-      const order = await this.ordersCollection.findOne({ uid });
-      return order as CowOrder | null;
-    } catch (error) {
-      console.error('❌ Error fetching order from MongoDB:', error);
-      throw error;
-    }
-  }
 
-  async getBatch(id: string): Promise<CowBatch | null> {
-    if (!this.batchesCollection) {
-      throw new Error('Database not connected');
-    }
 
-    try {
-      const batch = await this.batchesCollection.findOne({ id });
-      return batch as CowBatch | null;
-    } catch (error) {
-      console.error('❌ Error fetching batch from MongoDB:', error);
-      throw error;
-    }
-  }
-
-  async getOrders(params: {
-    limit?: number;
-    offset?: number;
-    status?: string;
-    owner?: string;
-  }): Promise<CowOrder[]> {
-    if (!this.ordersCollection) {
-      throw new Error('Database not connected');
-    }
-
-    try {
-      let filter: any = {};
-      
-      if (params.status) {
-        filter.status = params.status;
-      }
-      
-      if (params.owner) {
-        filter.owner = params.owner;
-      }
-
-      let query = this.ordersCollection.find(filter).sort({ validTo: -1 });
-      
-      if (params.offset) {
-        query = query.skip(params.offset);
-      }
-      
-      if (params.limit) {
-        query = query.limit(params.limit);
-      }
-
-      const orders = await query.toArray();
-      return orders as unknown as CowOrder[];
-    } catch (error) {
-      console.error('❌ Error fetching orders from MongoDB:', error);
-      throw error;
-    }
-  }
-
-  async getBatches(params: {
-    limit?: number;
-    offset?: number;
-    status?: string;
-  }): Promise<CowBatch[]> {
-    if (!this.batchesCollection) {
-      throw new Error('Database not connected');
-    }
-
-    try {
-      let filter: any = {};
-      
-      if (params.status) {
-        filter.status = params.status;
-      }
-
-      let query = this.batchesCollection.find(filter).sort({ timestamp: -1 });
-      
-      if (params.offset) {
-        query = query.skip(params.offset);
-      }
-      
-      if (params.limit) {
-        query = query.limit(params.limit);
-      }
-
-      const batches = await query.toArray();
-      return batches as unknown as CowBatch[];
-    } catch (error) {
-      console.error('❌ Error fetching batches from MongoDB:', error);
-      throw error;
-    }
-  }
 
   async getTransactions(params: {
     limit?: number;
