@@ -32,14 +32,13 @@ export class MongoDBDatabaseService {
   async connect(): Promise<void> {
     try {
       await this.client.connect();
-      
+
       const network = process.env.NETWORK || 'mainnet';
 
-      const dbName = this.databaseConfig.databases[network].name as string;
+      const dbName = network + "-visualiser";
       this.db = this.client.db(dbName);
       
-      const collectionName = this.databaseConfig.databases[network].collection as string;
-      this.transactionsCollection = this.db.collection(collectionName);
+      this.transactionsCollection = this.db.collection("transactions");
 
       // Create indexes for efficient querying
       await this.createIndexes();

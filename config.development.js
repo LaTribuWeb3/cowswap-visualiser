@@ -21,7 +21,6 @@ module.exports = {
   
   // CoW Protocol Settings
   COW_PROTOCOL_CONTRACT: process.env.COW_PROTOCOL_CONTRACT || '0x9008D19f58AAbD9eD0d60971565AA8510560ab41',
-  COW_PROTOCOL_API_URL: process.env.COW_PROTOCOL_API_URL || 'https://api.cow.fi/mainnet',
   
   // External API Endpoints
   TOKENS_METADATA_API_URL: process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz',

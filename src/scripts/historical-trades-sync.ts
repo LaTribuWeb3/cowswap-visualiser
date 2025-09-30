@@ -450,7 +450,7 @@ class HistoricalTradesSync {
   ): Promise<any[]> {
     try {
       // Determine the network based on the RPC URL
-      let apiBaseUrl = process.env.COW_PROTOCOL_API_URL || "";
+      let apiBaseUrl = "https://api.cow.fi/" + ( process.env.NETWORK || "mainnet");
 
       const apiUrl = `${apiBaseUrl}/transactions/${transactionHash}/orders`;
 

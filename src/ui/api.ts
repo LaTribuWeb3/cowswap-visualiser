@@ -295,7 +295,7 @@ export async function getBlockTimestamp(blockNumber: number): Promise<number> {
  */
 export async function fetchSolverCompetition(txHash: string): Promise<any> {
   try {
-    const response = await fetch(`https://api.cow.fi/arbitrum_one/api/v2/solver_competition/by_tx_hash/${txHash}`);
+    const response = await fetch(`https://api.cow.fi/${process.env.NETWORK || "mainnet"}/api/v2/solver_competition/by_tx_hash/${txHash}`);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
