@@ -1,6 +1,5 @@
 import { MongoClient, Db, Collection } from 'mongodb';
 import { EthereumService } from './ethereum';
-import databaseConfig from '../config/database.json';
 
 export interface DatabaseConfig {
   databases: {
@@ -16,7 +15,6 @@ export class MongoDBDatabaseService {
   private client: MongoClient;
   private db: Db | null = null;
   private transactionsCollection: Collection | null = null;
-  private databaseConfig: DatabaseConfig = databaseConfig;
 
   constructor() {
     const mongoUri = process.env.MONGODB_URI;
