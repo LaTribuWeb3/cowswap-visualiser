@@ -1,0 +1,12 @@
+{
+  "databases": {
+    "mainnet": {
+      "name": "cow-visualiser",
+      "collection": "transactions"
+    },
+    "arbitrum": {
+      "name": "arb-visualiser",
+      "collection": "transactions"
+    }
+  }
+}

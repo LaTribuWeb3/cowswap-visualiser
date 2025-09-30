@@ -1,11 +1,22 @@
 import { MongoClient, Db, Collection } from 'mongodb';
 import { EthereumService } from './ethereum';
+import databaseConfig from '../config/database.json';
+
+export interface DatabaseConfig {
+  databases: {
+    [key: string]: {
+      name: string;
+      collection: string;
+    };
+  };
+}
 
 export class MongoDBDatabaseService {
   private ethereumService: EthereumService;
   private client: MongoClient;
   private db: Db | null = null;
   private transactionsCollection: Collection | null = null;
+  private databaseConfig: DatabaseConfig = databaseConfig;
 
   constructor() {
     const mongoUri = process.env.MONGODB_URI;
@@ -21,10 +32,13 @@ export class MongoDBDatabaseService {
   async connect(): Promise<void> {
     try {
       await this.client.connect();
-      const dbName = process.env.DB_NAME || 'cow-visualiser';
+      
+      const network = process.env.NETWORK || 'mainnet';
+
+      const dbName = this.databaseConfig.databases[network].name as string;
       this.db = this.client.db(dbName);
       
-      const collectionName = process.env.COLLECTION_NAME || 'transactions';
+      const collectionName = this.databaseConfig.databases[network].collection as string;
       this.transactionsCollection = this.db.collection(collectionName);
 
       // Create indexes for efficient querying

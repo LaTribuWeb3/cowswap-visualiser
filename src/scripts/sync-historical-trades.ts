@@ -1,5 +1,4 @@
 import { HistoricalTradesSync } from './historical-trades-sync';
-import { CowApiHistoricalSync } from './cow-api-historical-sync';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -54,11 +53,11 @@ class HistoricalTradesSyncManager {
 
   private async runApiSync(): Promise<void> {
     console.log('🌐 Using CoW Protocol API method...');
-    const sync = new CowApiHistoricalSync();
+    const sync = new HistoricalTradesSync();
     
     try {
       await sync.initialize();
-      await sync.syncHistoricalData(this.options.monthsBack);
+      await sync.syncHistoricalTrades();
     } finally {
       await sync.cleanup();
     }
