@@ -1,5 +1,4 @@
 import { Transaction, APIResponse, BinancePriceData } from './types';
-import { formatAddress } from './utils';
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
 

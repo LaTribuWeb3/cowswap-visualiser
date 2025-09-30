@@ -15,6 +15,8 @@ module.exports = {
   DB_NAME: 'cow_swap_dev',
   DB_USER: 'postgres',
   DB_PASSWORD: 'password',
+
+  NETWORK: process.env.NETWORK || 'mainnet',
   
   // Ethereum Settings (Development)
   ETHEREUM_RPC_URL: process.env.RPC_URL || 'https://eth-mainnet.g.alchemy.com/v2/demo',

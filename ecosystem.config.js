@@ -30,8 +30,7 @@ module.exports = {
         // MongoDB Settings (from original ecosystem config)
         MONGODB_URI:
           "mongodb+srv://xxx:yyy@zzz/?retryWrites=true&w=majority&appName=Cluster0",
-        DB_NAME: "arb-visualiser",
-        COLLECTION_NAME: "transactions",
+        NETWORK: "arbitrum_one",
 
         // API Token
         PAIR_API_TOKEN: "xxx",
@@ -72,8 +71,7 @@ module.exports = {
         // MongoDB Settings (from original ecosystem config)
         MONGODB_URI:
           "mongodb+srv://xxx:yyy@zzz/?retryWrites=true&w=majority&appName=Cluster0",
-        DB_NAME: "arb-visualiser",
-        COLLECTION_NAME: "transactions",
+        NETWORK: "arbitrum_one",
 
         // API Token
         PAIR_API_TOKEN: "xxx",
@@ -113,8 +111,7 @@ module.exports = {
         // MongoDB Settings (from original ecosystem config)
         MONGODB_URI:
           "mongodb+srv://xxx:yyy@zzz/?retryWrites=true&w=majority&appName=Cluster0",
-        DB_NAME: "arb-visualiser",
-        COLLECTION_NAME: "transactions",
+        NETWORK: "arbitrum_one",
 
         // API Token
         PAIR_API_TOKEN: "xxx",
