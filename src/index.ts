@@ -423,7 +423,7 @@ app.get('/api/token/:address/decimals', async (req, res) => {
     console.log(`📡 Fetching decimals for token: ${address}`);
     
     // Fetch token metadata from la-tribu API
-    const response = await fetch(`${configFile.TOKENS_METADATA_API_URL}/tokens/ethereum/${address}`, {
+    const response = await fetch(`${configFile.TOKENS_METADATA_API_URL}/tokens/mainnet/${address}`, {
       headers: {
         'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
         'Content-Type': 'application/json'
@@ -461,7 +461,7 @@ app.get('/api/token/:address/symbol', async (req, res) => {
     console.log(`📡 Fetching symbol for token: ${address}`);
     
     // Fetch token metadata from la-tribu API
-    const response = await fetch(`${configFile.TOKENS_METADATA_API_URL}/tokens/ethereum/${address}`, {
+    const response = await fetch(`${configFile.TOKENS_METADATA_API_URL}/tokens/mainnet/${address}`, {
       headers: {
         'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
         'Content-Type': 'application/json'
