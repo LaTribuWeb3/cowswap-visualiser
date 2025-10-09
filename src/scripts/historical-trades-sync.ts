@@ -97,9 +97,9 @@ class HistoricalTradesSync {
       this.targetBlock = Number(latestBlock - actualBlocksBack);
       
       // Additional safety check - ensure target block is not negative or too small
-      if (this.targetBlock < 100000000) {
+      if (this.targetBlock < 20_000_000) {
         console.warn(`⚠️ Calculated target block ${this.targetBlock} seems too low, using minimum safe value`);
-        this.targetBlock = 100000000; // Safe minimum block number
+        this.targetBlock = 20_000_000; // Safe minimum block number
       }
 
       console.log(`📦 Starting from block: ${this.progress.lastProcessedBlock}`);
