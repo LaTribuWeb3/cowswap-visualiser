@@ -580,7 +580,7 @@ async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
                   ${solution.isWinner ? '<span class="winner-badge">🏆 Winner</span>' : ''}
                 </div>
                 <div class="solution-address">
-                  <a href="https://arbiscan.io/address/${solution.solverAddress}" target="_blank" class="address-link">
+                  <a href="https://etherscan.io/address/${solution.solverAddress}" target="_blank" class="address-link">
                     ${formatAddress(solution.solverAddress)}
                   </a>
                 </div>
