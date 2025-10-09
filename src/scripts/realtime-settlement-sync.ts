@@ -62,7 +62,7 @@ class RealtimeSettlementSync {
     this.MAX_BATCH_SIZE = parseInt(process.env.BATCH_SIZE || "100");
     this.BATCH_DELAY_MS = parseInt(process.env.BATCH_DELAY_MS || "1000");
     
-    // Set polling interval based on block time (Arbitrum ~0.25s blocks)
+    // Set polling interval based on block time
     // Poll every 1 second to stay current with new blocks
     this.pollingInterval = parseInt(process.env.REALTIME_POLLING_INTERVAL || "1000");
 
@@ -79,7 +79,7 @@ class RealtimeSettlementSync {
 
     console.log(`🔄 RealtimeSync config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}, timeoutDelay=${this.RPC_TIMEOUT_DELAY}ms`);
     console.log(`🚀 Batch config: maxBatchSize=${this.MAX_BATCH_SIZE}, batchDelay=${this.BATCH_DELAY_MS}ms`);
-    console.log(`⏱️ Polling interval: ${this.pollingInterval}ms (optimized for Arbitrum's ~0.25s block time)`);
+    console.log(`⏱️ Polling interval: ${this.pollingInterval}ms`);
   }
 
   /**

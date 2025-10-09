@@ -30,7 +30,7 @@ module.exports = {
         // MongoDB Settings (from original ecosystem config)
         MONGODB_URI:
           "mongodb+srv://xxx:yyy@zzz/?retryWrites=true&w=majority&appName=Cluster0",
-        NETWORK: "arbitrum_one",
+        NETWORK: "mainnet",
 
         // API Token
         PAIR_API_TOKEN: "xxx",
@@ -71,7 +71,7 @@ module.exports = {
         // MongoDB Settings (from original ecosystem config)
         MONGODB_URI:
           "mongodb+srv://xxx:yyy@zzz/?retryWrites=true&w=majority&appName=Cluster0",
-        NETWORK: "arbitrum_one",
+        NETWORK: "mainnet",
 
         // API Token
         PAIR_API_TOKEN: "xxx",
@@ -111,7 +111,7 @@ module.exports = {
         // MongoDB Settings (from original ecosystem config)
         MONGODB_URI:
           "mongodb+srv://xxx:yyy@zzz/?retryWrites=true&w=majority&appName=Cluster0",
-        NETWORK: "arbitrum_one",
+        NETWORK: "mainnet",
 
         // API Token
         PAIR_API_TOKEN: "xxx",

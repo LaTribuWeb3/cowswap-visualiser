@@ -235,7 +235,7 @@ async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol
   try {
     console.log(`🔍 Fetching token metadata for: ${tokenAddress}`);
     
-    const response = await fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/arbitrum/${tokenAddress}`, {
+    const response = await fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/ethereum/${tokenAddress}`, {
       headers: {
         'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
         'Content-Type': 'application/json'

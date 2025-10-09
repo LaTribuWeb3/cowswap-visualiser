@@ -86,7 +86,7 @@ class HistoricalTradesSync {
 
       // Calculate target block (4 months ago) with more conservative estimate
       const monthsBack = 4;
-      const blocksPerDay = 345600; // ~0.25 seconds per block on Arbitrum = 345,600 blocks per day
+      const blocksPerDay = (3600 * 24) / 10; // approx 1 block every 10 seconds
       const daysBack = monthsBack * 30;
       const estimatedBlocksBack = BigInt(daysBack * blocksPerDay);
       
@@ -97,7 +97,7 @@ class HistoricalTradesSync {
       this.targetBlock = Number(latestBlock - actualBlocksBack);
       
       // Additional safety check - ensure target block is not negative or too small
-      if (this.targetBlock < 100000000) { // Arbitrum started around block 0, but let's be safe
+      if (this.targetBlock < 100000000) {
         console.warn(`⚠️ Calculated target block ${this.targetBlock} seems too low, using minimum safe value`);
         this.targetBlock = 100000000; // Safe minimum block number
       }

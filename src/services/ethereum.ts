@@ -7,10 +7,10 @@ import {
   formatUnits,
   parseAbiItem,
 } from "viem";
-import { arbitrum } from "viem/chains";
+import { mainnet } from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
 
-// CoW Protocol contract address (Arbitrum)
+// CoW Protocol contract address (mainnet)
 const COW_PROTOCOL_ADDRESS = process.env.COW_PROTOCOL_CONTRACT || "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
 
 export class EthereumService {
@@ -49,9 +49,9 @@ export class EthereumService {
     console.log(`🔄 Backoff config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}`);
     console.log(`🚀 Batch config: maxBatchSize=${this.MAX_BATCH_SIZE}, batchDelay=${this.BATCH_DELAY_MS}ms`);
 
-    // Create public client for Arbitrum
+    // Create public client for Mainnet
     this.client = createPublicClient({
-      chain: arbitrum,
+      chain: mainnet,
       transport: http(rpcUrl),
     });
 
@@ -974,7 +974,7 @@ export class EthereumService {
     try {
       console.log(`🔍 Fetching complete token metadata for: ${tokenAddress}`);
       
-      const response = await fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/arbitrum/${tokenAddress}`, {
+      const response = await fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/ethereum/${tokenAddress}`, {
         headers: {
           'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
           'Content-Type': 'application/json'
