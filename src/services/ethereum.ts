@@ -974,7 +974,7 @@ export class EthereumService {
     try {
       console.log(`🔍 Fetching complete token metadata for: ${tokenAddress}`);
       
-      const response = await fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/mainnet/${tokenAddress}`, {
+      const response = await fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/ethereum/${tokenAddress}`, {
         headers: {
           'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
           'Content-Type': 'application/json'
