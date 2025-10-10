@@ -918,7 +918,15 @@ async function loadTrades(page: number = 1): Promise<void> {
   } catch (error) {
     console.error("❌ Error loading trades:", error);
     state.error = error instanceof Error ? error.message : "Unknown error";
-    showError("Failed to load trades");
+    
+    // Show non-blocking error notification
+    showError("Failed to load trades - check console for details");
+    
+    // Try to continue with any existing trades if available
+    if (state.trades.length > 0) {
+      console.log("🔄 Attempting to display existing trades despite API error");
+      await populateTradesList();
+    }
   } finally {
     state.isLoading = false;
   }
@@ -1101,23 +1109,42 @@ async function populateTradesList(): Promise<void> {
   for (let index = 0; index < state.trades.length; index++) {
     const trade = state.trades[index];
     console.log(`🔍 Creating trade row ${index}`);
-    const tradeRow = await createTradeTableRow(trade, index);
-    console.log(`🔍 Appending trade row ${index} to table:`, tradeRow);
+    
+    try {
+      const tradeRow = await createTradeTableRow(trade, index);
+      console.log(`🔍 Appending trade row ${index} to table:`, tradeRow);
 
-    // Debug: Check if tbody exists and is valid
-    console.log(`🔍 tbody element before append:`, tbody);
-    console.log(
-      `🔍 tbody children count before append:`,
-      tbody.children.length
-    );
+      // Debug: Check if tbody exists and is valid
+      console.log(`🔍 tbody element before append:`, tbody);
+      console.log(
+        `🔍 tbody children count before append:`,
+        tbody.children.length
+      );
 
-    tbody.appendChild(tradeRow);
+      tbody.appendChild(tradeRow);
 
-    // Debug: Check if append was successful
-    console.log(`🔍 tbody children count after append:`, tbody.children.length);
-    console.log(`🔍 Last child in tbody:`, tbody.lastElementChild);
+      // Debug: Check if append was successful
+      console.log(`🔍 tbody children count after append:`, tbody.children.length);
+      console.log(`🔍 Last child in tbody:`, tbody.lastElementChild);
 
-    console.log(`🔍 Trade row ${index} appended successfully`);
+      console.log(`🔍 Trade row ${index} appended successfully`);
+    } catch (error) {
+      console.error(`❌ Failed to create row for trade ${index} (${trade.hash}):`, error);
+      
+      // Create a fallback row for failed trades
+      const fallbackRow = document.createElement("tr");
+      fallbackRow.className = "trade-table-row";
+      fallbackRow.innerHTML = `
+        <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
+        <td class="trade-status error">Error</td>
+        <td class="trade-amount">Failed to load trade data</td>
+        <td class="trade-date">${trade.blockNumber ? `Block ${trade.blockNumber}` : "Unknown"}</td>
+        <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
+      `;
+      
+      tbody.appendChild(fallbackRow);
+      console.log(`🔍 Added fallback row for trade ${index}`);
+    }
   }
 
   console.log(
@@ -2888,12 +2915,12 @@ function showTradesList(): void {
 }
 
 /**
- * Show error message
+ * Show error message (non-blocking)
  */
 function showError(message: string): void {
   console.error("❌ Error:", message);
-  // You can implement a proper error UI here
-  alert(message);
+  // Use non-blocking toast instead of blocking alert
+  showToast(message, "error");
 }
 
 /**
