@@ -19,11 +19,13 @@ import {
   formatGasPrice,
   formatAddress,
   getTokenInfo,
+  getTokenInfoSync,
   getTokenInfoAsync,
   getTokenDecimals,
   getTokenSymbol,
   calculateConversionRates,
   formatScientific,
+  fetchTokenInfoAndUpdateDOM,
 } from "./utils";
 import {
   fetchRecentTrades,
@@ -1332,11 +1334,10 @@ async function createTradeTableRow(
       console.log(`🔍 Sell token address: ${trade.sellToken}`);
       console.log(`🔍 Buy token address: ${trade.buyToken}`);
 
-      const sellToken = await getTokenInfoAsync(trade.sellToken);
-      console.log(`✅ Sell token info fetched:`, sellToken);
-
-      const buyToken = await getTokenInfoAsync(trade.buyToken);
-      console.log(`✅ Buy token info fetched:`, buyToken);
+      // Get instant token info (will show addresses if not cached)
+      const sellToken = getTokenInfoSync(trade.sellToken);
+      const buyToken = getTokenInfoSync(trade.buyToken);
+      console.log(`✅ Token info loaded (sync):`, { sellToken, buyToken });
 
       console.log(`🔍 Trade ${index} token info:`, { sellToken, buyToken });
 
@@ -1376,13 +1377,17 @@ async function createTradeTableRow(
         <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
         <td class="trade-status success">Success</td>
         <td class="trade-amount">
-          ${executedSellAmount} ${sellToken.symbol} → ${executedBuyAmount} ${
+          ${executedSellAmount} <span data-token-address="${trade.sellToken}" data-token-field="symbol">${sellToken.symbol}</span> → ${executedBuyAmount} <span data-token-address="${trade.buyToken}" data-token-field="symbol">${
         buyToken.symbol
-      }
+      }</span>
         </td>
         <td class="trade-date">${localeString}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
       `;
+
+      // Asynchronously fetch token metadata and update all tagged elements
+      fetchTokenInfoAndUpdateDOM(trade.sellToken);
+      fetchTokenInfoAndUpdateDOM(trade.buyToken);
     } catch (error) {
       console.error(`❌ Error getting token info for trade ${index}:`, error);
       // Fallback to basic display if token info fails
@@ -1466,8 +1471,9 @@ async function createTradeTableRow(
       return row;
     }
 
-    const sellToken = await getTokenInfoAsync(tradeData.sellToken as `0x${string}`);
-    const buyToken = await getTokenInfoAsync(tradeData.buyToken as `0x${string}`);
+    // Get instant token info (will show addresses if not cached)
+    const sellToken = getTokenInfoSync(tradeData.sellToken as `0x${string}`);
+    const buyToken = getTokenInfoSync(tradeData.buyToken as `0x${string}`);
 
     row.innerHTML = `
       <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
@@ -1475,17 +1481,21 @@ async function createTradeTableRow(
       trade.status || "Unknown"
     }</td>
       <td class="trade-amount">
-        ${formatAmount(tradeData.sellAmount, sellToken.decimals)} ${
+        ${formatAmount(tradeData.sellAmount, sellToken.decimals)} <span data-token-address="${tradeData.sellToken}" data-token-field="symbol">${
       sellToken.symbol
-    } → ${formatAmount(tradeData.buyAmount, buyToken.decimals)} ${
+    }</span> → ${formatAmount(tradeData.buyAmount, buyToken.decimals)} <span data-token-address="${tradeData.buyToken}" data-token-field="symbol">${
       buyToken.symbol
-    }
+    }</span>
       </td>
       <td class="trade-date">${timestampToDateTime(
         await getBlockTimestamp(parseInt(trade.blockNumber))
       )}</td>
       <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
     `;
+
+    // Asynchronously fetch token metadata and update all tagged elements
+    fetchTokenInfoAndUpdateDOM(tradeData.sellToken as `0x${string}`);
+    fetchTokenInfoAndUpdateDOM(tradeData.buyToken as `0x${string}`);
 
     console.log(`🔍 Adding click listener to trade row ${index} (with data)`);
     row.addEventListener("click", () => {
@@ -1727,8 +1737,9 @@ async function createTradeInfoFrameOverlay(
       realSellAmount = "0";
     }
 
-    const sellToken = await getTokenInfoAsync(sellTokenAddress as `0x${string}`);
-    const buyToken = await getTokenInfoAsync(buyTokenAddress as `0x${string}`);
+    // Get instant token info (will show addresses if not cached)
+    const sellToken = getTokenInfoSync(sellTokenAddress as `0x${string}`);
+    const buyToken = getTokenInfoSync(buyTokenAddress as `0x${string}`);
 
     // Format amounts with proper decimals
     const formattedSellAmount = await formatTokenAmount(sellAmount, sellTokenAddress as `0x${string}`);
@@ -1873,7 +1884,7 @@ async function createTradeInfoFrameOverlay(
                     <div class="token-info">
                       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                         <span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">SELL</span>
-                        <span style="font-weight: 600; color: #dc3545; font-size: 1.1rem;">${sellToken.symbol}</span>
+                        <span data-token-address="${sellTokenAddress}" data-token-field="symbol" style="font-weight: 600; color: #dc3545; font-size: 1.1rem;">${sellToken.symbol}</span>
                       </div>
                       <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                         trade.sellToken ||
@@ -1944,7 +1955,7 @@ async function createTradeInfoFrameOverlay(
                     <div class="token-info">
                       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                         <span style="background: #198754; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">BUY</span>
-                        <span style="font-weight: 600; color: #198754; font-size: 1.1rem;">${buyToken.symbol}</span>
+                        <span data-token-address="${buyTokenAddress}" data-token-field="symbol" style="font-weight: 600; color: #198754; font-size: 1.1rem;">${buyToken.symbol}</span>
                       </div>
                       <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                         trade.buyToken ||
@@ -2707,8 +2718,8 @@ async function createTradeInfoFrameOverlay(
                     <span>Sell Token</span>
                   </div>
                   <div class="token-info-content">
-                    <div class="token-symbol">${sellToken.symbol}</div>
-                    <div class="token-name">${sellToken.name}</div>
+                    <div data-token-address="${trade.sellToken}" data-token-field="symbol" class="token-symbol">${sellToken.symbol}</div>
+                    <div data-token-address="${trade.sellToken}" data-token-field="name" class="token-name">${sellToken.name}</div>
                     <div class="token-address">
                       <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                         trade.sellToken
@@ -2724,8 +2735,8 @@ async function createTradeInfoFrameOverlay(
                     <span>Buy Token</span>
                   </div>
                   <div class="token-info-content">
-                    <div class="token-symbol">${buyToken.symbol}</div>
-                    <div class="token-name">${buyToken.name}</div>
+                    <div data-token-address="${trade.buyToken}" data-token-field="symbol" class="token-symbol">${buyToken.symbol}</div>
+                    <div data-token-address="${trade.buyToken}" data-token-field="name" class="token-name">${buyToken.name}</div>
                     <div class="token-address">
                       <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
                         trade.buyToken
@@ -2764,6 +2775,22 @@ async function createTradeInfoFrameOverlay(
     // Fetch and display solver competition data for this branch too
     setTimeout(async () => {
       await fetchAndDisplaySolverCompetition(trade.hash);
+    }, 0);
+
+    // Asynchronously fetch token metadata and update all tagged elements
+    // This allows the UI to show addresses instantly, then update with names
+    setTimeout(() => {
+      const actualSellToken = trade.sellToken || trade.parsedData?.trades?.[0]?.sellToken;
+      const actualBuyToken = trade.buyToken || trade.parsedData?.trades?.[0]?.buyToken;
+
+      // Fetch and update all elements tagged with these token addresses
+      if (actualSellToken) {
+        fetchTokenInfoAndUpdateDOM(actualSellToken as `0x${string}`);
+      }
+      
+      if (actualBuyToken) {
+        fetchTokenInfoAndUpdateDOM(actualBuyToken as `0x${string}`);
+      }
     }, 0);
   }
 

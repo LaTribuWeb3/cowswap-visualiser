@@ -266,6 +266,33 @@ async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol
 }
 
 /**
+ * Get token information synchronously (only from cache/known tokens)
+ * Returns address if not cached - use for instant display
+ */
+export function getTokenInfoSync(tokenAddress: `0x${string}`): TokenInfo {
+  // Check cache first
+  if (tokenInfoCache[tokenAddress]) {
+    return tokenInfoCache[tokenAddress];
+  }
+
+  // Check known tokens
+  if (KNOWN_TOKENS[tokenAddress]) {
+    tokenInfoCache[tokenAddress] = KNOWN_TOKENS[tokenAddress];
+    return KNOWN_TOKENS[tokenAddress];
+  }
+
+  // Return address as placeholder - will be updated async
+  const placeholderInfo: TokenInfo = {
+    symbol: formatAddress(tokenAddress),
+    name: formatAddress(tokenAddress),
+    decimals: 18,
+    address: tokenAddress
+  };
+  
+  return placeholderInfo;
+}
+
+/**
  * Get token information (asynchronous - fetches from backend if needed)
  */
 export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<TokenInfo> {
@@ -311,6 +338,75 @@ export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<To
     tokenInfoCache[tokenAddress] = tokenInfo;
     return tokenInfo;
   }
+}
+
+/**
+ * Fetch token info async and update all DOM elements tagged with this address
+ * This allows for progressive enhancement of the UI
+ */
+export async function fetchTokenInfoAndUpdateDOM(
+  tokenAddress: `0x${string}`
+): Promise<void> {
+  // If already cached, update immediately
+  if (tokenInfoCache[tokenAddress]) {
+    updateAllTokenElements(tokenAddress, tokenInfoCache[tokenAddress]);
+    return;
+  }
+
+  // If it's a known token, cache and update immediately
+  if (KNOWN_TOKENS[tokenAddress]) {
+    tokenInfoCache[tokenAddress] = KNOWN_TOKENS[tokenAddress];
+    updateAllTokenElements(tokenAddress, KNOWN_TOKENS[tokenAddress]);
+    return;
+  }
+
+  try {
+    // Fetch token metadata from la-tribu API
+    const metadata = await fetchTokenMetadata(tokenAddress);
+    
+    const tokenInfo: TokenInfo = {
+      symbol: metadata.symbol,
+      name: metadata.name,
+      decimals: metadata.decimals,
+      address: tokenAddress
+    };
+    
+    // Cache the complete token info
+    tokenInfoCache[tokenAddress] = tokenInfo;
+    tokenSymbolsCache[tokenAddress] = metadata.symbol;
+    tokenDecimalsCache[tokenAddress] = metadata.decimals;
+    
+    // Update all DOM elements with this token address
+    updateAllTokenElements(tokenAddress, tokenInfo);
+    
+    console.log(`✅ Updated all elements for token ${tokenAddress} with: ${tokenInfo.symbol} - ${tokenInfo.name}`);
+  } catch (error) {
+    console.warn(`Failed to fetch token info for ${tokenAddress}:`, error);
+    
+    // Fallback to formatted address - don't update since
+    // the display already shows the address
+  }
+}
+
+/**
+ * Update all DOM elements tagged with a specific token address
+ */
+function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): void {
+  // Find all elements tagged with this token address
+  const symbolElements = document.querySelectorAll(`[data-token-address="${tokenAddress}"][data-token-field="symbol"]`);
+  const nameElements = document.querySelectorAll(`[data-token-address="${tokenAddress}"][data-token-field="name"]`);
+  
+  // Update all symbol elements
+  symbolElements.forEach(element => {
+    element.textContent = tokenInfo.symbol;
+  });
+  
+  // Update all name elements
+  nameElements.forEach(element => {
+    element.textContent = tokenInfo.name;
+  });
+  
+  console.log(`✅ Updated ${symbolElements.length} symbol elements and ${nameElements.length} name elements for ${tokenAddress}`);
 }
 
 /**
