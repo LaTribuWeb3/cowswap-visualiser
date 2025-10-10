@@ -1472,6 +1472,89 @@ async function retryTradeLoading(tradeIndex: number): Promise<void> {
 // Make retryTradeLoading globally available
 (window as any).retryTradeLoading = retryTradeLoading;
 
+// Make state globally available for utils
+(window as any).appState = state;
+
+/**
+ * Asynchronously update trade date from block number to full timestamp
+ */
+async function updateTradeDateAsync(trade: Transaction, index: number): Promise<void> {
+  try {
+    console.log(`🕒 Fetching full timestamp for trade ${index} (block ${trade.blockNumber})`);
+    
+    // Try creationDate first if available
+    if (trade.creationDate) {
+      const formattedDate = formatDatabaseDate(trade.creationDate);
+      if (formattedDate !== 'No Date' && formattedDate !== 'Invalid Date') {
+        updateTradeDateElement(index, formattedDate);
+        console.log(`✅ Updated date for trade ${index} from creationDate: ${formattedDate}`);
+        return;
+      }
+    }
+    
+    // Fallback to block timestamp API
+    const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+    const fullTimestamp = timestampToDateTime(blockTimestamp);
+    updateTradeDateElement(index, fullTimestamp);
+    console.log(`✅ Updated date for trade ${index} from block API: ${fullTimestamp}`);
+    
+  } catch (error) {
+    console.warn(`⚠️ Failed to update date for trade ${index}:`, error);
+    // Keep the "Block X" display if timestamp fetch fails
+  }
+}
+
+/**
+ * Update the date element in the DOM
+ */
+function updateTradeDateElement(index: number, fullTimestamp: string): void {
+  const dateElement = document.querySelector(`[data-trade-index="${index}"][data-date-type="timestamp"]`);
+  if (dateElement) {
+    dateElement.textContent = fullTimestamp;
+    console.log(`🔍 Updated date element for trade ${index}: ${fullTimestamp}`);
+  }
+}
+
+/**
+ * Asynchronously update trade amounts when token decimals are available
+ */
+async function updateTradeAmountsAsync(trade: Transaction, index: number): Promise<void> {
+  try {
+    console.log(`💰 Updating amounts for trade ${index} with token decimals`);
+    
+    // Wait a bit for token metadata to be fetched
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Get updated token info (should be cached by now)
+    const sellToken = trade.sellToken ? getTokenInfoSync(trade.sellToken) : null;
+    const buyToken = trade.buyToken ? getTokenInfoSync(trade.buyToken) : null;
+    
+    // Format amounts with proper decimals (only if we have token addresses)
+    if (trade.sellToken && trade.buyToken) {
+      const sellAmount = await formatTokenAmount(trade.executedSellAmount || trade.sellAmount, trade.sellToken);
+      const buyAmount = await formatTokenAmount(trade.executedBuyAmount || trade.buyAmount, trade.buyToken);
+      
+      // Update sell amount element
+      const sellAmountElement = document.querySelector(`[data-trade-index="${index}"][data-amount-type="sell"]`);
+      if (sellAmountElement) {
+        sellAmountElement.textContent = sellAmount;
+        console.log(`✅ Updated sell amount for trade ${index}: ${sellAmount}`);
+      }
+      
+      // Update buy amount element
+      const buyAmountElement = document.querySelector(`[data-trade-index="${index}"][data-amount-type="buy"]`);
+      if (buyAmountElement) {
+        buyAmountElement.textContent = buyAmount;
+        console.log(`✅ Updated buy amount for trade ${index}: ${buyAmount}`);
+      }
+    }
+    
+  } catch (error) {
+    console.warn(`⚠️ Failed to update amounts for trade ${index}:`, error);
+    // Keep the existing amounts if update fails
+  }
+}
+
 /**
  * Create a trade table row element
  */
@@ -1519,26 +1602,8 @@ async function createTradeTableRow(
       const executedSellAmount = await formatTokenAmount(trade.executedSellAmount, trade.sellToken);
 
       // Handle creationDate - it might be a Date object or a string from the database
-      let localeString: string;
-      if (trade.creationDate) {
-        const formattedDate = formatDatabaseDate(trade.creationDate);
-        console.log('🔍 Formatted creation date:', formattedDate);
-        if (formattedDate !== 'No Date' && formattedDate !== 'Invalid Date') {
-          localeString = formattedDate;
-        } else {
-          // Fallback to block timestamp if date is invalid
-          const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
-          console.log('🔍 Block timestamp from API:', blockTimestamp);
-          console.log('🔍 Block number:', trade.blockNumber);
-          localeString = timestampToDateTime(blockTimestamp);
-        }
-      } else {
-        // No creationDate, use block timestamp
-        const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
-        console.log('🔍 No creation date, using block timestamp:', blockTimestamp);
-        console.log('🔍 Block number:', trade.blockNumber);
-        localeString = timestampToDateTime(blockTimestamp);
-      }
+      // Start with block number, update with full timestamp asynchronously
+      let localeString = `Block ${trade.blockNumber}`;
 
       console.log('🔍 Trade creation date:', trade.creationDate);
       console.log('🔍 Locale string:', localeString); 
@@ -1547,17 +1612,24 @@ async function createTradeTableRow(
         <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
         <td class="trade-status success">Success</td>
         <td class="trade-amount">
-          ${executedSellAmount} <span data-token-address="${trade.sellToken}" data-token-field="symbol">${sellToken.symbol}</span> → ${executedBuyAmount} <span data-token-address="${trade.buyToken}" data-token-field="symbol">${
-        buyToken.symbol
-      }</span>
+          <span data-trade-index="${index}" data-amount-type="sell" data-token-address="${trade.sellToken}">${executedSellAmount}</span> 
+          <span data-token-address="${trade.sellToken}" data-token-field="symbol">${sellToken.symbol}</span> → 
+          <span data-trade-index="${index}" data-amount-type="buy" data-token-address="${trade.buyToken}">${executedBuyAmount}</span> 
+          <span data-token-address="${trade.buyToken}" data-token-field="symbol">${buyToken.symbol}</span>
         </td>
-        <td class="trade-date">${localeString}</td>
+        <td class="trade-date" data-trade-index="${index}" data-date-type="timestamp">${localeString}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
       `;
 
       // Asynchronously fetch token metadata and update all tagged elements
       fetchTokenInfoAndUpdateDOM(trade.sellToken);
       fetchTokenInfoAndUpdateDOM(trade.buyToken);
+      
+      // Asynchronously fetch full timestamp and update date
+      updateTradeDateAsync(trade, index);
+      
+      // Asynchronously update amounts when token decimals are available
+      updateTradeAmountsAsync(trade, index);
     } catch (error) {
       console.error(`❌ Error getting token info for trade ${index}:`, error);
       
@@ -1596,9 +1668,12 @@ async function createTradeTableRow(
         <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
         <td class="trade-status success">Success</td>
         <td class="trade-amount">
-          ${rawSellAmount} <span data-token-address="${trade.sellToken || ''}" data-token-field="symbol">${sellTokenAddress}</span> → ${rawBuyAmount} <span data-token-address="${trade.buyToken || ''}" data-token-field="symbol">${buyTokenAddress}</span>
+          <span data-trade-index="${index}" data-amount-type="sell" data-token-address="${trade.sellToken || ''}">${rawSellAmount}</span> 
+          <span data-token-address="${trade.sellToken || ''}" data-token-field="symbol">${sellTokenAddress}</span> → 
+          <span data-trade-index="${index}" data-amount-type="buy" data-token-address="${trade.buyToken || ''}">${rawBuyAmount}</span> 
+          <span data-token-address="${trade.buyToken || ''}" data-token-field="symbol">${buyTokenAddress}</span>
         </td>
-        <td class="trade-date">${localeString}</td>
+        <td class="trade-date" data-trade-index="${index}" data-date-type="timestamp">${localeString}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
       `;
 
@@ -1609,6 +1684,12 @@ async function createTradeTableRow(
       if (trade.buyToken) {
         fetchTokenInfoAndUpdateDOM(trade.buyToken);
       }
+      
+      // Asynchronously fetch full timestamp and update date
+      updateTradeDateAsync(trade, index);
+      
+      // Asynchronously update amounts when token decimals are available
+      updateTradeAmountsAsync(trade, index);
     }
 
     console.log(

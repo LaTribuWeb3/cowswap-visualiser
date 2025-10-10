@@ -395,6 +395,7 @@ function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): voi
   // Find all elements tagged with this token address
   const symbolElements = document.querySelectorAll(`[data-token-address="${tokenAddress}"][data-token-field="symbol"]`);
   const nameElements = document.querySelectorAll(`[data-token-address="${tokenAddress}"][data-token-field="name"]`);
+  const amountElements = document.querySelectorAll(`[data-token-address="${tokenAddress}"][data-amount-type]`);
   
   // Update all symbol elements
   symbolElements.forEach(element => {
@@ -406,7 +407,40 @@ function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): voi
     element.textContent = tokenInfo.name;
   });
   
-  console.log(`✅ Updated ${symbolElements.length} symbol elements and ${nameElements.length} name elements for ${tokenAddress}`);
+  // Update all amount elements with proper decimals
+  amountElements.forEach(async (element) => {
+    const tradeIndex = element.getAttribute('data-trade-index');
+    const amountType = element.getAttribute('data-amount-type');
+    
+    if (tradeIndex && amountType) {
+      try {
+        // Get the trade data from the element's parent row
+        const row = element.closest('tr');
+        if (row) {
+          const tradeHash = row.querySelector('.trade-hash')?.textContent;
+          if (tradeHash) {
+            // Find the trade in state (access via window object)
+            const trade = (window as any).appState?.trades?.[parseInt(tradeIndex)];
+            if (trade) {
+              const rawAmount = amountType === 'sell' ? 
+                (trade.executedSellAmount || trade.sellAmount) : 
+                (trade.executedBuyAmount || trade.buyAmount);
+              
+              if (rawAmount) {
+                const formattedAmount = await formatTokenAmount(rawAmount, tokenAddress as `0x${string}`);
+                element.textContent = formattedAmount;
+                console.log(`✅ Updated ${amountType} amount for trade ${tradeIndex}: ${formattedAmount}`);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ Failed to update amount for trade ${tradeIndex}:`, error);
+      }
+    }
+  });
+  
+  console.log(`✅ Updated ${symbolElements.length} symbol elements, ${nameElements.length} name elements, and ${amountElements.length} amount elements for ${tokenAddress}`);
 }
 
 /**
