@@ -189,7 +189,7 @@ export class EthereumService {
   async getBlockNumberFromDate(date: Date): Promise<number> {
     /**
      * Queries https://api.etherscan.io/v2/api
-     * ?chainid=42161
+     * ?chainid=1 (Ethereum mainnet) or 42161 (Arbitrum)
      * &module=block
      * &action=getblocknobytime
      * &timestamp=1578638524
@@ -198,20 +198,25 @@ export class EthereumService {
      * 
      * to get the block number from a date
      */
-    const timestamp = date.getTime() / 1000;
+    // Convert to Unix timestamp in seconds (must be an integer)
+    const timestamp = Math.floor(date.getTime() / 1000);
+    
     if(this.dateToBlockNumber.has(timestamp)) {
       return this.dateToBlockNumber.get(timestamp)!;
     } else {
+      // Get chain ID from environment variable (default to Ethereum mainnet)
+      const chainId = process.env.CHAIN_ID || "1";
+      
       const blockNumber = await this.executeWithBackoff(
         async () => {
-          const response = await fetch(`https://api.etherscan.io/v2/api?chainid=42161&module=block&action=getblocknobytime&timestamp=${timestamp}&closest=before&apikey=${process.env.ETHERSCAN_API_KEY}`);
+          const response = await fetch(`https://api.etherscan.io/v2/api?chainid=${chainId}&module=block&action=getblocknobytime&timestamp=${timestamp}&closest=before&apikey=${process.env.ETHERSCAN_API_KEY}`);
           const data = await response.json();
           if (data.status !== "1") {
-            throw new Error(`Failed to get block number from date: ${data.result}`);
+            throw new Error(`Failed to get block number from date: ${data.result} (timestamp: ${timestamp}, date: ${date.toISOString()})`);
           }
           return data.result;
         },
-        `getBlockNumberFromDate(${date})`
+        `getBlockNumberFromDate(${date.toISOString()})`
       );
       const blockNum = Number(blockNumber);
       this.dateToBlockNumber.set(timestamp, blockNum);

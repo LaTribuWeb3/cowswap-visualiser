@@ -10,7 +10,8 @@
     "dev:frontend": "vite",
     "dev:backend": "ts-node src/index.ts",
     "sync:historical": "ts-node src/scripts/sync-historical-trades.ts --method blockchain",
-    "sync:realtime": "ts-node src/scripts/realtime-settlement-sync.ts"
+    "sync:realtime": "ts-node src/scripts/realtime-settlement-sync.ts",
+    "cleanup:old-trades": "ts-node src/scripts/cleanup-old-trades.ts"
   },
   "keywords": [
     "cow-protocol",

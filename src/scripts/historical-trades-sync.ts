@@ -86,7 +86,7 @@ class HistoricalTradesSync {
 
       // Calculate target block (4 months ago) with more conservative estimate
       const monthsBack = 4;
-      const blocksPerDay = (3600 * 24) / 10; // approx 1 block every 10 seconds
+      const blocksPerDay = (3600 * 24) / 12; // Ethereum mainnet: ~12 seconds per block
       const daysBack = monthsBack * 30;
       const estimatedBlocksBack = BigInt(daysBack * blocksPerDay);
       
