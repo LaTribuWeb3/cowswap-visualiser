@@ -397,6 +397,16 @@ body {
 
 .trade-table-row {
   border-bottom: 1px solid #e9ecef;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.trade-table-row[data-clickable="true"] {
+  cursor: pointer;
+}
+
+.trade-table-row[data-clickable="true"]:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .trade-hash {

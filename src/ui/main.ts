@@ -1475,6 +1475,17 @@ async function retryTradeLoading(tradeIndex: number): Promise<void> {
 // Make state globally available for utils
 (window as any).appState = state;
 
+// Debug function to check clickable trades
+(window as any).debugClickableTrades = () => {
+  const rows = document.querySelectorAll('.trade-table-row');
+  console.log(`🔍 Found ${rows.length} trade rows`);
+  rows.forEach((row, index) => {
+    const clickable = row.getAttribute('data-clickable');
+    const hash = row.getAttribute('data-trade-hash');
+    console.log(`Row ${index}: clickable=${clickable}, hash=${hash}`);
+  });
+};
+
 /**
  * Asynchronously update trade date from block number to full timestamp
  */
@@ -1525,27 +1536,28 @@ async function updateTradeAmountsAsync(trade: Transaction, index: number): Promi
     // Wait a bit for token metadata to be fetched
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Get updated token info (should be cached by now)
-    const sellToken = trade.sellToken ? getTokenInfoSync(trade.sellToken) : null;
-    const buyToken = trade.buyToken ? getTokenInfoSync(trade.buyToken) : null;
-    
     // Format amounts with proper decimals (only if we have token addresses)
     if (trade.sellToken && trade.buyToken) {
-      const sellAmount = await formatTokenAmount(trade.executedSellAmount || trade.sellAmount, trade.sellToken);
-      const buyAmount = await formatTokenAmount(trade.executedBuyAmount || trade.buyAmount, trade.buyToken);
-      
-      // Update sell amount element
-      const sellAmountElement = document.querySelector(`[data-trade-index="${index}"][data-amount-type="sell"]`);
-      if (sellAmountElement) {
-        sellAmountElement.textContent = sellAmount;
-        console.log(`✅ Updated sell amount for trade ${index}: ${sellAmount}`);
-      }
-      
-      // Update buy amount element
-      const buyAmountElement = document.querySelector(`[data-trade-index="${index}"][data-amount-type="buy"]`);
-      if (buyAmountElement) {
-        buyAmountElement.textContent = buyAmount;
-        console.log(`✅ Updated buy amount for trade ${index}: ${buyAmount}`);
+      try {
+        const sellAmount = await formatTokenAmount(trade.executedSellAmount || trade.sellAmount, trade.sellToken);
+        const buyAmount = await formatTokenAmount(trade.executedBuyAmount || trade.buyAmount, trade.buyToken);
+        
+        // Update sell amount element
+        const sellAmountElement = document.querySelector(`[data-trade-index="${index}"][data-amount-type="sell"]`);
+        if (sellAmountElement) {
+          sellAmountElement.textContent = sellAmount;
+          console.log(`✅ Updated sell amount for trade ${index}: ${sellAmount}`);
+        }
+        
+        // Update buy amount element
+        const buyAmountElement = document.querySelector(`[data-trade-index="${index}"][data-amount-type="buy"]`);
+        if (buyAmountElement) {
+          buyAmountElement.textContent = buyAmount;
+          console.log(`✅ Updated buy amount for trade ${index}: ${buyAmount}`);
+        }
+      } catch (amountError) {
+        console.warn(`⚠️ Failed to format amounts for trade ${index}:`, amountError);
+        // Keep the existing amounts if formatting fails
       }
     }
     
@@ -1695,7 +1707,9 @@ async function createTradeTableRow(
     console.log(
       `🔍 Adding click listener to trade row ${index} (simplified structure)`
     );
-    row.addEventListener("click", (event) => {
+    
+    // Add click listener with better error handling
+    const clickHandler = (event: MouseEvent) => {
       // Don't trigger if clicking on retry button or other interactive elements
       if (event.target instanceof HTMLElement) {
         const target = event.target as HTMLElement;
@@ -1704,9 +1718,21 @@ async function createTradeTableRow(
         }
       }
       
-      console.log(`🖱️ Trade row ${index} clicked (simplified structure)`);
-      showTradeDetails(trade);
-    });
+      try {
+        console.log(`🖱️ Trade row ${index} clicked (simplified structure)`);
+        showTradeDetails(trade);
+      } catch (error) {
+        console.error(`❌ Error handling click for trade ${index}:`, error);
+        // Fallback: try to show basic trade info
+        alert(`Trade Details\nHash: ${trade.hash}\nBlock: ${trade.blockNumber}\nStatus: ${trade.status || 'Unknown'}`);
+      }
+    };
+    
+    row.addEventListener("click", clickHandler);
+    
+    // Also add a data attribute to help with debugging
+    row.dataset.clickable = "true";
+    row.dataset.tradeHash = trade.hash || "unknown";
 
 
     console.log(`🔍 Trade row ${index} HTML content:`, row.innerHTML);
@@ -1796,7 +1822,9 @@ async function createTradeTableRow(
     fetchTokenInfoAndUpdateDOM(tradeData.buyToken as `0x${string}`);
 
     console.log(`🔍 Adding click listener to trade row ${index} (with data)`);
-    row.addEventListener("click", (event) => {
+    
+    // Add click listener with better error handling
+    const clickHandler = (event: MouseEvent) => {
       // Don't trigger if clicking on retry button or other interactive elements
       if (event.target instanceof HTMLElement) {
         const target = event.target as HTMLElement;
@@ -1805,9 +1833,21 @@ async function createTradeTableRow(
         }
       }
       
-      console.log(`🖱️ Trade row ${index} clicked (with data)`);
-      showTradeDetails(trade);
-    });
+      try {
+        console.log(`🖱️ Trade row ${index} clicked (with data)`);
+        showTradeDetails(trade);
+      } catch (error) {
+        console.error(`❌ Error handling click for trade ${index}:`, error);
+        // Fallback: try to show basic trade info
+        alert(`Trade Details\nHash: ${trade.hash}\nBlock: ${trade.blockNumber}\nStatus: ${trade.status || 'Unknown'}`);
+      }
+    };
+    
+    row.addEventListener("click", clickHandler);
+    
+    // Also add a data attribute to help with debugging
+    row.dataset.clickable = "true";
+    row.dataset.tradeHash = trade.hash || "unknown";
 
 
     return row;
