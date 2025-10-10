@@ -285,7 +285,7 @@ export function getTokenInfoSync(tokenAddress: `0x${string}`): TokenInfo {
   const placeholderInfo: TokenInfo = {
     symbol: formatAddress(tokenAddress),
     name: formatAddress(tokenAddress),
-    decimals: 18,
+    decimals: 18, // Default to 18, but we'll show raw amounts when decimals are unknown
     address: tokenAddress
   };
   
@@ -526,6 +526,15 @@ export function formatAmount(amount: string | undefined | null, decimals: number
 }
 
 /**
+ * Format raw token amount without decimal conversion (for unknown tokens)
+ */
+export function formatRawAmount(amount: string | undefined | null): string {
+  if (!amount) return '0';
+  // Just format the raw number with commas
+  return new Intl.NumberFormat('en-US').format(BigInt(amount));
+}
+
+/**
  * Format token amount with proper decimals, maintaining float precision
  */
 export function formatAmountWithDecimals(amount: string | undefined | null, decimals: number): string {
@@ -557,12 +566,18 @@ export function formatAmountWithDecimals(amount: string | undefined | null, deci
 
 /**
  * Format token amount using token address (fetches decimals automatically)
+ * Falls back to raw amount if token info is not available
  */
 export async function formatTokenAmount(amount: string | undefined | null, tokenAddress: `0x${string}`): Promise<string> {
   if (!amount) return '0';
   
-  const decimals = await getTokenDecimals(tokenAddress);
-  return formatAmountWithDecimals(amount, decimals);
+  try {
+    const decimals = await getTokenDecimals(tokenAddress);
+    return formatAmountWithDecimals(amount, decimals);
+  } catch (error) {
+    console.warn(`Failed to get decimals for ${tokenAddress}, showing raw amount:`, error);
+    return formatRawAmount(amount);
+  }
 }
 
 /**

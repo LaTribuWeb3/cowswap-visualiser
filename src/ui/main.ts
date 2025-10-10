@@ -14,6 +14,7 @@ import {
   formatAmount,
   formatAmountWithDecimals,
   formatTokenAmount,
+  formatRawAmount,
   formatDatabaseDate,
   formatGasUsed,
   formatGasPrice,
@@ -1390,16 +1391,28 @@ async function createTradeTableRow(
       fetchTokenInfoAndUpdateDOM(trade.buyToken);
     } catch (error) {
       console.error(`❌ Error getting token info for trade ${index}:`, error);
-      // Fallback to basic display if token info fails
+      
+      // Show raw amounts when token info fails
+      const rawSellAmount = formatRawAmount(trade.sellAmount);
+      const rawBuyAmount = formatRawAmount(trade.buyAmount);
+      const sellTokenAddress = formatAddress(trade.sellToken);
+      const buyTokenAddress = formatAddress(trade.buyToken);
+      
       row.innerHTML = `
         <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
         <td class="trade-status success">Success</td>
-        <td class="trade-amount">Token Info Missing</td>
+        <td class="trade-amount">
+          ${rawSellAmount} <span data-token-address="${trade.sellToken}" data-token-field="symbol">${sellTokenAddress}</span> → ${rawBuyAmount} <span data-token-address="${trade.buyToken}" data-token-field="symbol">${buyTokenAddress}</span>
+        </td>
         <td class="trade-date">${timestampToDateTime(
           await getBlockTimestamp(parseInt(trade.blockNumber))
         )}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
       `;
+
+      // Still try to fetch token metadata for async updates
+      fetchTokenInfoAndUpdateDOM(trade.sellToken);
+      fetchTokenInfoAndUpdateDOM(trade.buyToken);
     }
 
     console.log(
