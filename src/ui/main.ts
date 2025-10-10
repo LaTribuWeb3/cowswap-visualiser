@@ -1486,6 +1486,26 @@ async function retryTradeLoading(tradeIndex: number): Promise<void> {
   });
 };
 
+// Debug function to check token decimal issues
+(window as any).debugTokenDecimals = () => {
+  console.log(`🔍 Checking token decimal issues...`);
+  
+  // Check all amount elements that are still in scientific notation
+  const amountElements = document.querySelectorAll('[data-amount-type]');
+  amountElements.forEach((element, index) => {
+    const text = element.textContent || '';
+    if (text.includes('e+') || text.includes('e-')) {
+      const tradeIndex = element.getAttribute('data-trade-index');
+      const amountType = element.getAttribute('data-amount-type');
+      const tokenAddress = element.getAttribute('data-token-address');
+      console.log(`⚠️ Scientific notation found: Row ${tradeIndex}, ${amountType}, Token ${tokenAddress}, Amount: ${text}`);
+    }
+  });
+  
+  // Check token cache
+  console.log(`🔍 Token cache contents:`, (window as any).appState?.trades?.length || 0, 'trades');
+};
+
 /**
  * Asynchronously update trade date from block number to full timestamp
  */

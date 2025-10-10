@@ -254,6 +254,11 @@ async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol
 
     console.log(`✅ Fetched token metadata: ${data.symbol} - ${data.name} (${data.decimals || 18} decimals)`);
     
+    // Debug: Check if decimals are missing or suspicious
+    if (!data.decimals || data.decimals === 0) {
+      console.warn(`⚠️ Token ${tokenAddress} (${data.symbol}) has missing or zero decimals, using default 18`);
+    }
+    
     return {
       symbol: data.symbol,
       name: data.name,
@@ -349,14 +354,14 @@ export async function fetchTokenInfoAndUpdateDOM(
 ): Promise<void> {
   // If already cached, update immediately
   if (tokenInfoCache[tokenAddress]) {
-    updateAllTokenElements(tokenAddress, tokenInfoCache[tokenAddress]);
+    await updateAllTokenElements(tokenAddress, tokenInfoCache[tokenAddress]);
     return;
   }
 
   // If it's a known token, cache and update immediately
   if (KNOWN_TOKENS[tokenAddress]) {
     tokenInfoCache[tokenAddress] = KNOWN_TOKENS[tokenAddress];
-    updateAllTokenElements(tokenAddress, KNOWN_TOKENS[tokenAddress]);
+    await updateAllTokenElements(tokenAddress, KNOWN_TOKENS[tokenAddress]);
     return;
   }
 
@@ -377,7 +382,7 @@ export async function fetchTokenInfoAndUpdateDOM(
     tokenDecimalsCache[tokenAddress] = metadata.decimals;
     
     // Update all DOM elements with this token address
-    updateAllTokenElements(tokenAddress, tokenInfo);
+    await updateAllTokenElements(tokenAddress, tokenInfo);
     
     console.log(`✅ Updated all elements for token ${tokenAddress} with: ${tokenInfo.symbol} - ${tokenInfo.name}`);
   } catch (error) {
@@ -391,7 +396,7 @@ export async function fetchTokenInfoAndUpdateDOM(
 /**
  * Update all DOM elements tagged with a specific token address
  */
-function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): void {
+async function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): Promise<void> {
   // Find all elements tagged with this token address
   const symbolElements = document.querySelectorAll(`[data-token-address="${tokenAddress}"][data-token-field="symbol"]`);
   const nameElements = document.querySelectorAll(`[data-token-address="${tokenAddress}"][data-token-field="name"]`);
@@ -407,8 +412,8 @@ function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): voi
     element.textContent = tokenInfo.name;
   });
   
-  // Update all amount elements with proper decimals
-  amountElements.forEach(async (element) => {
+  // Update all amount elements with proper decimals (use for...of to handle async properly)
+  for (const element of Array.from(amountElements)) {
     const tradeIndex = element.getAttribute('data-trade-index');
     const amountType = element.getAttribute('data-amount-type');
     
@@ -427,6 +432,7 @@ function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): voi
                 (trade.executedBuyAmount || trade.buyAmount);
               
               if (rawAmount) {
+                console.log(`🔍 Formatting ${amountType} amount for trade ${tradeIndex}: raw=${rawAmount}, token=${tokenAddress}, decimals=${tokenInfo.decimals}`);
                 const formattedAmount = await formatTokenAmount(rawAmount, tokenAddress as `0x${string}`);
                 element.textContent = formattedAmount;
                 console.log(`✅ Updated ${amountType} amount for trade ${tradeIndex}: ${formattedAmount}`);
@@ -438,7 +444,7 @@ function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): voi
         console.warn(`⚠️ Failed to update amount for trade ${tradeIndex}:`, error);
       }
     }
-  });
+  }
   
   console.log(`✅ Updated ${symbolElements.length} symbol elements, ${nameElements.length} name elements, and ${amountElements.length} amount elements for ${tokenAddress}`);
 }
