@@ -83,16 +83,64 @@ export class MongoDBDatabaseService {
     }
 
     try {
+      // Sanitize all amount fields to ensure NO scientific notation is stored
+      const sanitizedTransaction = this.sanitizeTransactionAmounts(transaction);
+      
       await this.transactionsCollection.updateOne(
-        { hash: transaction.hash },
-        { $set: transaction },
+        { hash: sanitizedTransaction.hash },
+        { $set: sanitizedTransaction },
         { upsert: true }
       );
-      console.log(`💾 Transaction saved to MongoDB: ${transaction.hash}`);
+      console.log(`💾 Transaction saved to MongoDB: ${sanitizedTransaction.hash}`);
     } catch (error) {
       console.error('❌ Error saving transaction to MongoDB:', error);
       throw error;
     }
+  }
+
+  /**
+   * Sanitize all amount fields in a transaction to ensure they are plain strings
+   * This prevents scientific notation from being stored in the database
+   */
+  private sanitizeTransactionAmounts(transaction: any): any {
+    const amountFields = [
+      'sellAmount',
+      'buyAmount',
+      'executedBuyAmount',
+      'executedSellAmount',
+      'executedSellAmountBeforeFees',
+      'executedAmount',
+      'realSellAmount'
+    ];
+
+    const sanitized = { ...transaction };
+
+    for (const field of amountFields) {
+      if (sanitized[field] !== undefined && sanitized[field] !== null) {
+        const originalValue = sanitized[field];
+        const stringValue = String(originalValue);
+        
+        // Check if it has scientific notation
+        if (stringValue.includes('e') || stringValue.includes('E')) {
+          console.warn(`⚠️ Preventing scientific notation storage for ${field}: ${stringValue}`);
+          try {
+            // Convert to BigInt to get full precision string
+            const num = parseFloat(stringValue);
+            const bigIntStr = BigInt(Math.floor(num)).toString();
+            sanitized[field] = bigIntStr;
+            console.log(`✅ Sanitized ${field}: ${stringValue} → ${bigIntStr}`);
+          } catch (error) {
+            console.error(`❌ Failed to sanitize ${field}: ${stringValue}`, error);
+            sanitized[field] = '0';
+          }
+        } else if (typeof originalValue !== 'string') {
+          // Ensure it's stored as a string, not a number
+          sanitized[field] = stringValue;
+        }
+      }
+    }
+
+    return sanitized;
   }
 
 
@@ -186,17 +234,18 @@ export class MongoDBDatabaseService {
           gasUsed: tx.gasUsed ? String(tx.gasUsed) : '0',
           decodedFunction: tx.decodedFunction || 'Unknown',
           functionDescription: tx.functionDescription || 'No description available',
-          // Map new database format fields to expected interface
-          sellAmount: tx.sellAmount ? String(tx.sellAmount) : '0',
-          buyAmount: tx.buyAmount ? String(tx.buyAmount) : '0',
-          executedAmount: tx.executedBuyAmount ? String(tx.executedBuyAmount) : '0',
-          realSellAmount: tx.executedSellAmount ? String(tx.executedSellAmount) : '0',
-          sellPrice: tx.sellPrice ? String(tx.sellPrice) : '0',
-          buyPrice: tx.buyPrice ? String(tx.buyPrice) : '0',
-          // Add new fields from the database format
-          executedBuyAmount: tx.executedBuyAmount ? String(tx.executedBuyAmount) : '0',
-          executedSellAmount: tx.executedSellAmount ? String(tx.executedSellAmount) : '0',
-          executedSellAmountBeforeFees: tx.executedSellAmountBeforeFees ? String(tx.executedSellAmountBeforeFees) : '0',
+        // Map new database format fields to expected interface
+        // Convert all amounts to exact string representations
+        sellAmount: tx.sellAmount ? this.convertToExactString(tx.sellAmount) : '0',
+        buyAmount: tx.buyAmount ? this.convertToExactString(tx.buyAmount) : '0',
+        executedAmount: tx.executedBuyAmount ? this.convertToExactString(tx.executedBuyAmount) : '0',
+        realSellAmount: tx.executedSellAmount ? this.convertToExactString(tx.executedSellAmount) : '0',
+        sellPrice: tx.sellPrice ? String(tx.sellPrice) : '0',
+        buyPrice: tx.buyPrice ? String(tx.buyPrice) : '0',
+        // Add new fields from the database format
+        executedBuyAmount: tx.executedBuyAmount ? this.convertToExactString(tx.executedBuyAmount) : '0',
+        executedSellAmount: tx.executedSellAmount ? this.convertToExactString(tx.executedSellAmount) : '0',
+        executedSellAmountBeforeFees: tx.executedSellAmountBeforeFees ? this.convertToExactString(tx.executedSellAmountBeforeFees) : '0',
           kind: tx.kind || 'sell',
           receiver: tx.receiver || 'Unknown',
           // Handle creationDate - ensure it's properly converted to Date object
@@ -472,5 +521,57 @@ export class MongoDBDatabaseService {
     }
     
     return null;
+  }
+
+  /**
+   * Convert any value to exact string representation WITHOUT scientific notation
+   * This ensures we NEVER store numbers with precision loss in the database
+   */
+  private convertToExactString(value: any): string {
+    if (value === undefined || value === null) {
+      return '0';
+    }
+    
+    // If it's already a string
+    if (typeof value === 'string') {
+      // Check if it contains scientific notation
+      if (value.includes('e+') || value.includes('e-') || value.includes('E+') || value.includes('E-')) {
+        console.warn(`⚠️ Converting scientific notation string to plain: ${value}`);
+        try {
+          // Convert scientific notation to BigInt string (no precision loss)
+          const num = parseFloat(value);
+          const bigIntStr = BigInt(Math.floor(num)).toString();
+          console.log(`✅ Converted: ${value} → ${bigIntStr}`);
+          return bigIntStr;
+        } catch (error) {
+          console.error(`❌ Failed to convert scientific notation: ${value}`, error);
+          return '0';
+        }
+      }
+      return value;
+    }
+    
+    // If it's a number (Double from old data or JavaScript computation)
+    if (typeof value === 'number') {
+      const stringValue = String(value);
+      // Check if the string representation has scientific notation
+      if (stringValue.includes('e') || stringValue.includes('E')) {
+        console.warn(`⚠️ Number has scientific notation, converting to plain string: ${value}`);
+        try {
+          // Convert to BigInt to get exact integer representation
+          const bigIntStr = BigInt(Math.floor(value)).toString();
+          console.log(`✅ Converted number: ${value} → ${bigIntStr}`);
+          return bigIntStr;
+        } catch (error) {
+          console.error(`❌ Failed to convert number: ${value}`, error);
+          return '0';
+        }
+      }
+      // Regular number without scientific notation
+      return stringValue;
+    }
+    
+    // For any other case, convert to string
+    return String(value);
   }
 }

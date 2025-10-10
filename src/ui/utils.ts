@@ -566,12 +566,43 @@ export function formatAmount(amount: string | undefined | null, decimals: number
 }
 
 /**
+ * Convert scientific notation to BigInt string
+ */
+export function convertScientificToBigInt(amount: string | undefined | null): string {
+  if (!amount) return '0';
+  
+  // If it's already a regular number string, return as is
+  if (!amount.includes('e+') && !amount.includes('e-') && !amount.includes('E+') && !amount.includes('E-')) {
+    return amount;
+  }
+  
+  try {
+    // Convert scientific notation to number, then to BigInt
+    const num = parseFloat(amount);
+    if (isNaN(num)) {
+      console.warn(`⚠️ Invalid scientific notation: ${amount}`);
+      return '0';
+    }
+    
+    // Convert to BigInt by using the integer part
+    const bigIntStr = BigInt(Math.floor(num)).toString();
+    console.log(`🔢 Converted scientific notation: ${amount} → ${bigIntStr}`);
+    return bigIntStr;
+  } catch (error) {
+    console.error(`❌ Failed to convert scientific notation ${amount}:`, error);
+    return '0';
+  }
+}
+
+/**
  * Format raw token amount without decimal conversion (for unknown tokens)
  */
 export function formatRawAmount(amount: string | undefined | null): string {
   if (!amount) return '0';
-  // Just format the raw number with commas
-  return new Intl.NumberFormat('en-US').format(BigInt(amount));
+  
+  // Convert scientific notation to BigInt if needed
+  const normalizedAmount = convertScientificToBigInt(amount);
+  return new Intl.NumberFormat('en-US').format(BigInt(normalizedAmount));
 }
 
 /**
@@ -580,8 +611,11 @@ export function formatRawAmount(amount: string | undefined | null): string {
 export function formatAmountWithDecimals(amount: string | undefined | null, decimals: number): string {
   if (!amount) return '0';
   
+  // Convert scientific notation to BigInt if needed
+  const normalizedAmount = convertScientificToBigInt(amount);
+  
   // Use BigInt for precise calculation to avoid floating point precision issues
-  const amountBigInt = BigInt(amount);
+  const amountBigInt = BigInt(normalizedAmount);
   const divisorBigInt = BigInt(Math.pow(10, decimals));
   
   // Calculate integer and fractional parts

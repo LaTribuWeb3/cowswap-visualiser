@@ -19,14 +19,14 @@ interface SyncProgress {
 
 interface CowOrderData {
   hash: string;
-  executedBuyAmount: number;
-  executedSellAmount: number;
-  executedSellAmountBeforeFees: number;
+  executedBuyAmount: string;  // Store as exact string representation
+  executedSellAmount: string; // Store as exact string representation
+  executedSellAmountBeforeFees: string; // Store as exact string representation
   sellToken: string;
   buyToken: string;
   receiver: string;
-  sellAmount: number;
-  buyAmount: number;
+  sellAmount: string;  // Store as exact string representation
+  buyAmount: string;   // Store as exact string representation
   kind: string;
   blockNumber: number;
 }
@@ -424,16 +424,15 @@ class RealtimeSettlementSync {
           
           const processedOrder: CowOrderData = {
             hash: tx.hash,
-            executedBuyAmount: parseInt(order.executedBuyAmount),
-            executedSellAmount: parseInt(order.executedSellAmount),
-            executedSellAmountBeforeFees: parseInt(
-              order.executedSellAmountBeforeFees
-            ),
+            // Store amounts as exact string representations to avoid precision loss
+            executedBuyAmount: String(order.executedBuyAmount),
+            executedSellAmount: String(order.executedSellAmount),
+            executedSellAmountBeforeFees: String(order.executedSellAmountBeforeFees),
             sellToken: order.sellToken,
             buyToken: order.buyToken,
             receiver: order.receiver,
-            sellAmount: parseInt(order.sellAmount),
-            buyAmount: parseInt(order.buyAmount),
+            sellAmount: String(order.sellAmount),
+            buyAmount: String(order.buyAmount),
             kind: order.kind,
             blockNumber: Number(blockNumber),
           };
