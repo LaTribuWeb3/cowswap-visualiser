@@ -1423,7 +1423,7 @@ function createFallbackRowWithRetry(
       <div class="error-message" title="Full error: ${errorMessage}">
         ${shortErrorMessage}
       </div>
-      <button class="retry-button" onclick="retryTradeLoading(${index})">
+      <button class="retry-button" onclick="event.stopPropagation(); retryTradeLoading(${index})">
         <i class="fas fa-redo"></i> Retry
       </button>
     </td>
@@ -1695,7 +1695,15 @@ async function createTradeTableRow(
     console.log(
       `🔍 Adding click listener to trade row ${index} (simplified structure)`
     );
-    row.addEventListener("click", () => {
+    row.addEventListener("click", (event) => {
+      // Don't trigger if clicking on retry button or other interactive elements
+      if (event.target instanceof HTMLElement) {
+        const target = event.target as HTMLElement;
+        if (target.closest('.retry-button') || target.closest('button')) {
+          return; // Let the button handle its own click
+        }
+      }
+      
       console.log(`🖱️ Trade row ${index} clicked (simplified structure)`);
       showTradeDetails(trade);
     });
@@ -1788,7 +1796,15 @@ async function createTradeTableRow(
     fetchTokenInfoAndUpdateDOM(tradeData.buyToken as `0x${string}`);
 
     console.log(`🔍 Adding click listener to trade row ${index} (with data)`);
-    row.addEventListener("click", () => {
+    row.addEventListener("click", (event) => {
+      // Don't trigger if clicking on retry button or other interactive elements
+      if (event.target instanceof HTMLElement) {
+        const target = event.target as HTMLElement;
+        if (target.closest('.retry-button') || target.closest('button')) {
+          return; // Let the button handle its own click
+        }
+      }
+      
       console.log(`🖱️ Trade row ${index} clicked (with data)`);
       showTradeDetails(trade);
     });
