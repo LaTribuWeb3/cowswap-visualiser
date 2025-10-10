@@ -436,6 +436,67 @@ body {
   color: #721c24;
 }
 
+.trade-amount[title] {
+  cursor: help;
+  color: #dc3545;
+  font-style: italic;
+}
+
+/* Loading state styles */
+.trade-table-row.loading {
+  opacity: 0.7;
+}
+
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.loading-spinner i {
+  color: #007bff;
+}
+
+/* Error fallback styles */
+.trade-table-row.error-fallback {
+  background-color: #fff5f5;
+}
+
+.error-message {
+  color: #dc3545;
+  font-style: italic;
+  margin-bottom: 8px;
+  cursor: help;
+}
+
+.retry-button {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background-color 0.2s;
+}
+
+.retry-button:hover {
+  background: #0056b3;
+}
+
+.retry-button:active {
+  background: #004085;
+}
+
+.retry-button i {
+  font-size: 0.7rem;
+}
+
 .trade-status.pending {
   background: #fff3cd;
   color: #856404;

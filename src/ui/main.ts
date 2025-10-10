@@ -1110,8 +1110,10 @@ async function populateTradesList(): Promise<void> {
     const trade = state.trades[index];
     console.log(`🔍 Creating trade row ${index}`);
     
-    try {
-      const tradeRow = await createTradeTableRow(trade, index);
+    // Try to create trade row with retry logic
+    const tradeRow = await createTradeTableRowWithRetry(trade, index, tbody);
+    
+    if (tradeRow) {
       console.log(`🔍 Appending trade row ${index} to table:`, tradeRow);
 
       // Debug: Check if tbody exists and is valid
@@ -1128,22 +1130,6 @@ async function populateTradesList(): Promise<void> {
       console.log(`🔍 Last child in tbody:`, tbody.lastElementChild);
 
       console.log(`🔍 Trade row ${index} appended successfully`);
-    } catch (error) {
-      console.error(`❌ Failed to create row for trade ${index} (${trade.hash}):`, error);
-      
-      // Create a fallback row for failed trades
-      const fallbackRow = document.createElement("tr");
-      fallbackRow.className = "trade-table-row";
-      fallbackRow.innerHTML = `
-        <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
-        <td class="trade-status error">Error</td>
-        <td class="trade-amount">Failed to load trade data</td>
-        <td class="trade-date">${trade.blockNumber ? `Block ${trade.blockNumber}` : "Unknown"}</td>
-        <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
-      `;
-      
-      tbody.appendChild(fallbackRow);
-      console.log(`🔍 Added fallback row for trade ${index}`);
     }
   }
 
@@ -1331,6 +1317,162 @@ async function updatePaginationControls(): Promise<void> {
 }
 
 /**
+ * Create a trade table row with retry logic
+ */
+async function createTradeTableRowWithRetry(
+  trade: Transaction,
+  index: number,
+  tbody: HTMLElement
+): Promise<HTMLElement | null> {
+  const maxRetries = 10;
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Attempt ${attempt}/${maxRetries} for trade ${index} (${trade.hash})`);
+      
+      // Show loading state for retries
+      if (attempt > 1) {
+        showLoadingStateForTrade(trade, index, attempt, tbody);
+        
+        // Exponential backoff delay
+        const delay = Math.min(1000 * Math.pow(2, attempt - 2), 10000); // Max 10 seconds
+        console.log(`⏳ Waiting ${delay}ms before retry ${attempt}...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      const tradeRow = await createTradeTableRow(trade, index);
+      console.log(`✅ Success on attempt ${attempt} for trade ${index}`);
+      return tradeRow;
+      
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for trade ${index}:`, lastError.message);
+      
+      // If this is the last attempt, we'll handle it below
+      if (attempt === maxRetries) {
+        console.error(`❌ All ${maxRetries} attempts failed for trade ${index} (${trade.hash})`);
+        break;
+      }
+    }
+  }
+  
+  // All retries failed - create fallback row with retry button
+  console.log(`🔧 Creating fallback row for trade ${index} after ${maxRetries} failed attempts`);
+  const fallbackRow = createFallbackRowWithRetry(trade, index, lastError, tbody);
+  tbody.appendChild(fallbackRow);
+  
+  return null; // Indicate that we created a fallback instead of a normal row
+}
+
+/**
+ * Show loading state during retries
+ */
+function showLoadingStateForTrade(
+  trade: Transaction,
+  index: number,
+  attempt: number,
+  tbody: HTMLElement
+): void {
+  // Remove any existing loading row for this trade
+  const existingLoadingRow = tbody.querySelector(`[data-trade-index="${index}"][data-loading="true"]`);
+  if (existingLoadingRow) {
+    existingLoadingRow.remove();
+  }
+  
+  // Create loading row
+  const loadingRow = document.createElement("tr");
+  loadingRow.className = "trade-table-row loading";
+  loadingRow.dataset.tradeIndex = index.toString();
+  loadingRow.dataset.loading = "true";
+  loadingRow.innerHTML = `
+    <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
+    <td class="trade-status pending">Retrying ${attempt}/10</td>
+    <td class="trade-amount">
+      <div class="loading-spinner">
+        <i class="fas fa-spinner fa-spin"></i>
+        Loading trade data...
+      </div>
+    </td>
+    <td class="trade-date">${trade.blockNumber ? `Block ${trade.blockNumber}` : "Unknown"}</td>
+    <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
+  `;
+  
+  tbody.appendChild(loadingRow);
+}
+
+/**
+ * Create fallback row with retry button
+ */
+function createFallbackRowWithRetry(
+  trade: Transaction,
+  index: number,
+  error: Error | null,
+  tbody: HTMLElement
+): HTMLElement {
+  const errorMessage = error ? error.message : "Unknown error";
+  const shortErrorMessage = errorMessage.length > 50 ? errorMessage.substring(0, 50) + "..." : errorMessage;
+  
+  const fallbackRow = document.createElement("tr");
+  fallbackRow.className = "trade-table-row error-fallback";
+  fallbackRow.dataset.tradeIndex = index.toString();
+  fallbackRow.innerHTML = `
+    <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
+    <td class="trade-status error">Failed (10/10)</td>
+    <td class="trade-amount">
+      <div class="error-message" title="Full error: ${errorMessage}">
+        ${shortErrorMessage}
+      </div>
+      <button class="retry-button" onclick="retryTradeLoading(${index})">
+        <i class="fas fa-redo"></i> Retry
+      </button>
+    </td>
+    <td class="trade-date">${trade.blockNumber ? `Block ${trade.blockNumber}` : "Unknown"}</td>
+    <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
+  `;
+  
+  return fallbackRow;
+}
+
+/**
+ * Retry loading for a specific trade (called from retry button)
+ */
+async function retryTradeLoading(tradeIndex: number): Promise<void> {
+  console.log(`🔄 Manual retry requested for trade ${tradeIndex}`);
+  
+  const trade = state.trades[tradeIndex];
+  if (!trade) {
+    console.error(`❌ Trade ${tradeIndex} not found in state`);
+    return;
+  }
+  
+  const tbody = elements.tradesGrid.querySelector("tbody");
+  if (!tbody) {
+    console.error(`❌ Table body not found`);
+    return;
+  }
+  
+  // Remove existing error row
+  const existingRow = tbody.querySelector(`[data-trade-index="${tradeIndex}"]`);
+  if (existingRow) {
+    existingRow.remove();
+  }
+  
+  // Try to create the trade row again with retry logic
+  const tradeRow = await createTradeTableRowWithRetry(trade, tradeIndex, tbody);
+  
+  if (tradeRow) {
+    tbody.appendChild(tradeRow);
+    console.log(`✅ Manual retry successful for trade ${tradeIndex}`);
+  } else {
+    console.log(`❌ Manual retry also failed for trade ${tradeIndex}`);
+  }
+}
+
+// Make retryTradeLoading globally available
+(window as any).retryTradeLoading = retryTradeLoading;
+
+/**
  * Create a trade table row element
  */
 async function createTradeTableRow(
@@ -1419,27 +1561,54 @@ async function createTradeTableRow(
     } catch (error) {
       console.error(`❌ Error getting token info for trade ${index}:`, error);
       
-      // Show raw amounts when token info fails
-      const rawSellAmount = formatRawAmount(trade.sellAmount);
-      const rawBuyAmount = formatRawAmount(trade.buyAmount);
-      const sellTokenAddress = formatAddress(trade.sellToken);
-      const buyTokenAddress = formatAddress(trade.buyToken);
+      // Show raw amounts when token info fails - this should rarely fail
+      let rawSellAmount = "Unknown";
+      let rawBuyAmount = "Unknown";
+      let sellTokenAddress = "Unknown";
+      let buyTokenAddress = "Unknown";
+      let localeString = "Unknown";
+      
+      try {
+        rawSellAmount = formatRawAmount(trade.sellAmount);
+        rawBuyAmount = formatRawAmount(trade.buyAmount);
+        sellTokenAddress = formatAddress(trade.sellToken);
+        buyTokenAddress = formatAddress(trade.buyToken);
+        
+        // Try to get block timestamp, but don't fail if it doesn't work
+        try {
+          const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+          localeString = timestampToDateTime(blockTimestamp);
+        } catch (timestampError) {
+          console.warn(`⚠️ Block timestamp failed for ${trade.blockNumber}, using fallback`);
+          localeString = `Block ${trade.blockNumber}`;
+        }
+      } catch (fallbackError) {
+        console.error(`❌ Even fallback data failed for trade ${index}:`, fallbackError);
+        // Use absolute minimum fallback data
+        rawSellAmount = trade.sellAmount || "0";
+        rawBuyAmount = trade.buyAmount || "0";
+        sellTokenAddress = trade.sellToken ? formatAddress(trade.sellToken) : "Unknown";
+        buyTokenAddress = trade.buyToken ? formatAddress(trade.buyToken) : "Unknown";
+        localeString = trade.blockNumber ? `Block ${trade.blockNumber}` : "Unknown";
+      }
       
       row.innerHTML = `
         <td class="trade-hash">${formatAddress(trade.hash || "Unknown")}</td>
         <td class="trade-status success">Success</td>
         <td class="trade-amount">
-          ${rawSellAmount} <span data-token-address="${trade.sellToken}" data-token-field="symbol">${sellTokenAddress}</span> → ${rawBuyAmount} <span data-token-address="${trade.buyToken}" data-token-field="symbol">${buyTokenAddress}</span>
+          ${rawSellAmount} <span data-token-address="${trade.sellToken || ''}" data-token-field="symbol">${sellTokenAddress}</span> → ${rawBuyAmount} <span data-token-address="${trade.buyToken || ''}" data-token-field="symbol">${buyTokenAddress}</span>
         </td>
-        <td class="trade-date">${timestampToDateTime(
-          await getBlockTimestamp(parseInt(trade.blockNumber))
-        )}</td>
+        <td class="trade-date">${localeString}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
       `;
 
-      // Still try to fetch token metadata for async updates
-      fetchTokenInfoAndUpdateDOM(trade.sellToken);
-      fetchTokenInfoAndUpdateDOM(trade.buyToken);
+      // Still try to fetch token metadata for async updates if we have token addresses
+      if (trade.sellToken) {
+        fetchTokenInfoAndUpdateDOM(trade.sellToken);
+      }
+      if (trade.buyToken) {
+        fetchTokenInfoAndUpdateDOM(trade.buyToken);
+      }
     }
 
     console.log(
