@@ -175,109 +175,19 @@ async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol
         console.log(`⏳ Waiting ${Math.round(delayMs)}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       } else {
-        // All retries failed, try fallback sources
-        console.log(`🔄 All ${maxRetries} attempts failed, trying fallback sources...`);
-        return await fetchTokenMetadataFallback(tokenAddress);
-      }
-    }
-  }
-
-  // This should never be reached due to the fallback above, but just in case
-  throw new Error(`Failed to fetch token metadata for ${tokenAddress} after ${maxRetries} attempts`);
-}
-
-/**
- * Fallback token metadata fetching from multiple sources
- */
-async function fetchTokenMetadataFallback(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
-  console.log(`🔄 Trying fallback sources for token: ${tokenAddress}`);
-  
-  // Try CoinGecko API as fallback
-  try {
-    console.log(`🔍 Trying CoinGecko API for ${tokenAddress}...`);
-    const response = await fetch(`https://api.coingecko.com/api/v3/coins/ethereum/contract/${tokenAddress}`, {
-      headers: {
-        'Accept': 'application/json'
-      },
-      signal: AbortSignal.timeout(10000) // 10 second timeout
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data.symbol && data.name) {
-        console.log(`✅ CoinGecko fallback successful: ${data.symbol} - ${data.name}`);
+        // All retries failed, default to 18 decimals
+        console.log(`🔄 All ${maxRetries} attempts failed, defaulting to 18 decimals...`);
         return {
-          symbol: data.symbol.toUpperCase(),
-          name: data.name,
-          decimals: data.detail_platforms?.ethereum?.decimal_place || 18
+          symbol: generateFallbackSymbol(tokenAddress),
+          name: `Token ${formatAddress(tokenAddress)}`,
+          decimals: 18
         };
       }
     }
-  } catch (error) {
-    console.warn(`⚠️ CoinGecko fallback failed for ${tokenAddress}:`, error);
   }
 
-  // Try Etherscan API as fallback
-  try {
-    console.log(`🔍 Trying Etherscan API for ${tokenAddress}...`);
-    const etherscanApiKey = process.env.ETHERSCAN_API_KEY || 'YourApiKeyToken'; // You'll need to set this
-    const response = await fetch(`https://api.etherscan.io/api?module=token&action=tokeninfo&contractaddress=${tokenAddress}&apikey=${etherscanApiKey}`, {
-      headers: {
-        'Accept': 'application/json'
-      },
-      signal: AbortSignal.timeout(10000)
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data.status === '1' && data.result && data.result[0]) {
-        const tokenData = data.result[0];
-        if (tokenData.symbol && tokenData.tokenName) {
-          console.log(`✅ Etherscan fallback successful: ${tokenData.symbol} - ${tokenData.tokenName}`);
-          return {
-            symbol: tokenData.symbol,
-            name: tokenData.tokenName,
-            decimals: parseInt(tokenData.divisor) || 18
-          };
-        }
-      }
-    }
-  } catch (error) {
-    console.warn(`⚠️ Etherscan fallback failed for ${tokenAddress}:`, error);
-  }
-
-  // Try Moralis API as fallback
-  try {
-    console.log(`🔍 Trying Moralis API for ${tokenAddress}...`);
-    const moralisApiKey = process.env.MORALIS_API_KEY; // You'll need to set this
-    if (moralisApiKey) {
-      const response = await fetch(`https://deep-index.moralis.io/api/v2/erc20/metadata?chain=eth&addresses[]=${tokenAddress}`, {
-        headers: {
-          'Accept': 'application/json',
-          'X-API-Key': moralisApiKey
-        },
-        signal: AbortSignal.timeout(10000)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data[0] && data[0].symbol && data[0].name) {
-          console.log(`✅ Moralis fallback successful: ${data[0].symbol} - ${data[0].name}`);
-          return {
-            symbol: data[0].symbol,
-            name: data[0].name,
-            decimals: parseInt(data[0].decimals) || 18
-          };
-        }
-      }
-    }
-  } catch (error) {
-    console.warn(`⚠️ Moralis fallback failed for ${tokenAddress}:`, error);
-  }
-
-  // All fallbacks failed, but don't generate fallback symbol - keep trying
-  console.warn(`❌ All fallback sources failed for ${tokenAddress}, will retry later`);
-  throw new Error(`All token metadata sources failed for ${tokenAddress}`);
+  // This should never be reached due to the default above, but just in case
+  throw new Error(`Failed to fetch token metadata for ${tokenAddress} after ${maxRetries} attempts`);
 }
 
 /**
