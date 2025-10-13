@@ -3187,6 +3187,62 @@ body {
   }
 }
 
+/* Direct Page Input */
+.pagination-direct-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pagination-page-input {
+  width: 80px;
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.pagination-page-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+  background: white;
+}
+
+.pagination-page-input::placeholder {
+  color: #999;
+  font-size: 12px;
+}
+
+.pagination-go-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+.pagination-go-button:hover {
+  background: #5a6fd8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.pagination-go-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
 /* Responsive pagination */
 @media (max-width: 768px) {
   .pagination-controls {
@@ -3825,4 +3881,30 @@ body {
   font-size: 12px;
   color: #4a5568;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* Skeleton loading animation for token addresses */
+.token-loading {
+  display: inline-block;
+  background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+  color: transparent !important;
+  user-select: none;
+  position: relative;
+}
+
+.token-loading::before {
+  content: attr(data-loading-text);
+  color: transparent;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }

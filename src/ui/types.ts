@@ -65,6 +65,7 @@ export interface TokenInfo {
   name: string;
   decimals: number;
   address: `0x${string}`;
+  isLoading?: boolean; // Indicates if this is a placeholder while fetching metadata
 }
 
 // UI State Types

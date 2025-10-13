@@ -14,6 +14,7 @@ import {
   formatAmount,
   formatAmountWithDecimals,
   formatTokenAmount,
+  formatTokenAmountSync,
   formatRawAmount,
   formatDatabaseDate,
   formatGasUsed,
@@ -27,6 +28,9 @@ import {
   calculateConversionRates,
   formatScientific,
   fetchTokenInfoAndUpdateDOM,
+  getRetryStatus,
+  retryAllUnresolvedTokens,
+  clearAllCaches,
 } from "./utils";
 import {
   fetchRecentTrades,
@@ -664,6 +668,9 @@ async function init(): Promise<void> {
   
   // Add manual refresh button
   addManualRefreshButton();
+  
+  // Add token retry status UI
+  addTokenRetryStatusUI();
 
   // Check API health
   const isHealthy = await checkAPIHealth();
@@ -723,6 +730,154 @@ function addManualRefreshButton(): void {
   tradesCountElement.parentNode?.insertBefore(refreshButton, tradesCountElement.nextSibling);
   
   console.log("✅ Manual refresh button added");
+}
+
+/**
+ * Add token retry status UI to show unresolved tokens and retry options
+ */
+function addTokenRetryStatusUI(): void {
+  // Find a good place to add the retry status UI
+  const tradesCountElement = document.getElementById("tradesCount");
+  if (!tradesCountElement) {
+    console.warn("⚠️ Could not find tradesCount element to add retry status UI");
+    return;
+  }
+
+  // Create retry status container
+  const retryStatusContainer = document.createElement("div");
+  retryStatusContainer.id = "tokenRetryStatus";
+  retryStatusContainer.className = "retry-status-container";
+  retryStatusContainer.style.cssText = `
+    margin: 10px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+  `;
+
+  // Create retry status content
+  const retryStatusContent = document.createElement("div");
+  retryStatusContent.id = "retryStatusContent";
+  retryStatusContent.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  `;
+
+  // Create retry button
+  const retryButton = document.createElement("button");
+  retryButton.id = "retryTokensButton";
+  retryButton.className = "retry-tokens-button";
+  retryButton.innerHTML = '<i class="fas fa-redo"></i> Retry Unresolved Tokens';
+  retryButton.style.cssText = `
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  `;
+  retryButton.title = "Retry fetching names for unresolved token addresses";
+
+  // Create clear cache button
+  const clearCacheButton = document.createElement("button");
+  clearCacheButton.id = "clearCacheButton";
+  clearCacheButton.className = "clear-cache-button";
+  clearCacheButton.innerHTML = '<i class="fas fa-trash"></i> Clear Cache';
+  clearCacheButton.style.cssText = `
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  `;
+  clearCacheButton.title = "Clear all token caches (for debugging)";
+
+  // Create status text
+  const statusText = document.createElement("span");
+  statusText.id = "retryStatusText";
+  statusText.style.cssText = `
+    color: #6c757d;
+    font-size: 12px;
+  `;
+
+  // Add event listeners
+  retryButton.addEventListener("click", async () => {
+    retryButton.disabled = true;
+    retryButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...';
+    
+    try {
+      await retryAllUnresolvedTokens();
+      showToast("Retrying unresolved tokens...", "info");
+      setTimeout(updateRetryStatusUI, 2000); // Update UI after 2 seconds
+    } catch (error) {
+      console.error("❌ Error during token retry:", error);
+      showToast("Failed to retry tokens", "error");
+    } finally {
+      retryButton.disabled = false;
+      retryButton.innerHTML = '<i class="fas fa-redo"></i> Retry Unresolved Tokens';
+    }
+  });
+
+  clearCacheButton.addEventListener("click", () => {
+    if (confirm("Are you sure you want to clear all token caches? This will remove all cached token information.")) {
+      clearAllCaches();
+      showToast("Token caches cleared", "success");
+      updateRetryStatusUI();
+    }
+  });
+
+  // Assemble the UI
+  retryStatusContent.appendChild(statusText);
+  retryStatusContent.appendChild(retryButton);
+  retryStatusContent.appendChild(clearCacheButton);
+  retryStatusContainer.appendChild(retryStatusContent);
+
+  // Insert after the trades count element
+  tradesCountElement.parentNode?.insertBefore(retryStatusContainer, tradesCountElement.nextSibling);
+
+  // Initial update
+  updateRetryStatusUI();
+
+  // Update periodically
+  setInterval(updateRetryStatusUI, 10000); // Update every 10 seconds
+
+  console.log("✅ Token retry status UI added");
+}
+
+/**
+ * Update the retry status UI based on current state
+ */
+function updateRetryStatusUI(): void {
+  const retryStatusContainer = document.getElementById("tokenRetryStatus");
+  const statusText = document.getElementById("retryStatusText");
+  const retryButton = document.getElementById("retryTokensButton") as HTMLButtonElement;
+
+  if (!retryStatusContainer || !statusText || !retryButton) {
+    return;
+  }
+
+  const status = getRetryStatus();
+  
+  if (status.unresolvedCount > 0) {
+    retryStatusContainer.style.display = "block";
+    statusText.textContent = `${status.unresolvedCount} token${status.unresolvedCount === 1 ? '' : 's'} unresolved${status.isRetrying ? ' (retrying...)' : ''}`;
+    retryButton.disabled = status.isRetrying;
+  } else {
+    retryStatusContainer.style.display = "none";
+  }
 }
 
 /**
@@ -1050,6 +1205,41 @@ async function goToPreviousPage(): Promise<void> {
 }
 
 /**
+ * Handle direct page input
+ */
+async function handleDirectPageInput(inputElement: HTMLInputElement): Promise<void> {
+  const pageNumber = parseInt(inputElement.value);
+  
+  // Validate input
+  if (isNaN(pageNumber)) {
+    showToast('Please enter a valid page number', 'error');
+    inputElement.value = state.pagination.currentPage.toString();
+    return;
+  }
+  
+  if (pageNumber < 1) {
+    showToast('Page number must be at least 1', 'error');
+    inputElement.value = state.pagination.currentPage.toString();
+    return;
+  }
+  
+  if (pageNumber > state.pagination.totalPages) {
+    showToast(`Page number cannot exceed ${state.pagination.totalPages}`, 'error');
+    inputElement.value = state.pagination.currentPage.toString();
+    return;
+  }
+  
+  // If it's the same page, just update the input value
+  if (pageNumber === state.pagination.currentPage) {
+    inputElement.value = state.pagination.currentPage.toString();
+    return;
+  }
+  
+  // Navigate to the page
+  await goToPage(pageNumber);
+}
+
+/**
  * Populate trades list in the UI
  */
 async function populateTradesList(): Promise<void> {
@@ -1232,9 +1422,37 @@ async function addPaginationControls(): Promise<void> {
   navigationControls.appendChild(pageNumbers);
   navigationControls.appendChild(nextButton);
 
+  // Create direct page input section
+  const directPageSection = document.createElement('div');
+  directPageSection.className = 'pagination-direct-input';
+  
+  const pageInput = document.createElement('input');
+  pageInput.type = 'number';
+  pageInput.min = '1';
+  pageInput.max = state.pagination.totalPages.toString();
+  pageInput.placeholder = 'Page';
+  pageInput.value = state.pagination.currentPage.toString();
+  pageInput.className = 'pagination-page-input';
+  
+  const goToPageButton = document.createElement('button');
+  goToPageButton.className = 'pagination-go-button';
+  goToPageButton.textContent = 'Go';
+  goToPageButton.addEventListener('click', () => handleDirectPageInput(pageInput));
+  
+  // Handle Enter key in input
+  pageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      handleDirectPageInput(pageInput);
+    }
+  });
+  
+  directPageSection.appendChild(pageInput);
+  directPageSection.appendChild(goToPageButton);
+
   // Add elements to container
   paginationContainer.appendChild(paginationInfo);
   paginationContainer.appendChild(navigationControls);
+  paginationContainer.appendChild(directPageSection);
 
   // Add to the trades grid container
   if (elements.tradesGrid && elements.tradesGrid.parentNode) {
@@ -1309,6 +1527,13 @@ async function updatePaginationControls(): Promise<void> {
         pageNumbers.appendChild(pageButton);
       }
     }
+  }
+
+  // Update direct page input
+  const pageInput = document.querySelector('.pagination-page-input') as HTMLInputElement;
+  if (pageInput) {
+    pageInput.value = state.pagination.currentPage.toString();
+    pageInput.max = state.pagination.totalPages.toString();
   }
 
   // No load more button to update
@@ -1626,12 +1851,12 @@ async function createTradeTableRow(
 
       console.log(`🔍 Trade ${index} token info:`, { sellToken, buyToken });
 
-      // Format amounts properly using token decimals
-      // Based on new database structure: amounts are in wei format, need to divide by decimals
-      const expectedSellAmount = await formatTokenAmount(trade.sellAmount, trade.sellToken);
-      const expectedBuyAmount = await formatTokenAmount(trade.buyAmount, trade.buyToken);
-      const executedBuyAmount = await formatTokenAmount(trade.executedBuyAmount, trade.buyToken);
-      const executedSellAmount = await formatTokenAmount(trade.executedSellAmount, trade.sellToken);
+      // Format amounts synchronously with default/cached decimals for instant display
+      // Will be updated asynchronously once accurate metadata is fetched
+      const expectedSellAmount = formatTokenAmountSync(trade.sellAmount, trade.sellToken);
+      const expectedBuyAmount = formatTokenAmountSync(trade.buyAmount, trade.buyToken);
+      const executedBuyAmount = formatTokenAmountSync(trade.executedBuyAmount, trade.buyToken);
+      const executedSellAmount = formatTokenAmountSync(trade.executedSellAmount, trade.sellToken);
 
       // Handle creationDate - it might be a Date object or a string from the database
       // Start with block number, update with full timestamp asynchronously
@@ -1645,9 +1870,9 @@ async function createTradeTableRow(
         <td class="trade-status success">Success</td>
         <td class="trade-amount">
           <span data-trade-index="${index}" data-amount-type="sell" data-token-address="${trade.sellToken}">${executedSellAmount}</span> 
-          <span data-token-address="${trade.sellToken}" data-token-field="symbol">${sellToken.symbol}</span> → 
+          <span data-token-address="${trade.sellToken}" data-token-field="symbol" class="${sellToken.isLoading ? 'token-loading' : ''}">${sellToken.symbol}</span> → 
           <span data-trade-index="${index}" data-amount-type="buy" data-token-address="${trade.buyToken}">${executedBuyAmount}</span> 
-          <span data-token-address="${trade.buyToken}" data-token-field="symbol">${buyToken.symbol}</span>
+          <span data-token-address="${trade.buyToken}" data-token-field="symbol" class="${buyToken.isLoading ? 'token-loading' : ''}">${buyToken.symbol}</span>
         </td>
         <td class="trade-date" data-trade-index="${index}" data-date-type="timestamp">${localeString}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
@@ -1701,9 +1926,9 @@ async function createTradeTableRow(
         <td class="trade-status success">Success</td>
         <td class="trade-amount">
           <span data-trade-index="${index}" data-amount-type="sell" data-token-address="${trade.sellToken || ''}">${rawSellAmount}</span> 
-          <span data-token-address="${trade.sellToken || ''}" data-token-field="symbol">${sellTokenAddress}</span> → 
+          <span data-token-address="${trade.sellToken || ''}" data-token-field="symbol" class="token-loading">${sellTokenAddress}</span> → 
           <span data-trade-index="${index}" data-amount-type="buy" data-token-address="${trade.buyToken || ''}">${rawBuyAmount}</span> 
-          <span data-token-address="${trade.buyToken || ''}" data-token-field="symbol">${buyTokenAddress}</span>
+          <span data-token-address="${trade.buyToken || ''}" data-token-field="symbol" class="token-loading">${buyTokenAddress}</span>
         </td>
         <td class="trade-date" data-trade-index="${index}" data-date-type="timestamp">${localeString}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
@@ -1825,9 +2050,9 @@ async function createTradeTableRow(
       trade.status || "Unknown"
     }</td>
       <td class="trade-amount">
-        ${formatAmount(tradeData.sellAmount, sellToken.decimals)} <span data-token-address="${tradeData.sellToken}" data-token-field="symbol">${
+        ${formatAmount(tradeData.sellAmount, sellToken.decimals)} <span data-token-address="${tradeData.sellToken}" data-token-field="symbol" class="${sellToken.isLoading ? 'token-loading' : ''}">${
       sellToken.symbol
-    }</span> → ${formatAmount(tradeData.buyAmount, buyToken.decimals)} <span data-token-address="${tradeData.buyToken}" data-token-field="symbol">${
+    }</span> → ${formatAmount(tradeData.buyAmount, buyToken.decimals)} <span data-token-address="${tradeData.buyToken}" data-token-field="symbol" class="${buyToken.isLoading ? 'token-loading' : ''}">${
       buyToken.symbol
     }</span>
       </td>

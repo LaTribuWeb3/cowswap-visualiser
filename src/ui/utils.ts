@@ -7,6 +7,73 @@ const tokenDecimalsCache: Record<`0x${string}`, number> = {};
 const tokenSymbolsCache: Record<`0x${string}`, string> = {};
 const tokenInfoCache: Record<`0x${string}`, TokenInfo> = {};
 
+// Persistent cache keys for localStorage
+const TOKEN_CACHE_KEY = 'cow_swap_token_cache';
+const FAILED_LOOKUPS_KEY = 'cow_swap_failed_lookups';
+
+/**
+ * Load token cache from localStorage
+ */
+function loadTokenCacheFromStorage(): void {
+  try {
+    const cached = localStorage.getItem(TOKEN_CACHE_KEY);
+    if (cached) {
+      const cacheData = JSON.parse(cached);
+      Object.assign(tokenInfoCache, cacheData);
+      console.log(`📦 Loaded ${Object.keys(cacheData).length} tokens from persistent cache`);
+    }
+  } catch (error) {
+    console.warn('Failed to load token cache from localStorage:', error);
+  }
+}
+
+/**
+ * Save token cache to localStorage
+ */
+function saveTokenCacheToStorage(): void {
+  try {
+    localStorage.setItem(TOKEN_CACHE_KEY, JSON.stringify(tokenInfoCache));
+    console.log(`💾 Saved ${Object.keys(tokenInfoCache).length} tokens to persistent cache`);
+  } catch (error) {
+    console.warn('Failed to save token cache to localStorage:', error);
+  }
+}
+
+/**
+ * Load failed lookups from localStorage
+ */
+function loadFailedLookupsFromStorage(): void {
+  try {
+    const cached = localStorage.getItem(FAILED_LOOKUPS_KEY);
+    if (cached) {
+      const failedLookups = JSON.parse(cached);
+      failedLookups.forEach((address: string) => {
+        if (!tokenInfoCache[address as `0x${string}`]) {
+          failedTokenLookups.add(address);
+        }
+      });
+      console.log(`📦 Loaded ${failedLookups.length} failed lookups from persistent cache`);
+    }
+  } catch (error) {
+    console.warn('Failed to load failed lookups from localStorage:', error);
+  }
+}
+
+/**
+ * Save failed lookups to localStorage
+ */
+function saveFailedLookupsToStorage(): void {
+  try {
+    localStorage.setItem(FAILED_LOOKUPS_KEY, JSON.stringify(Array.from(failedTokenLookups)));
+  } catch (error) {
+    console.warn('Failed to save failed lookups to localStorage:', error);
+  }
+}
+
+// Initialize caches from localStorage when the module loads
+loadTokenCacheFromStorage();
+loadFailedLookupsFromStorage();
+
 // Known token information
 const KNOWN_TOKENS: Record<`0x${string}`, TokenInfo> = {
   '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': {
@@ -99,6 +166,37 @@ const KNOWN_TOKENS: Record<`0x${string}`, TokenInfo> = {
     name: 'Maker',
     decimals: 18,
     address: '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2'
+  },
+  // Add more common tokens that might appear in COW swaps
+  '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee': {
+    symbol: 'ETH',
+    name: 'Ethereum',
+    decimals: 18,
+    address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+  },
+  '0x5e8422345238f34275888049021821e8e08caa1f': {
+    symbol: 'aEthUSDC',
+    name: 'Aave Ethereum USDC',
+    decimals: 6,
+    address: '0x5e8422345238f34275888049021821e8e08caa1f'
+  },
+  '0x4d5f47fa6a74757f35c14fd3a6ef8e3c9bc514e8': {
+    symbol: 'aEthWETH',
+    name: 'Aave Ethereum WETH',
+    decimals: 18,
+    address: '0x4d5f47fa6a74757f35c14fd3a6ef8e3c9bc514e8'
+  },
+  '0x5e8c8a5c8d5c8d5c8d5c8d5c8d5c8d5c8d5c8d5c': {
+    symbol: 'aEthWBTC',
+    name: 'Aave Ethereum WBTC',
+    decimals: 8,
+    address: '0x5e8c8a5c8d5c8d5c8d5c8d5c8d5c8d5c8d5c8d5c'
+  },
+  '0x6f40d4a6237c257fff2db00fa0510deeecd303eb': {
+    symbol: 'PNKSTR',
+    name: 'Pinkstreet Token',
+    decimals: 18,
+    address: '0x6f40d4a6237c257fff2db00fa0510deeecd303eb'
   },
   '0x0D8775F648430679A709E98d2b0Cb6250d2887EF': {
     symbol: 'BAT',
@@ -229,30 +327,47 @@ export function getTokenInfo(tokenAddress: `0x${string}`): TokenInfo {
 }
 
 /**
- * Fetch token metadata from la-tribu API
+ * Fetch token metadata with enhanced retry logic and multiple fallback sources
  */
 async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
-  try {
-    console.log(`🔍 Fetching token metadata for: ${tokenAddress}`);
-    
-    const response = await fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/ethereum/${tokenAddress}`, {
+  const maxRetries = 5;
+  const timeoutMs = 15000; // 15 seconds timeout
+  const retryDelayMs = 2000; // 2 seconds between retries
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔍 Attempt ${attempt}/${maxRetries} to fetch token metadata for: ${tokenAddress}`);
+      
+      // Create a timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
+      });
+
+      // Create the fetch promise with enhanced error handling
+      const fetchPromise = fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/ethereum/${tokenAddress}`, {
       headers: {
         'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
+          'Content-Type': 'application/json',
+          'User-Agent': 'COW-Swap-Visualizer/1.0'
+        },
+        // Add timeout to the fetch itself
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      
+      // Race between timeout and fetch
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
     }
 
     const data = await response.json();
     
     if (!data.symbol || !data.name) {
-      throw new Error('Invalid token metadata response');
+        throw new Error('Invalid token metadata response - missing symbol or name');
     }
 
-    console.log(`✅ Fetched token metadata: ${data.symbol} - ${data.name} (${data.decimals || 18} decimals)`);
+      console.log(`✅ Fetched token metadata on attempt ${attempt}: ${data.symbol} - ${data.name} (${data.decimals || 18} decimals)`);
     
     // Debug: Check if decimals are missing or suspicious
     if (!data.decimals || data.decimals === 0) {
@@ -264,10 +379,140 @@ async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol
       name: data.name,
       decimals: data.decimals || 18
     };
+
   } catch (error) {
-    console.warn(`Failed to fetch token metadata for ${tokenAddress}:`, error);
-    throw error;
+      console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for ${tokenAddress}:`, error);
+      
+      if (attempt < maxRetries) {
+        // Exponential backoff with jitter
+        const baseDelay = retryDelayMs * Math.pow(1.5, attempt - 1);
+        const jitter = Math.random() * 1000; // Add up to 1 second of jitter
+        const delayMs = Math.min(baseDelay + jitter, 10000); // Cap at 10 seconds
+        
+        console.log(`⏳ Waiting ${Math.round(delayMs)}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        // All retries failed, try fallback sources
+        console.log(`🔄 All ${maxRetries} attempts failed, trying fallback sources...`);
+        return await fetchTokenMetadataFallback(tokenAddress);
+      }
+    }
   }
+
+  // This should never be reached due to the fallback above, but just in case
+  throw new Error(`Failed to fetch token metadata for ${tokenAddress} after ${maxRetries} attempts`);
+}
+
+/**
+ * Fallback token metadata fetching from multiple sources
+ */
+async function fetchTokenMetadataFallback(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
+  console.log(`🔄 Trying fallback sources for token: ${tokenAddress}`);
+  
+  // Try CoinGecko API as fallback
+  try {
+    console.log(`🔍 Trying CoinGecko API for ${tokenAddress}...`);
+    const response = await fetch(`https://api.coingecko.com/api/v3/coins/ethereum/contract/${tokenAddress}`, {
+      headers: {
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(10000) // 10 second timeout
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.symbol && data.name) {
+        console.log(`✅ CoinGecko fallback successful: ${data.symbol} - ${data.name}`);
+        return {
+          symbol: data.symbol.toUpperCase(),
+          name: data.name,
+          decimals: data.detail_platforms?.ethereum?.decimal_place || 18
+        };
+      }
+    }
+  } catch (error) {
+    console.warn(`⚠️ CoinGecko fallback failed for ${tokenAddress}:`, error);
+  }
+
+  // Try Etherscan API as fallback
+  try {
+    console.log(`🔍 Trying Etherscan API for ${tokenAddress}...`);
+    const etherscanApiKey = process.env.ETHERSCAN_API_KEY || 'YourApiKeyToken'; // You'll need to set this
+    const response = await fetch(`https://api.etherscan.io/api?module=token&action=tokeninfo&contractaddress=${tokenAddress}&apikey=${etherscanApiKey}`, {
+      headers: {
+        'Accept': 'application/json'
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.status === '1' && data.result && data.result[0]) {
+        const tokenData = data.result[0];
+        if (tokenData.symbol && tokenData.tokenName) {
+          console.log(`✅ Etherscan fallback successful: ${tokenData.symbol} - ${tokenData.tokenName}`);
+          return {
+            symbol: tokenData.symbol,
+            name: tokenData.tokenName,
+            decimals: parseInt(tokenData.divisor) || 18
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`⚠️ Etherscan fallback failed for ${tokenAddress}:`, error);
+  }
+
+  // Try Moralis API as fallback
+  try {
+    console.log(`🔍 Trying Moralis API for ${tokenAddress}...`);
+    const moralisApiKey = process.env.MORALIS_API_KEY; // You'll need to set this
+    if (moralisApiKey) {
+      const response = await fetch(`https://deep-index.moralis.io/api/v2/erc20/metadata?chain=eth&addresses[]=${tokenAddress}`, {
+        headers: {
+          'Accept': 'application/json',
+          'X-API-Key': moralisApiKey
+        },
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data[0] && data[0].symbol && data[0].name) {
+          console.log(`✅ Moralis fallback successful: ${data[0].symbol} - ${data[0].name}`);
+          return {
+            symbol: data[0].symbol,
+            name: data[0].name,
+            decimals: parseInt(data[0].decimals) || 18
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`⚠️ Moralis fallback failed for ${tokenAddress}:`, error);
+  }
+
+  // All fallbacks failed, generate a fallback symbol
+  console.warn(`❌ All fallback sources failed for ${tokenAddress}, generating fallback symbol`);
+  return {
+    symbol: generateFallbackSymbol(tokenAddress),
+    name: `Token ${formatAddress(tokenAddress)}`,
+    decimals: 18
+  };
+}
+
+/**
+ * Generate a fallback symbol when all sources fail
+ */
+function generateFallbackSymbol(tokenAddress: string): string {
+  // Special case for ETH
+  if (tokenAddress.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
+    return 'ETH';
+  }
+  
+  // Extract first 4 characters after 0x for a readable symbol
+  const shortAddress = tokenAddress.slice(2, 6).toUpperCase();
+  return `TKN${shortAddress}`;
 }
 
 /**
@@ -291,7 +536,8 @@ export function getTokenInfoSync(tokenAddress: `0x${string}`): TokenInfo {
     symbol: formatAddress(tokenAddress),
     name: formatAddress(tokenAddress),
     decimals: 18, // Default to 18, but we'll show raw amounts when decimals are unknown
-    address: tokenAddress
+    address: tokenAddress,
+    isLoading: true // Mark as loading to apply skeleton animation
   };
   
   return placeholderInfo;
@@ -346,6 +592,12 @@ export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<To
 }
 
 /**
+ * Track failed token lookups for background retry
+ */
+const failedTokenLookups = new Set<string>();
+const retryQueue: string[] = [];
+
+/**
  * Fetch token info async and update all DOM elements tagged with this address
  * This allows for progressive enhancement of the UI
  */
@@ -354,19 +606,19 @@ export async function fetchTokenInfoAndUpdateDOM(
 ): Promise<void> {
   // If already cached, update immediately
   if (tokenInfoCache[tokenAddress]) {
-    await updateAllTokenElements(tokenAddress, tokenInfoCache[tokenAddress]);
+    updateAllTokenElements(tokenAddress, tokenInfoCache[tokenAddress]);
     return;
   }
 
   // If it's a known token, cache and update immediately
   if (KNOWN_TOKENS[tokenAddress]) {
     tokenInfoCache[tokenAddress] = KNOWN_TOKENS[tokenAddress];
-    await updateAllTokenElements(tokenAddress, KNOWN_TOKENS[tokenAddress]);
+    updateAllTokenElements(tokenAddress, KNOWN_TOKENS[tokenAddress]);
     return;
   }
 
   try {
-    // Fetch token metadata from la-tribu API
+    // Fetch token metadata with enhanced retry logic
     const metadata = await fetchTokenMetadata(tokenAddress);
     
     const tokenInfo: TokenInfo = {
@@ -381,22 +633,178 @@ export async function fetchTokenInfoAndUpdateDOM(
     tokenSymbolsCache[tokenAddress] = metadata.symbol;
     tokenDecimalsCache[tokenAddress] = metadata.decimals;
     
+    // Remove from failed lookups if it was there
+    failedTokenLookups.delete(tokenAddress);
+    
+    // Save to persistent cache
+    saveTokenCacheToStorage();
+    saveFailedLookupsToStorage();
+    
     // Update all DOM elements with this token address
-    await updateAllTokenElements(tokenAddress, tokenInfo);
+    updateAllTokenElements(tokenAddress, tokenInfo);
     
     console.log(`✅ Updated all elements for token ${tokenAddress} with: ${tokenInfo.symbol} - ${tokenInfo.name}`);
   } catch (error) {
     console.warn(`Failed to fetch token info for ${tokenAddress}:`, error);
     
-    // Fallback to formatted address - don't update since
-    // the display already shows the address
+    // Add to failed lookups for background retry
+    failedTokenLookups.add(tokenAddress);
+    if (!retryQueue.includes(tokenAddress)) {
+      retryQueue.push(tokenAddress);
+    }
+    
+    // Start background retry process if not already running
+    if (retryQueue.length === 1) {
+      setTimeout(() => retryFailedTokenLookups(), 5000); // Retry after 5 seconds
+    }
+  }
+}
+
+/**
+ * Background retry process for failed token lookups
+ */
+async function retryFailedTokenLookups(): Promise<void> {
+  if (retryQueue.length === 0) {
+    return;
+  }
+
+  console.log(`🔄 Starting background retry for ${retryQueue.length} failed token lookups...`);
+  
+  const tokensToRetry = [...retryQueue];
+  retryQueue.length = 0; // Clear the queue
+  
+  for (const tokenAddress of tokensToRetry) {
+    if (tokenInfoCache[tokenAddress as `0x${string}`]) {
+      // Already resolved, skip
+      continue;
+    }
+    
+    try {
+      console.log(`🔄 Background retry for token: ${tokenAddress}`);
+      const metadata = await fetchTokenMetadata(tokenAddress as `0x${string}`);
+      
+      const tokenInfo: TokenInfo = {
+        symbol: metadata.symbol,
+        name: metadata.name,
+        decimals: metadata.decimals,
+        address: tokenAddress as `0x${string}`
+      };
+      
+      // Cache the complete token info
+      tokenInfoCache[tokenAddress as `0x${string}`] = tokenInfo;
+      tokenSymbolsCache[tokenAddress as `0x${string}`] = metadata.symbol;
+      tokenDecimalsCache[tokenAddress as `0x${string}`] = metadata.decimals;
+      
+      // Remove from failed lookups
+      failedTokenLookups.delete(tokenAddress);
+      
+      // Save to persistent cache
+      saveTokenCacheToStorage();
+      saveFailedLookupsToStorage();
+      
+      // Update all DOM elements with this token address
+      updateAllTokenElements(tokenAddress, tokenInfo);
+      
+      console.log(`✅ Background retry successful for ${tokenAddress}: ${tokenInfo.symbol} - ${tokenInfo.name}`);
+      
+      // Small delay between retries to avoid overwhelming APIs
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+    } catch (error) {
+      console.warn(`⚠️ Background retry failed for ${tokenAddress}:`, error);
+      // Keep in failed lookups for potential future retry
+    }
+  }
+  
+  // Schedule another retry if there are still failed lookups
+  if (failedTokenLookups.size > 0) {
+    console.log(`⏳ Scheduling another retry in 30 seconds for ${failedTokenLookups.size} remaining tokens...`);
+    setTimeout(() => retryFailedTokenLookups(), 30000); // Retry again in 30 seconds
+  }
+}
+
+/**
+ * Get list of currently unresolved token addresses
+ */
+export function getUnresolvedTokens(): string[] {
+  return Array.from(failedTokenLookups);
+}
+
+/**
+ * Force retry for specific token addresses
+ */
+export async function forceRetryTokens(tokenAddresses: string[]): Promise<void> {
+  for (const address of tokenAddresses) {
+    if (!retryQueue.includes(address)) {
+      retryQueue.push(address);
+    }
+  }
+  
+  if (retryQueue.length > 0) {
+    setTimeout(() => retryFailedTokenLookups(), 1000); // Retry in 1 second
+  }
+}
+
+/**
+ * Get retry status for UI display
+ */
+export function getRetryStatus(): { 
+  unresolvedCount: number; 
+  unresolvedTokens: string[]; 
+  isRetrying: boolean 
+} {
+  return {
+    unresolvedCount: failedTokenLookups.size,
+    unresolvedTokens: Array.from(failedTokenLookups),
+    isRetrying: retryQueue.length > 0
+  };
+}
+
+/**
+ * Force retry all unresolved tokens
+ */
+export async function retryAllUnresolvedTokens(): Promise<void> {
+  const unresolvedTokens = Array.from(failedTokenLookups);
+  console.log(`🔄 Force retrying ${unresolvedTokens.length} unresolved tokens...`);
+  
+  for (const address of unresolvedTokens) {
+    if (!retryQueue.includes(address)) {
+      retryQueue.push(address);
+    }
+  }
+  
+  if (retryQueue.length > 0) {
+    setTimeout(() => retryFailedTokenLookups(), 500); // Retry immediately
+  }
+}
+
+/**
+ * Clear all caches (useful for debugging)
+ */
+export function clearAllCaches(): void {
+  // Clear memory caches
+  Object.keys(tokenInfoCache).forEach(key => delete tokenInfoCache[key as `0x${string}`]);
+  Object.keys(tokenSymbolsCache).forEach(key => delete tokenSymbolsCache[key as `0x${string}`]);
+  Object.keys(tokenDecimalsCache).forEach(key => delete tokenDecimalsCache[key as `0x${string}`]);
+  
+  // Clear failed lookups
+  failedTokenLookups.clear();
+  retryQueue.length = 0;
+  
+  // Clear localStorage
+  try {
+    localStorage.removeItem(TOKEN_CACHE_KEY);
+    localStorage.removeItem(FAILED_LOOKUPS_KEY);
+    console.log('🧹 All caches cleared');
+  } catch (error) {
+    console.warn('Failed to clear localStorage caches:', error);
   }
 }
 
 /**
  * Update all DOM elements tagged with a specific token address
  */
-async function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): Promise<void> {
+function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo): void {
   // Find all elements tagged with this token address
   const symbolElements = document.querySelectorAll(`[data-token-address="${tokenAddress}"][data-token-field="symbol"]`);
   const nameElements = document.querySelectorAll(`[data-token-address="${tokenAddress}"][data-token-field="name"]`);
@@ -405,15 +813,20 @@ async function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo
   // Update all symbol elements
   symbolElements.forEach(element => {
     element.textContent = tokenInfo.symbol;
+    // Remove loading class once real data is loaded
+    element.classList.remove('token-loading');
   });
   
   // Update all name elements
   nameElements.forEach(element => {
     element.textContent = tokenInfo.name;
+    // Remove loading class once real data is loaded
+    element.classList.remove('token-loading');
   });
   
-  // Update all amount elements with proper decimals (use for...of to handle async properly)
-  for (const element of Array.from(amountElements)) {
+  // Update all amount elements with proper decimals
+  // We already have tokenInfo with correct decimals, so use it directly
+  amountElements.forEach(element => {
     const tradeIndex = element.getAttribute('data-trade-index');
     const amountType = element.getAttribute('data-amount-type');
     
@@ -433,7 +846,7 @@ async function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo
               
               if (rawAmount) {
                 console.log(`🔍 Formatting ${amountType} amount for trade ${tradeIndex}: raw=${rawAmount}, token=${tokenAddress}, decimals=${tokenInfo.decimals}`);
-                const formattedAmount = await formatTokenAmount(rawAmount, tokenAddress as `0x${string}`);
+                const formattedAmount = formatAmountWithDecimals(rawAmount, tokenInfo.decimals);
                 element.textContent = formattedAmount;
                 console.log(`✅ Updated ${amountType} amount for trade ${tradeIndex}: ${formattedAmount}`);
               }
@@ -444,7 +857,7 @@ async function updateAllTokenElements(tokenAddress: string, tokenInfo: TokenInfo
         console.warn(`⚠️ Failed to update amount for trade ${tradeIndex}:`, error);
       }
     }
-  }
+  });
   
   console.log(`✅ Updated ${symbolElements.length} symbol elements, ${nameElements.length} name elements, and ${amountElements.length} amount elements for ${tokenAddress}`);
 }
@@ -636,6 +1049,23 @@ export function formatAmountWithDecimals(amount: string | undefined | null, deci
   const displayFractional = trimmedFractional.slice(0, 6);
   
   return `${integerPart}.${displayFractional}`;
+}
+
+/**
+ * Format token amount synchronously using cached decimals or default 18
+ * For instant display - will be updated once metadata is fetched
+ */
+export function formatTokenAmountSync(amount: string | undefined | null, tokenAddress: `0x${string}`): string {
+  if (!amount) return '0';
+  
+  try {
+    // Check if we have cached token info
+    const tokenInfo = getTokenInfoSync(tokenAddress);
+    return formatAmountWithDecimals(amount, tokenInfo.decimals);
+  } catch (error) {
+    console.warn(`Failed to format amount for ${tokenAddress}, showing raw amount:`, error);
+    return formatRawAmount(amount);
+  }
 }
 
 /**
