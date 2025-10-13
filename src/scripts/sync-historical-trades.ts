@@ -171,7 +171,8 @@ ENVIRONMENT VARIABLES:
   MONGODB_URI     - MongoDB connection string
   DB_NAME         - Database name (default: cow-visualiser)
   COLLECTION_NAME - Collection name (default: transactions)
-  RPC_URL         - Ethereum RPC URL for blockchain scanning
+  RPC_BASE_URL    - RPC load balancer base URL
+  RPC_TOKEN       - RPC authentication token
 `);
 }
 

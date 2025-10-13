@@ -18,8 +18,11 @@ module.exports = {
 
   NETWORK: process.env.NETWORK || 'mainnet',
   
-  // Ethereum Settings (Development)
-  ETHEREUM_RPC_URL: process.env.RPC_URL || 'https://eth-mainnet.g.alchemy.com/v2/demo',
+  // Ethereum Settings (Development) - RPC Load Balancer
+  RPC_BASE_URL: process.env.RPC_BASE_URL || 'https://rpc.example.com',
+  NETWORK_ID: process.env.NETWORK_ID || '1',
+  RPC_TOKEN: process.env.RPC_TOKEN || 'demo',
+  ETHEREUM_RPC_URL: `${process.env.RPC_BASE_URL || 'https://rpc.example.com'}/${process.env.NETWORK_ID || '1'}/${process.env.RPC_TOKEN || 'demo'}`,
   
   // CoW Protocol Settings
   COW_PROTOCOL_CONTRACT: process.env.COW_PROTOCOL_CONTRACT || '0x9008D19f58AAbD9eD0d60971565AA8510560ab41',

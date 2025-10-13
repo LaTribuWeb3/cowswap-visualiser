@@ -3,6 +3,49 @@ import { Transaction, APIResponse, BinancePriceData } from './types';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
 
 /**
+ * Get current network ID from sessionStorage
+ */
+export function getCurrentNetworkId(): string {
+  if (typeof window !== 'undefined') {
+    return sessionStorage.getItem('NETWORK_ID') || '1';
+  }
+  return '1';
+}
+
+/**
+ * Switch to a different network
+ */
+export async function switchNetwork(networkId: string): Promise<boolean> {
+  try {
+    console.log(`🔄 Calling backend to switch to network ${networkId}...`);
+    
+    const response = await fetch(`${API_BASE_URL}/api/network/switch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ networkId })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to switch network');
+    }
+    
+    console.log(`✅ Backend switched to network ${networkId}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Error switching network:', error);
+    return false;
+  }
+}
+
+/**
  * Fetch recent trades from the API
  */
 export async function fetchRecentTrades(limit: number = 50, offset: number = 0): Promise<Transaction[]> {
@@ -141,7 +184,11 @@ export async function fetchTradeByHash(hash: string): Promise<Transaction | null
  */
 export async function fetchRecentEvents(): Promise<any[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/events`);
+    const networkId = getCurrentNetworkId();
+    const url = new URL(`${API_BASE_URL}/api/events`);
+    url.searchParams.append('networkId', networkId);
+    
+    const response = await fetch(url.toString());
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -229,7 +276,11 @@ export async function fetchTokenDecimals(tokenAddress: string): Promise<number> 
  */
 export async function getBlockTimestamp(blockNumber: number): Promise<number> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/block-timestamp/${blockNumber}`);
+    const networkId = getCurrentNetworkId();
+    const url = new URL(`${API_BASE_URL}/api/block-timestamp/${blockNumber}`);
+    url.searchParams.append('networkId', networkId);
+    
+    const response = await fetch(url.toString());
     
     if (!response.ok) {
       if (response.status === 404) {

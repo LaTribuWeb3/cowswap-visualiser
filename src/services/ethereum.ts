@@ -6,16 +6,19 @@ import {
   formatEther,
   formatUnits,
   parseAbiItem,
+  PublicClient,
 } from "viem";
 import { mainnet } from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
 
 // CoW Protocol contract address (mainnet)
-const COW_PROTOCOL_ADDRESS = process.env.COW_PROTOCOL_CONTRACT || "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
+const COW_PROTOCOL_ADDRESS =
+  process.env.COW_PROTOCOL_CONTRACT ||
+  "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
 
 export class EthereumService {
-  private client;
-  private contract;
+  private client!: PublicClient;
+  private contract!: any;
   private blockCache: Map<number, number> = new Map();
   private readonly CACHE_SIZE_LIMIT = 1000;
   private readonly dateToBlockNumber: Map<number, number> = new Map();
@@ -25,29 +28,44 @@ export class EthereumService {
   private readonly BASE_DELAY: number;
   private readonly MAX_DELAY: number;
   private readonly BACKOFF_MULTIPLIER: number;
-  
+
   // Batch processing configuration
   private readonly MAX_BATCH_SIZE: number;
   private readonly BATCH_DELAY_MS: number;
 
-  constructor() {
-    // Get RPC URL from environment variables
-    const rpcUrl =
-      process.env.RPC_URL || "https://arb-mainnet.g.alchemy.com/v2/demo"; 
+  constructor(networkId?: string) {
+    this.switchNetwork(networkId);
 
     // Initialize backoff configuration from environment variables
     this.MAX_RETRIES = parseInt(process.env.RPC_BACKOFF_MAX_RETRIES || "5");
     this.BASE_DELAY = parseInt(process.env.RPC_BACKOFF_BASE_DELAY || "1000");
     this.MAX_DELAY = parseInt(process.env.RPC_BACKOFF_MAX_DELAY || "30000");
-    this.BACKOFF_MULTIPLIER = parseFloat(process.env.RPC_BACKOFF_MULTIPLIER || "2");
-    
+    this.BACKOFF_MULTIPLIER = parseFloat(
+      process.env.RPC_BACKOFF_MULTIPLIER || "2"
+    );
+
     // Initialize batch processing configuration
     this.MAX_BATCH_SIZE = parseInt(process.env.BATCH_SIZE || "100");
     this.BATCH_DELAY_MS = parseInt(process.env.BATCH_DELAY_MS || "1000");
 
+    console.log(
+      `🔄 Backoff config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}`
+    );
+    console.log(
+      `🚀 Batch config: maxBatchSize=${this.MAX_BATCH_SIZE}, batchDelay=${this.BATCH_DELAY_MS}ms`
+    );
+  }
+
+  public switchNetwork(networkId?: string) {
+    // Construct RPC URL from environment variables
+    const rpcBaseUrl = process.env.RPC_BASE_URL || "https://rpc.example.com";
+    // Use provided networkId, or default to 1 (Ethereum Mainnet)
+    const actualNetworkId = networkId || "1";
+    const rpcToken = process.env.RPC_TOKEN || "demo";
+    const rpcUrl = `${rpcBaseUrl}/${actualNetworkId}/${rpcToken}`;
+
+    console.log(`🔗 Switching to network ${actualNetworkId}`);
     console.log(`🔗 Using RPC URL: ${rpcUrl}`);
-    console.log(`🔄 Backoff config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}`);
-    console.log(`🚀 Batch config: maxBatchSize=${this.MAX_BATCH_SIZE}, batchDelay=${this.BATCH_DELAY_MS}ms`);
 
     // Create public client for Mainnet
     this.client = createPublicClient({
@@ -75,7 +93,7 @@ export class EthereumService {
    * Sleep for specified milliseconds
    */
   private async sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -87,33 +105,49 @@ export class EthereumService {
     maxRetries: number = this.MAX_RETRIES
   ): Promise<T> {
     let lastError: Error | null = null;
-    
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         if (attempt > 0) {
           const delay = this.calculateBackoffDelay(attempt - 1);
-          console.log(`🔄 Retrying ${operationName} (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms delay...`);
+          console.log(
+            `🔄 Retrying ${operationName} (attempt ${attempt + 1}/${
+              maxRetries + 1
+            }) after ${delay}ms delay...`
+          );
           await this.sleep(delay);
         }
-        
+
         return await operation();
       } catch (error) {
         lastError = error as Error;
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
         // Check if it's a retryable error
         const isRetryableError = this.isRetryableRpcError(errorMessage);
-        
+
         if (!isRetryableError || attempt === maxRetries) {
-          console.error(`❌ ${operationName} failed after ${attempt + 1} attempts:`, errorMessage);
+          console.error(
+            `❌ ${operationName} failed after ${attempt + 1} attempts:`,
+            errorMessage
+          );
           throw error;
         }
-        
-        console.warn(`⚠️ ${operationName} failed (attempt ${attempt + 1}/${maxRetries + 1}):`, errorMessage);
+
+        console.warn(
+          `⚠️ ${operationName} failed (attempt ${attempt + 1}/${
+            maxRetries + 1
+          }):`,
+          errorMessage
+        );
       }
     }
-    
-    throw lastError || new Error(`${operationName} failed after ${maxRetries + 1} attempts`);
+
+    throw (
+      lastError ||
+      new Error(`${operationName} failed after ${maxRetries + 1} attempts`)
+    );
   }
 
   /**
@@ -121,25 +155,25 @@ export class EthereumService {
    */
   private isRetryableRpcError(errorMessage: string): boolean {
     const retryableErrors = [
-      'timeout',
-      'connection',
-      'network',
-      'rate limit',
-      'too many requests',
-      'service unavailable',
-      'internal server error',
-      'bad gateway',
-      'gateway timeout',
-      'request timeout',
-      'socket hang up',
-      'ECONNRESET',
-      'ENOTFOUND',
-      'ETIMEDOUT',
-      'ECONNREFUSED'
+      "timeout",
+      "connection",
+      "network",
+      "rate limit",
+      "too many requests",
+      "service unavailable",
+      "internal server error",
+      "bad gateway",
+      "gateway timeout",
+      "request timeout",
+      "socket hang up",
+      "ECONNRESET",
+      "ENOTFOUND",
+      "ETIMEDOUT",
+      "ECONNREFUSED",
     ];
-    
+
     const lowerErrorMessage = errorMessage.toLowerCase();
-    return retryableErrors.some(error => lowerErrorMessage.includes(error));
+    return retryableErrors.some((error) => lowerErrorMessage.includes(error));
   }
 
   /**
@@ -153,7 +187,7 @@ export class EthereumService {
       const entries = Array.from(this.blockCache.entries());
       // Sort by block number to remove oldest (lowest block numbers)
       entries.sort((a, b) => a[0] - b[0]);
-      
+
       // Remove the oldest 10% of entries
       const entriesToRemove = Math.floor(this.CACHE_SIZE_LIMIT * 0.1);
       for (let i = 0; i < entriesToRemove; i++) {
@@ -165,21 +199,20 @@ export class EthereumService {
   /**
    * Fetch block timestamp using viem (RPC call)
    */
-  private async fetchBlockTimestampFromRPC(blockNumber: number): Promise<number> {
-    return await this.executeWithBackoff(
-      async () => {
-        const block = await this.client.getBlock({
-          blockNumber: BigInt(blockNumber),
-        });
-        if (block) {
-          const timestamp = Number(block.timestamp);
-          this.addToCache(blockNumber, timestamp);
-          return timestamp;
-        }
-        return 0;
-      },
-      `fetchBlockTimestampFromRPC(${blockNumber})`
-    );
+  private async fetchBlockTimestampFromRPC(
+    blockNumber: number
+  ): Promise<number> {
+    return await this.executeWithBackoff(async () => {
+      const block = await this.client.getBlock({
+        blockNumber: BigInt(blockNumber),
+      });
+      if (block) {
+        const timestamp = Number(block.timestamp);
+        this.addToCache(blockNumber, timestamp);
+        return timestamp;
+      }
+      return 0;
+    }, `fetchBlockTimestampFromRPC(${blockNumber})`);
   }
 
   async getBlockTimestamp(blockNumber: number): Promise<number> {
@@ -195,29 +228,32 @@ export class EthereumService {
      * &timestamp=1578638524
      * &closest=before
      * &apikey=YourApiKeyToken
-     * 
+     *
      * to get the block number from a date
      */
     // Convert to Unix timestamp in seconds (must be an integer)
     const timestamp = Math.floor(date.getTime() / 1000);
-    
-    if(this.dateToBlockNumber.has(timestamp)) {
+
+    if (this.dateToBlockNumber.has(timestamp)) {
       return this.dateToBlockNumber.get(timestamp)!;
     } else {
       // Get chain ID from environment variable (default to Ethereum mainnet)
       const chainId = process.env.CHAIN_ID || "1";
-      
-      const blockNumber = await this.executeWithBackoff(
-        async () => {
-          const response = await fetch(`https://api.etherscan.io/v2/api?chainid=${chainId}&module=block&action=getblocknobytime&timestamp=${timestamp}&closest=before&apikey=${process.env.ETHERSCAN_API_KEY}`);
-          const data = await response.json();
-          if (data.status !== "1") {
-            throw new Error(`Failed to get block number from date: ${data.result} (timestamp: ${timestamp}, date: ${date.toISOString()})`);
-          }
-          return data.result;
-        },
-        `getBlockNumberFromDate(${date.toISOString()})`
-      );
+
+      const blockNumber = await this.executeWithBackoff(async () => {
+        const response = await fetch(
+          `https://api.etherscan.io/v2/api?chainid=${chainId}&module=block&action=getblocknobytime&timestamp=${timestamp}&closest=before&apikey=${process.env.ETHERSCAN_API_KEY}`
+        );
+        const data = await response.json();
+        if (data.status !== "1") {
+          throw new Error(
+            `Failed to get block number from date: ${
+              data.result
+            } (timestamp: ${timestamp}, date: ${date.toISOString()})`
+          );
+        }
+        return data.result;
+      }, `getBlockNumberFromDate(${date.toISOString()})`);
       const blockNum = Number(blockNumber);
       this.dateToBlockNumber.set(timestamp, blockNum);
       return blockNum;
@@ -229,7 +265,9 @@ export class EthereumService {
    */
   public addBlockToCache(blockNumber: number, timestamp: number): void {
     this.addToCache(blockNumber, timestamp);
-    console.log(`Added block ${blockNumber} with timestamp ${timestamp} to cache`);
+    console.log(
+      `Added block ${blockNumber} with timestamp ${timestamp} to cache`
+    );
   }
 
   /**
@@ -239,7 +277,7 @@ export class EthereumService {
     return {
       size: this.blockCache.size,
       limit: this.CACHE_SIZE_LIMIT,
-      blocks: Array.from(this.blockCache.keys()).sort((a, b) => a - b)
+      blocks: Array.from(this.blockCache.keys()).sort((a, b) => a - b),
     };
   }
 
@@ -248,7 +286,7 @@ export class EthereumService {
    */
   public clearCache(): void {
     this.blockCache.clear();
-    console.log('Block cache cleared');
+    console.log("Block cache cleared");
   }
 
   async fetchTokenSymbol(tokenAddress: `0x${string}`): Promise<string> {
@@ -256,8 +294,7 @@ export class EthereumService {
       console.log(`🔍 Fetching symbol for token: ${tokenAddress}`);
 
       // Known token symbols for common tokens
-      const knownTokens: Record<string, string> = {
-      };
+      const knownTokens: Record<string, string> = {};
 
       // Check if we know this token
       if (knownTokens[tokenAddress]) {
@@ -282,14 +319,12 @@ export class EthereumService {
     }
   }
 
-
   /**
    * Generate a fallback symbol when token symbol fetching fails
    */
   private generateFallbackSymbol(tokenAddress: string): string {
     // Check if it's a known token by address
-    const knownTokens: Record<string, string> = {
-    };
+    const knownTokens: Record<string, string> = {};
 
     if (knownTokens[tokenAddress]) {
       return knownTokens[tokenAddress];
@@ -303,7 +338,7 @@ export class EthereumService {
   async getLatestBlockNumber() {
     return await this.executeWithBackoff(
       () => this.client.getBlockNumber(),
-      'getLatestBlockNumber'
+      "getLatestBlockNumber"
     );
   }
 
@@ -328,10 +363,11 @@ export class EthereumService {
       while (count < limit && blockNumber > 0) {
         try {
           const block = await this.executeWithBackoff(
-            () => this.client.getBlock({
-              blockNumber,
-              includeTransactions: true,
-            }),
+            () =>
+              this.client.getBlock({
+                blockNumber,
+                includeTransactions: true,
+              }),
             `getBlock(${blockNumber})`
           );
 
@@ -657,7 +693,9 @@ export class EthereumService {
   ): Promise<any[]> {
     try {
       console.log(
-        `📡 Fetching batch events from block ${fromBlock} to ${toBlock}${eventName ? ` for event ${eventName}` : ''}...`
+        `📡 Fetching batch events from block ${fromBlock} to ${toBlock}${
+          eventName ? ` for event ${eventName}` : ""
+        }...`
       );
 
       const blockRange = Number(toBlock - fromBlock);
@@ -665,37 +703,51 @@ export class EthereumService {
 
       // If the range is too large, split it into smaller chunks
       if (blockRange > this.MAX_BATCH_SIZE) {
-        console.log(`⚠️ Block range too large (${blockRange} blocks), splitting into chunks of ${this.MAX_BATCH_SIZE}`);
-        
+        console.log(
+          `⚠️ Block range too large (${blockRange} blocks), splitting into chunks of ${this.MAX_BATCH_SIZE}`
+        );
+
         const allEvents: any[] = [];
         let currentFromBlock = fromBlock;
-        
+
         while (currentFromBlock < toBlock) {
-          const currentToBlock = BigInt(Math.min(Number(currentFromBlock) + this.MAX_BATCH_SIZE - 1, Number(toBlock)));
-          
-          console.log(`🔄 Processing chunk: blocks ${currentFromBlock} to ${currentToBlock}`);
-          const chunkEvents = await this.getBatchEvents(currentFromBlock, currentToBlock, eventName);
+          const currentToBlock = BigInt(
+            Math.min(
+              Number(currentFromBlock) + this.MAX_BATCH_SIZE - 1,
+              Number(toBlock)
+            )
+          );
+
+          console.log(
+            `🔄 Processing chunk: blocks ${currentFromBlock} to ${currentToBlock}`
+          );
+          const chunkEvents = await this.getBatchEvents(
+            currentFromBlock,
+            currentToBlock,
+            eventName
+          );
           allEvents.push(...chunkEvents);
-          
+
           currentFromBlock = currentToBlock + 1n;
-          
+
           // Add a configurable delay between chunks to avoid overwhelming the RPC
           if (currentFromBlock < toBlock) {
             await this.sleep(this.BATCH_DELAY_MS);
           }
         }
-        
+
         return allEvents;
       }
 
       // Use getLogs to fetch all CoW Protocol events efficiently in a single call
       // This is much more efficient than multiple getLogs calls or fetching all blocks
       const allLogs = await this.executeWithBackoff(
-        () => this.client.getLogs({
-          address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-          fromBlock,
-          toBlock,
-        }),
+        () =>
+          this.client.getLogs({
+            address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+            fromBlock,
+            toBlock,
+          }),
         `getLogs(${fromBlock}-${toBlock})`
       );
 
@@ -703,7 +755,7 @@ export class EthereumService {
 
       // Group logs by transaction hash to process them as settlement transactions
       const logsByTransaction = new Map<string, any[]>();
-      
+
       for (const log of allLogs) {
         const txHash = log.transactionHash;
         if (!logsByTransaction.has(txHash)) {
@@ -712,37 +764,49 @@ export class EthereumService {
         logsByTransaction.get(txHash)!.push(log);
       }
 
-      console.log(`🎯 Unique settlement transactions: ${logsByTransaction.size}`);
+      console.log(
+        `🎯 Unique settlement transactions: ${logsByTransaction.size}`
+      );
 
       // Convert to event-like objects for compatibility with existing processing logic
-      const allEvents = Array.from(logsByTransaction.entries()).map(([txHash, logs]) => ({
-        type: "SettlementTransaction",
-        transactionHash: txHash,
-        blockNumber: logs[0].blockNumber,
-        logs: logs,
-        // Add other fields for compatibility
-        hash: txHash,
-        blockHash: logs[0].blockHash,
-      })).sort((a, b) => Number(a.blockNumber) - Number(b.blockNumber));
+      const allEvents = Array.from(logsByTransaction.entries())
+        .map(([txHash, logs]) => ({
+          type: "SettlementTransaction",
+          transactionHash: txHash,
+          blockNumber: logs[0].blockNumber,
+          logs: logs,
+          // Add other fields for compatibility
+          hash: txHash,
+          blockHash: logs[0].blockHash,
+        }))
+        .sort((a, b) => Number(a.blockNumber) - Number(b.blockNumber));
 
-      console.log(`✅ Batch fetch completed: ${allEvents.length} events from ${blockRange} blocks`);
+      console.log(
+        `✅ Batch fetch completed: ${allEvents.length} events from ${blockRange} blocks`
+      );
       return allEvents;
     } catch (error) {
-      console.error(`❌ Error in batch event fetch (${fromBlock}-${toBlock}):`, error);
-      
+      console.error(
+        `❌ Error in batch event fetch (${fromBlock}-${toBlock}):`,
+        error
+      );
+
       // If batch fails, fall back to individual block processing
       console.log(`🔄 Falling back to individual block processing...`);
       const allEvents: any[] = [];
-      
+
       for (let blockNum = fromBlock; blockNum <= toBlock; blockNum++) {
         try {
           const blockEvents = await this.getEventsFromSingleBlock(blockNum);
           allEvents.push(...blockEvents);
         } catch (blockError) {
-          console.error(`❌ Error fetching events from block ${blockNum}:`, blockError);
+          console.error(
+            `❌ Error fetching events from block ${blockNum}:`,
+            blockError
+          );
         }
       }
-      
+
       return allEvents;
     }
   }
@@ -753,10 +817,11 @@ export class EthereumService {
   async getEventsFromSingleBlock(blockNumber: bigint): Promise<any[]> {
     try {
       const block = await this.executeWithBackoff(
-        () => this.client.getBlock({
-          blockNumber,
-          includeTransactions: true,
-        }),
+        () =>
+          this.client.getBlock({
+            blockNumber,
+            includeTransactions: true,
+          }),
         `getBlock(${blockNumber})`
       );
 
@@ -779,7 +844,10 @@ export class EthereumService {
         transaction: tx,
       }));
     } catch (error) {
-      console.error(`❌ Error fetching events from single block ${blockNumber}:`, error);
+      console.error(
+        `❌ Error fetching events from single block ${blockNumber}:`,
+        error
+      );
       return [];
     }
   }
@@ -810,54 +878,57 @@ export class EthereumService {
         [orderPlacements, orderCancellations, orderFulfillments] =
           await Promise.all([
             this.executeWithBackoff(
-              () => this.client.getLogs({
-                address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-                event: {
-                  type: "event",
-                  name: "OrderPlacement",
-                  inputs: [
-                    { type: "bytes", name: "orderUid", indexed: true },
-                    { type: "address", name: "owner", indexed: true },
-                    { type: "address", name: "sender", indexed: true },
-                  ],
-                },
-                fromBlock,
-                toBlock: latestBlock,
-              }),
-              'getLogs(OrderPlacement)'
+              () =>
+                this.client.getLogs({
+                  address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                  event: {
+                    type: "event",
+                    name: "OrderPlacement",
+                    inputs: [
+                      { type: "bytes", name: "orderUid", indexed: true },
+                      { type: "address", name: "owner", indexed: true },
+                      { type: "address", name: "sender", indexed: true },
+                    ],
+                  },
+                  fromBlock,
+                  toBlock: latestBlock,
+                }),
+              "getLogs(OrderPlacement)"
             ),
             this.executeWithBackoff(
-              () => this.client.getLogs({
-                address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-                event: {
-                  type: "event",
-                  name: "OrderCancellation",
-                  inputs: [
-                    { type: "bytes", name: "orderUid", indexed: true },
-                    { type: "address", name: "owner", indexed: true },
-                  ],
-                },
-                fromBlock,
-                toBlock: latestBlock,
-              }),
-              'getLogs(OrderCancellation)'
+              () =>
+                this.client.getLogs({
+                  address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                  event: {
+                    type: "event",
+                    name: "OrderCancellation",
+                    inputs: [
+                      { type: "bytes", name: "orderUid", indexed: true },
+                      { type: "address", name: "owner", indexed: true },
+                    ],
+                  },
+                  fromBlock,
+                  toBlock: latestBlock,
+                }),
+              "getLogs(OrderCancellation)"
             ),
             this.executeWithBackoff(
-              () => this.client.getLogs({
-                address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-                event: {
-                  type: "event",
-                  name: "OrderFulfillment",
-                  inputs: [
-                    { type: "bytes", name: "orderUid", indexed: true },
-                    { type: "address", name: "owner", indexed: true },
-                    { type: "address", name: "sender", indexed: true },
-                  ],
-                },
-                fromBlock,
-                toBlock: latestBlock,
-              }),
-              'getLogs(OrderFulfillment)'
+              () =>
+                this.client.getLogs({
+                  address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                  event: {
+                    type: "event",
+                    name: "OrderFulfillment",
+                    inputs: [
+                      { type: "bytes", name: "orderUid", indexed: true },
+                      { type: "address", name: "owner", indexed: true },
+                      { type: "address", name: "sender", indexed: true },
+                    ],
+                  },
+                  fromBlock,
+                  toBlock: latestBlock,
+                }),
+              "getLogs(OrderFulfillment)"
             ),
           ]);
       } catch (error: any) {
@@ -872,54 +943,57 @@ export class EthereumService {
             [orderPlacements, orderCancellations, orderFulfillments] =
               await Promise.all([
                 this.executeWithBackoff(
-                  () => this.client.getLogs({
-                    address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-                    event: {
-                      type: "event",
-                      name: "OrderPlacement",
-                      inputs: [
-                        { type: "bytes", name: "orderUid", indexed: true },
-                        { type: "address", name: "owner", indexed: true },
-                        { type: "address", name: "sender", indexed: true },
-                      ],
-                    },
-                    fromBlock: smallerFromBlock,
-                    toBlock: latestBlock,
-                  }),
-                  'getLogs(OrderPlacement-retry)'
+                  () =>
+                    this.client.getLogs({
+                      address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                      event: {
+                        type: "event",
+                        name: "OrderPlacement",
+                        inputs: [
+                          { type: "bytes", name: "orderUid", indexed: true },
+                          { type: "address", name: "owner", indexed: true },
+                          { type: "address", name: "sender", indexed: true },
+                        ],
+                      },
+                      fromBlock: smallerFromBlock,
+                      toBlock: latestBlock,
+                    }),
+                  "getLogs(OrderPlacement-retry)"
                 ),
                 this.executeWithBackoff(
-                  () => this.client.getLogs({
-                    address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-                    event: {
-                      type: "event",
-                      name: "OrderCancellation",
-                      inputs: [
-                        { type: "bytes", name: "orderUid", indexed: true },
-                        { type: "address", name: "owner", indexed: true },
-                      ],
-                    },
-                    fromBlock: smallerFromBlock,
-                    toBlock: latestBlock,
-                  }),
-                  'getLogs(OrderCancellation-retry)'
+                  () =>
+                    this.client.getLogs({
+                      address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                      event: {
+                        type: "event",
+                        name: "OrderCancellation",
+                        inputs: [
+                          { type: "bytes", name: "orderUid", indexed: true },
+                          { type: "address", name: "owner", indexed: true },
+                        ],
+                      },
+                      fromBlock: smallerFromBlock,
+                      toBlock: latestBlock,
+                    }),
+                  "getLogs(OrderCancellation-retry)"
                 ),
                 this.executeWithBackoff(
-                  () => this.client.getLogs({
-                    address: COW_PROTOCOL_ADDRESS as `0x${string}`,
-                    event: {
-                      type: "event",
-                      name: "OrderFulfillment",
-                      inputs: [
-                        { type: "bytes", name: "orderUid", indexed: true },
-                        { type: "address", name: "owner", indexed: true },
-                        { type: "address", name: "sender", indexed: true },
-                      ],
-                    },
-                    fromBlock: smallerFromBlock,
-                    toBlock: latestBlock,
-                  }),
-                  'getLogs(OrderFulfillment-retry)'
+                  () =>
+                    this.client.getLogs({
+                      address: COW_PROTOCOL_ADDRESS as `0x${string}`,
+                      event: {
+                        type: "event",
+                        name: "OrderFulfillment",
+                        inputs: [
+                          { type: "bytes", name: "orderUid", indexed: true },
+                          { type: "address", name: "owner", indexed: true },
+                          { type: "address", name: "sender", indexed: true },
+                        ],
+                      },
+                      fromBlock: smallerFromBlock,
+                      toBlock: latestBlock,
+                    }),
+                  "getLogs(OrderFulfillment-retry)"
                 ),
               ]);
             console.log(
@@ -978,26 +1052,36 @@ export class EthereumService {
   }> {
     try {
       console.log(`🔍 Fetching complete token metadata for: ${tokenAddress}`);
-      
-      const response = await fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/ethereum/${tokenAddress}`, {
-        headers: {
-          'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
-          'Content-Type': 'application/json'
+
+      const response = await fetch(
+        `${
+          process.env.TOKENS_METADATA_API_URL ||
+          "https://tokens-metadata.la-tribu.xyz"
+        }/tokens/ethereum/${tokenAddress}`,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
+            "Content-Type": "application/json",
+          },
         }
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      
+
       if (!data.symbol || !data.name) {
-        throw new Error('Invalid token metadata response');
+        throw new Error("Invalid token metadata response");
       }
 
-      console.log(`✅ Fetched token metadata: ${data.symbol} - ${data.name} (${data.decimals || 18} decimals)`);
-      
+      console.log(
+        `✅ Fetched token metadata: ${data.symbol} - ${data.name} (${
+          data.decimals || 18
+        } decimals)`
+      );
+
       return {
         address: data.address,
         network: data.network,
@@ -1005,10 +1089,13 @@ export class EthereumService {
         symbol: data.symbol,
         decimals: data.decimals || 18,
         cached: data.cached || false,
-        timestamp: data.timestamp
+        timestamp: data.timestamp,
       };
     } catch (error) {
-      console.warn(`Failed to fetch token metadata for ${tokenAddress}:`, error);
+      console.warn(
+        `Failed to fetch token metadata for ${tokenAddress}:`,
+        error
+      );
       throw error;
     }
   }
@@ -1021,8 +1108,7 @@ export class EthereumService {
       console.log(`🔍 Fetching decimals for token: ${tokenAddress}`);
 
       // Known token decimals for common tokens
-      const knownDecimals: Record<string, number> = {
-      };
+      const knownDecimals: Record<string, number> = {};
 
       // Check if we know this token
       if (knownDecimals[tokenAddress]) {
@@ -1038,7 +1124,9 @@ export class EthereumService {
 
       // Use the comprehensive metadata function
       const metadata = await this.fetchTokenMetadata(tokenAddress);
-      console.log(`✅ Fetched decimals for ${tokenAddress}: ${metadata.decimals}`);
+      console.log(
+        `✅ Fetched decimals for ${tokenAddress}: ${metadata.decimals}`
+      );
       return metadata.decimals;
     } catch (error) {
       console.error(`❌ Error fetching decimals for ${tokenAddress}:`, error);

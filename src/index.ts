@@ -35,7 +35,8 @@ if (!envFileFound) {
 
 console.log('🔍 Environment variables after dotenv:');
 console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
-console.log('🔍 RPC_URL:', process.env.RPC_URL);
+console.log('🔍 RPC_BASE_URL:', process.env.RPC_BASE_URL);
+console.log('🔍 RPC_TOKEN:', process.env.RPC_TOKEN ? 'SET' : 'NOT SET');
 console.log('🔍 PAIR_API_TOKEN:', process.env.PAIR_API_TOKEN ? 'SET' : 'NOT SET');
 if(!process.env.PAIR_API_TOKEN) {
   console.error('❌ PAIR_API_TOKEN is not set');
@@ -71,6 +72,31 @@ const configFile = {
 // Initialize database service
 let databaseService: any = null;
 let isDatabaseConnected = false;
+
+// Singleton EthereumService instance - only ONE instance for the entire application
+let ethereumServiceInstance: any = null;
+let currentNetworkId: string = '1';
+
+function getEthereumService(networkId?: string): any {
+  const targetNetworkId = networkId || '1';
+  
+  // Create instance only once on first call
+  if (!ethereumServiceInstance) {
+    console.log(`🔧 Creating single EthereumService instance with network ${targetNetworkId}`);
+    const { EthereumService } = require('./services/ethereum');
+    ethereumServiceInstance = new EthereumService(targetNetworkId);
+    currentNetworkId = targetNetworkId;
+  } else if (targetNetworkId !== currentNetworkId) {
+    // Switch network on the existing single instance
+    console.log(`🔄 Switching network from ${currentNetworkId} to ${targetNetworkId} on existing instance`);
+    ethereumServiceInstance.switchNetwork(targetNetworkId);
+    currentNetworkId = targetNetworkId;
+  } else {
+    console.log(`✓ Using existing EthereumService instance (already on network ${currentNetworkId})`);
+  }
+  
+  return ethereumServiceInstance;
+}
 
 async function initializeDatabase() {
   try {
@@ -347,12 +373,47 @@ app.get('/api/trades/:hash', async (req, res) => {
   }
 });
 
+// API endpoint to switch network
+app.post('/api/network/switch', async (req, res) => {
+  try {
+    const { networkId } = req.body;
+    
+    if (!networkId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Network ID is required'
+      });
+    }
+    
+    console.log(`🔄 Switching to network ${networkId}...`);
+    
+    // Get or create service instance and switch network
+    const ethereumService = getEthereumService(networkId);
+    
+    console.log(`✅ Successfully switched to network ${networkId}`);
+    
+    return res.json({
+      success: true,
+      networkId: networkId,
+      message: `Switched to network ${networkId}`
+    });
+  } catch (error: any) {
+    console.error('❌ Error switching network:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to switch network'
+    });
+  }
+});
+
 // API endpoint to get real CoW Protocol events
 app.get('/api/events', async (req, res) => {
   try {
     console.log('📡 Fetching real CoW Protocol events...');
     
-    const ethereumService = new EthereumService();
+    // Get network ID from query parameter or default to 1
+    const networkId = (req.query.networkId as string) || '1';
+    const ethereumService = getEthereumService(networkId);
     const events = await ethereumService.getRecentEvents(10);
     
     console.log(`✅ Fetched ${events.length} real events`);
@@ -380,7 +441,9 @@ app.post('/api/trades/sync', async (req, res) => {
       await initializeDatabase();
     }
     
-    const ethereumService = new EthereumService();
+    // Get network ID from query parameter or default to 1
+    const networkId = (req.query.networkId as string) || (req.body.networkId as string) || '1';
+    const ethereumService = getEthereumService(networkId);
     
     // Get real transactions from the blockchain (last 10 days)
     const transactions = await ethereumService.getLastTransactions(100);
@@ -509,7 +572,9 @@ app.get('/api/block-timestamp/:blockNumber', async (req, res) => {
     
     console.log(`📡 Fetching timestamp for block: ${blockNum}`);
     
-    const ethereumService = new EthereumService();
+    // Get network ID from query parameter or default to 1
+    const networkId = (req.query.networkId as string) || '1';
+    const ethereumService = getEthereumService(networkId);
     const timestamp = await ethereumService.getBlockTimestamp(blockNum);
     
     // Check if we got a valid timestamp
@@ -811,8 +876,8 @@ async function fetchAndDisplayData() {
   try {
     console.log("📊 CoW Protocol data fetcher initialized");
 
-    // Initialize Ethereum service
-    const ethereumService = new EthereumService();
+    // Initialize Ethereum service with default network ID of 1
+    const ethereumService = new EthereumService('1');
 
     // Get contract information
     console.log("\n📋 Contract Information:");

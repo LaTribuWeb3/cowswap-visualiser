@@ -38,6 +38,8 @@ import {
   fetchBinancePrice,
   getBlockTimestamp,
   fetchSolverCompetition,
+  getCurrentNetworkId,
+  switchNetwork as switchNetworkAPI,
 } from "./api";
 // EthereumService is now accessed via API calls to the backend
 
@@ -3369,5 +3371,174 @@ function showToast(
   console.log(`💬 Toast (${type}):`, message);
 }
 
+// Network selector functionality
+interface ChainNetwork {
+  chainId: number;
+  name: string;
+  nativeCurrency?: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+  rpc?: string[];
+}
+
+let networksCache: ChainNetwork[] | null = null;
+
+async function fetchNetworks(): Promise<ChainNetwork[]> {
+  if (networksCache) {
+    return networksCache;
+  }
+
+  try {
+    console.log('🌐 Fetching networks from chainlist.org...');
+    const response = await fetch('https://chainlist.org/rpcs.json');
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch networks: ${response.status}`);
+    }
+
+    const networks: ChainNetwork[] = await response.json();
+    
+    // Sort networks by chainId
+    networks.sort((a, b) => a.chainId - b.chainId);
+    
+    networksCache = networks;
+    console.log(`✅ Loaded ${networks.length} networks`);
+    
+    return networks;
+  } catch (error) {
+    console.error('❌ Error fetching networks:', error);
+    // Return some popular networks as fallback
+    return [
+      { chainId: 1, name: 'Ethereum Mainnet' },
+      { chainId: 10, name: 'Optimism' },
+      { chainId: 137, name: 'Polygon' },
+      { chainId: 42161, name: 'Arbitrum One' },
+      { chainId: 8453, name: 'Base' },
+    ];
+  }
+}
+
+async function initializeNetworkSelector() {
+  const networkSelect = document.getElementById('networkSelect') as HTMLSelectElement;
+  
+  if (!networkSelect) {
+    console.warn('Network selector not found');
+    return;
+  }
+
+  try {
+    const networks = await fetchNetworks();
+    
+    // Get current network ID from sessionStorage or default to 1 (Ethereum Mainnet)
+    const storedNetworkId = sessionStorage.getItem('NETWORK_ID');
+    const currentNetworkId = storedNetworkId || '1';
+    const currentNetworkIdNum = parseInt(currentNetworkId);
+    
+    // Clear existing options
+    networkSelect.innerHTML = '';
+    
+    // Add networks to dropdown
+    networks.forEach(network => {
+      const option = document.createElement('option');
+      option.value = network.chainId.toString();
+      option.textContent = `${network.name} (Chain ID: ${network.chainId})`;
+      
+      // Select current network
+      if (network.chainId === currentNetworkIdNum) {
+        option.selected = true;
+      }
+      
+      networkSelect.appendChild(option);
+    });
+    
+    // Add change event listener
+    networkSelect.addEventListener('change', handleNetworkChange);
+    
+    console.log(`✅ Network selector initialized with ${networks.length} networks`);
+    console.log(`🔗 Current network: ${currentNetworkId}`);
+    
+  } catch (error) {
+    console.error('❌ Error initializing network selector:', error);
+    networkSelect.innerHTML = '<option value="">Error loading networks</option>';
+  }
+}
+
+async function handleNetworkChange(event: Event) {
+  const select = event.target as HTMLSelectElement;
+  const newNetworkId = select.value;
+  
+  if (!newNetworkId) {
+    return;
+  }
+  
+  const selectedOption = select.options[select.selectedIndex];
+  const networkName = selectedOption.textContent || `Chain ${newNetworkId}`;
+  
+  console.log(`🔄 Network changed to: ${networkName} (ID: ${newNetworkId})`);
+  
+  // Show confirmation dialog
+  const confirmed = confirm(
+    `Switch to ${networkName}?\n\n` +
+    `This will switch the network configuration and reload the page.\n\n` +
+    `Note: This is a temporary change and will not persist across sessions.`
+  );
+  
+  if (confirmed) {
+    try {
+      // Show loading message
+      showToast(`Switching to ${networkName}...`, 'info');
+      
+      // Call backend to switch network
+      const success = await switchNetworkAPI(newNetworkId);
+      
+      if (success) {
+        // Store in sessionStorage for this session
+        sessionStorage.setItem('NETWORK_ID', newNetworkId);
+        
+        console.log(`✅ Network switched successfully to ${newNetworkId}`);
+        
+        // Clear all caches to ensure fresh data from new network
+        console.log('🗑️ Clearing caches before reload...');
+        clearAllCaches();
+        
+        // Show updated message
+        showToast(`Network switched to ${networkName}. Refreshing trade list...`, 'success');
+        
+        // Reload the page to apply the new network and refresh all data
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
+      } else {
+        throw new Error('Failed to switch network on backend');
+      }
+    } catch (error) {
+      console.error('❌ Error switching network:', error);
+      showToast('Failed to switch network. Please try again.', 'error');
+      
+      // Reset to current network
+      const currentNetworkId = sessionStorage.getItem('NETWORK_ID') || '1';
+      select.value = currentNetworkId;
+    }
+  } else {
+    // Reset to current network
+    const currentNetworkId = sessionStorage.getItem('NETWORK_ID') || '1';
+    select.value = currentNetworkId;
+  }
+}
+
+// Initialize network ID to 1 if not set
+if (typeof window !== 'undefined' && !sessionStorage.getItem('NETWORK_ID')) {
+  sessionStorage.setItem('NETWORK_ID', '1');
+  console.log(`🔗 Initialized network ID to: 1 (Ethereum Mainnet)`);
+} else if (typeof window !== 'undefined') {
+  const storedNetworkId = sessionStorage.getItem('NETWORK_ID');
+  console.log(`🔗 Using stored network ID: ${storedNetworkId}`);
+}
+
 // Initialize the application when DOM is loaded
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => {
+  init();
+  initializeNetworkSelector();
+});

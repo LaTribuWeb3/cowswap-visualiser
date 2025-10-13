@@ -48,8 +48,9 @@ npm install
 
 3. Create a `.env` file (required):
 ```bash
-# Ethereum RPC Configuration (REQUIRED)
-RPC_URL=https://eth-mainnet.g.alchemy.com/v2/your-api-key
+# Ethereum RPC Configuration (REQUIRED) - Load Balancer Format
+RPC_BASE_URL=https://rpc.example.com
+RPC_TOKEN=your_rpc_token_here
 
 # CoW Protocol API configuration
 COW_API_KEY=your_api_key_here
@@ -106,13 +107,16 @@ Currently using a mock database service that stores data in memory. The `Databas
 
 ## Ethereum Integration
 
-The project uses viem to connect to Ethereum mainnet and interact with the CoW Protocol contract. You can configure the RPC endpoint by setting the `RPC_URL` environment variable in your `.env` file.
+The project uses viem to connect to Ethereum mainnet and interact with the CoW Protocol contract. You can configure the RPC endpoint by setting the RPC load balancer configuration in your `.env` file.
 
 ### RPC Configuration
 
-- **Required**: You must set `RPC_URL` in your `.env` file
-- **Providers**: Any Ethereum mainnet RPC endpoint (Alchemy, Infura, etc.)
-- **Example**: `RPC_URL=https://eth-mainnet.g.alchemy.com/v2/your-api-key`
+- **Required**: You must set `RPC_BASE_URL`, `NETWORK_ID`, and `RPC_TOKEN` in your `.env` file
+- **Load Balancer Format**: The RPC URL is constructed as `RPC_BASE_URL/NETWORK_ID/RPC_TOKEN`
+- **Example**:
+  - `RPC_BASE_URL=https://rpc.example.com`
+  - `NETWORK_ID=1` (1 for Ethereum mainnet, 42161 for Arbitrum, etc.)
+  - `RPC_TOKEN=your_rpc_token_here`
 
 ### Blockchain Explorer Configuration
 

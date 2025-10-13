@@ -18,7 +18,8 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       "process.env.NODE_ENV": JSON.stringify(env.NODE_ENV || "development"),
-      "process.env.RPC_URL": JSON.stringify(env.RPC_URL || ""),
+      "process.env.RPC_BASE_URL": JSON.stringify(env.RPC_BASE_URL || ""),
+      "process.env.RPC_TOKEN": JSON.stringify(env.RPC_TOKEN || ""),
       "process.env.PAIR_API_TOKEN": JSON.stringify(env.PAIR_API_TOKEN || ""),
       "process.env.TOKEN_METADATA_API_TOKEN": JSON.stringify(env.TOKEN_METADATA_API_TOKEN || ""),
       "process.env.API_BASE_URL": JSON.stringify(env.API_BASE_URL || ""),
