@@ -218,39 +218,7 @@ const tradesData: TradeData[] = [
 ];
 
 // Token information mapping with cached decimals
-const tokenInfo: Record<`0x${string}`, TokenInfo> = {
-  "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {
-    symbol: "USDC",
-    name: "USD Coin",
-    decimals: 6
-  },
-  "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c": {
-    symbol: "EURe",
-    name: "Euro Coin",
-    decimals: 6
-  },
-  "0xdAC17F958D2ee523a2206206994597C13D831ec7": {
-    symbol: "USDT",
-    name: "Tether USD",
-    decimals: 6
-  }
-};
-
-// Cache for token decimals to avoid repeated contract calls
-const tokenDecimalsCache = new Map<`0x${string}`, number>();
-
-// ERC20 ABI for decimals function
-const ERC20_ABI: ERC20ABI[] = [
-  {
-    "constant": true,
-    "inputs": [],
-    "name": "decimals",
-    "outputs": [{"name": "", "type": "uint8"}],
-    "payable": false,
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
+const tokenInfo: Record<`0x${string}`, TokenInfo> = {};
 
 // Global variables
 let currentTradeData: TradeData | null = null;
