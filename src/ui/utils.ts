@@ -1,6 +1,4 @@
 import { TokenInfo, FormattedAmount, ConversionRate } from './types';
-import { fetchTokenDecimals } from './api';
-import { EthereumService } from '../services/ethereum';
 
 // Token information cache
 const tokenDecimalsCache: Record<`0x${string}`, number> = {};
@@ -74,8 +72,6 @@ function saveFailedLookupsToStorage(): void {
 loadTokenCacheFromStorage();
 loadFailedLookupsFromStorage();
 
-// Known token information (empty by default - tokens will be fetched dynamically)
-const KNOWN_TOKENS: Record<`0x${string}`, TokenInfo> = {};
 
 /**
  * Get token decimals from cache or fetch from contract
@@ -84,13 +80,6 @@ export async function getTokenDecimals(tokenAddress: `0x${string}`): Promise<num
   // Check cache first
   if (tokenDecimalsCache[tokenAddress]) {
     return tokenDecimalsCache[tokenAddress];
-  }
-
-  // Check known tokens
-  if (KNOWN_TOKENS[tokenAddress]) {
-    const decimals = KNOWN_TOKENS[tokenAddress].decimals;
-    tokenDecimalsCache[tokenAddress] = decimals;
-    return decimals;
   }
 
   try {
@@ -109,11 +98,11 @@ export async function getTokenDecimals(tokenAddress: `0x${string}`): Promise<num
 }
 
 /**
- * Get token information (synchronous - only from cache/known tokens)
+ * Get token information (synchronous - only from cache)
  */
 export function getTokenInfo(tokenAddress: `0x${string}`): TokenInfo {
-  return KNOWN_TOKENS[tokenAddress] || {
-    symbol: formatAddress(tokenAddress),
+  return tokenInfoCache[tokenAddress] || {
+    symbol: generateFallbackSymbol(tokenAddress),
     name: `Token ${formatAddress(tokenAddress)}`,
     decimals: 18,
     address: tokenAddress
@@ -286,31 +275,38 @@ async function fetchTokenMetadataFallback(tokenAddress: `0x${string}`): Promise<
     console.warn(`⚠️ Moralis fallback failed for ${tokenAddress}:`, error);
   }
 
-  // All fallbacks failed, generate a fallback symbol
-  console.warn(`❌ All fallback sources failed for ${tokenAddress}, generating fallback symbol`);
-  return {
-    symbol: generateFallbackSymbol(tokenAddress),
-    name: `Token ${formatAddress(tokenAddress)}`,
-    decimals: 18
-  };
+  // All fallbacks failed, but don't generate fallback symbol - keep trying
+  console.warn(`❌ All fallback sources failed for ${tokenAddress}, will retry later`);
+  throw new Error(`All token metadata sources failed for ${tokenAddress}`);
 }
 
 /**
  * Generate a fallback symbol when all sources fail
  */
 function generateFallbackSymbol(tokenAddress: string): string {
-  // Special case for ETH
-  if (tokenAddress.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
-    return 'ETH';
-  }
-  
   // Extract first 4 characters after 0x for a readable symbol
   const shortAddress = tokenAddress.slice(2, 6).toUpperCase();
   return `TKN${shortAddress}`;
 }
 
 /**
- * Get token information synchronously (only from cache/known tokens)
+ * Check if a token info is real data (not fallback)
+ */
+function isRealTokenData(tokenInfo: TokenInfo): boolean {
+  // Real token data should not start with "TKN" (our fallback prefix)
+  return !tokenInfo.symbol.startsWith('TKN');
+}
+
+/**
+ * Check if we have real cached token data
+ */
+export function hasRealTokenData(tokenAddress: `0x${string}`): boolean {
+  const cached = tokenInfoCache[tokenAddress];
+  return cached ? isRealTokenData(cached) : false;
+}
+
+/**
+ * Get token information synchronously (only from cache)
  * Returns address if not cached - use for instant display
  */
 export function getTokenInfoSync(tokenAddress: `0x${string}`): TokenInfo {
@@ -319,16 +315,10 @@ export function getTokenInfoSync(tokenAddress: `0x${string}`): TokenInfo {
     return tokenInfoCache[tokenAddress];
   }
 
-  // Check known tokens
-  if (KNOWN_TOKENS[tokenAddress]) {
-    tokenInfoCache[tokenAddress] = KNOWN_TOKENS[tokenAddress];
-    return KNOWN_TOKENS[tokenAddress];
-  }
-
-  // Return address as placeholder - will be updated async
+  // Return fallback symbol as placeholder - will be updated async
   const placeholderInfo: TokenInfo = {
-    symbol: formatAddress(tokenAddress),
-    name: formatAddress(tokenAddress),
+    symbol: generateFallbackSymbol(tokenAddress),
+    name: `Token ${formatAddress(tokenAddress)}`,
     decimals: 18, // Default to 18, but we'll show raw amounts when decimals are unknown
     address: tokenAddress,
     isLoading: true // Mark as loading to apply skeleton animation
@@ -346,12 +336,6 @@ export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<To
     return tokenInfoCache[tokenAddress];
   }
 
-  // Check known tokens first
-  if (KNOWN_TOKENS[tokenAddress]) {
-    tokenInfoCache[tokenAddress] = KNOWN_TOKENS[tokenAddress];
-    return KNOWN_TOKENS[tokenAddress];
-  }
-
   try {
     // Fetch token metadata from la-tribu API
     const metadata = await fetchTokenMetadata(tokenAddress);
@@ -363,24 +347,26 @@ export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<To
       address: tokenAddress
     };
     
-    // Cache the complete token info
-    tokenInfoCache[tokenAddress] = tokenInfo;
-    tokenSymbolsCache[tokenAddress] = metadata.symbol;
-    tokenDecimalsCache[tokenAddress] = metadata.decimals;
+    // Only cache if we have real token data
+    if (isRealTokenData(tokenInfo)) {
+      tokenInfoCache[tokenAddress] = tokenInfo;
+      tokenSymbolsCache[tokenAddress] = metadata.symbol;
+      tokenDecimalsCache[tokenAddress] = metadata.decimals;
+    }
     
     return tokenInfo;
   } catch (error) {
     console.warn(`Failed to fetch token info for ${tokenAddress}:`, error);
     
-    // Fallback to formatted address with default decimals
+    // Don't cache fallback data - let it retry later
+    // Return fallback info without caching
     const tokenInfo: TokenInfo = {
-      symbol: formatAddress(tokenAddress),
+      symbol: generateFallbackSymbol(tokenAddress),
       name: `Token ${formatAddress(tokenAddress)}`,
       decimals: 18,
       address: tokenAddress
     };
     
-    tokenInfoCache[tokenAddress] = tokenInfo;
     return tokenInfo;
   }
 }
@@ -398,16 +384,9 @@ const retryQueue: string[] = [];
 export async function fetchTokenInfoAndUpdateDOM(
   tokenAddress: `0x${string}`
 ): Promise<void> {
-  // If already cached, update immediately
-  if (tokenInfoCache[tokenAddress]) {
+  // If already cached with real data, update immediately
+  if (tokenInfoCache[tokenAddress] && isRealTokenData(tokenInfoCache[tokenAddress])) {
     updateAllTokenElements(tokenAddress, tokenInfoCache[tokenAddress]);
-    return;
-  }
-
-  // If it's a known token, cache and update immediately
-  if (KNOWN_TOKENS[tokenAddress]) {
-    tokenInfoCache[tokenAddress] = KNOWN_TOKENS[tokenAddress];
-    updateAllTokenElements(tokenAddress, KNOWN_TOKENS[tokenAddress]);
     return;
   }
 
@@ -422,22 +401,24 @@ export async function fetchTokenInfoAndUpdateDOM(
       address: tokenAddress
     };
     
-    // Cache the complete token info
-    tokenInfoCache[tokenAddress] = tokenInfo;
-    tokenSymbolsCache[tokenAddress] = metadata.symbol;
-    tokenDecimalsCache[tokenAddress] = metadata.decimals;
-    
-    // Remove from failed lookups if it was there
-    failedTokenLookups.delete(tokenAddress);
-    
-    // Save to persistent cache
-    saveTokenCacheToStorage();
-    saveFailedLookupsToStorage();
-    
-    // Update all DOM elements with this token address
-    updateAllTokenElements(tokenAddress, tokenInfo);
-    
-    console.log(`✅ Updated all elements for token ${tokenAddress} with: ${tokenInfo.symbol} - ${tokenInfo.name}`);
+    // Only cache if we have real token data
+    if (isRealTokenData(tokenInfo)) {
+      tokenInfoCache[tokenAddress] = tokenInfo;
+      tokenSymbolsCache[tokenAddress] = metadata.symbol;
+      tokenDecimalsCache[tokenAddress] = metadata.decimals;
+      
+      // Remove from failed lookups if it was there
+      failedTokenLookups.delete(tokenAddress);
+      
+      // Save to persistent cache
+      saveTokenCacheToStorage();
+      saveFailedLookupsToStorage();
+      
+      // Update all DOM elements with this token address
+      updateAllTokenElements(tokenAddress, tokenInfo);
+      
+      console.log(`✅ Updated all elements for token ${tokenAddress} with: ${tokenInfo.symbol} - ${tokenInfo.name}`);
+    }
   } catch (error) {
     console.warn(`Failed to fetch token info for ${tokenAddress}:`, error);
     
@@ -451,6 +432,9 @@ export async function fetchTokenInfoAndUpdateDOM(
     if (retryQueue.length === 1) {
       setTimeout(() => retryFailedTokenLookups(), 5000); // Retry after 5 seconds
     }
+    
+    // Don't update DOM with fallback symbols - keep existing data
+    console.log(`⚠️ Keeping existing token display for ${tokenAddress} while retrying...`);
   }
 }
 
@@ -484,22 +468,24 @@ async function retryFailedTokenLookups(): Promise<void> {
         address: tokenAddress as `0x${string}`
       };
       
-      // Cache the complete token info
-      tokenInfoCache[tokenAddress as `0x${string}`] = tokenInfo;
-      tokenSymbolsCache[tokenAddress as `0x${string}`] = metadata.symbol;
-      tokenDecimalsCache[tokenAddress as `0x${string}`] = metadata.decimals;
-      
-      // Remove from failed lookups
-      failedTokenLookups.delete(tokenAddress);
-      
-      // Save to persistent cache
-      saveTokenCacheToStorage();
-      saveFailedLookupsToStorage();
-      
-      // Update all DOM elements with this token address
-      updateAllTokenElements(tokenAddress, tokenInfo);
-      
-      console.log(`✅ Background retry successful for ${tokenAddress}: ${tokenInfo.symbol} - ${tokenInfo.name}`);
+      // Only cache if we have real token data
+      if (isRealTokenData(tokenInfo)) {
+        tokenInfoCache[tokenAddress as `0x${string}`] = tokenInfo;
+        tokenSymbolsCache[tokenAddress as `0x${string}`] = metadata.symbol;
+        tokenDecimalsCache[tokenAddress as `0x${string}`] = metadata.decimals;
+        
+        // Remove from failed lookups
+        failedTokenLookups.delete(tokenAddress);
+        
+        // Save to persistent cache
+        saveTokenCacheToStorage();
+        saveFailedLookupsToStorage();
+        
+        // Update all DOM elements with this token address
+        updateAllTokenElements(tokenAddress, tokenInfo);
+        
+        console.log(`✅ Background retry successful for ${tokenAddress}: ${tokenInfo.symbol} - ${tokenInfo.name}`);
+      }
       
       // Small delay between retries to avoid overwhelming APIs
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -539,38 +525,6 @@ export async function forceRetryTokens(tokenAddresses: string[]): Promise<void> 
   }
 }
 
-/**
- * Get retry status for UI display
- */
-export function getRetryStatus(): { 
-  unresolvedCount: number; 
-  unresolvedTokens: string[]; 
-  isRetrying: boolean 
-} {
-  return {
-    unresolvedCount: failedTokenLookups.size,
-    unresolvedTokens: Array.from(failedTokenLookups),
-    isRetrying: retryQueue.length > 0
-  };
-}
-
-/**
- * Force retry all unresolved tokens
- */
-export async function retryAllUnresolvedTokens(): Promise<void> {
-  const unresolvedTokens = Array.from(failedTokenLookups);
-  console.log(`🔄 Force retrying ${unresolvedTokens.length} unresolved tokens...`);
-  
-  for (const address of unresolvedTokens) {
-    if (!retryQueue.includes(address)) {
-      retryQueue.push(address);
-    }
-  }
-  
-  if (retryQueue.length > 0) {
-    setTimeout(() => retryFailedTokenLookups(), 500); // Retry immediately
-  }
-}
 
 /**
  * Clear all caches (useful for debugging)
@@ -665,13 +619,6 @@ export async function getTokenSymbol(tokenAddress: `0x${string}`): Promise<strin
     return tokenSymbolsCache[tokenAddress];
   }
 
-  // Check known tokens
-  if (KNOWN_TOKENS[tokenAddress]) {
-    const symbol = KNOWN_TOKENS[tokenAddress].symbol;
-    tokenSymbolsCache[tokenAddress] = symbol;
-    return symbol;
-  }
-
   try {
     // Fetch from la-tribu API
     const metadata = await fetchTokenMetadata(tokenAddress);
@@ -681,24 +628,10 @@ export async function getTokenSymbol(tokenAddress: `0x${string}`): Promise<strin
     console.warn(`Failed to fetch symbol for token ${tokenAddress}:`, error);
   }
 
-  // Default to formatted address
-  return formatAddress(tokenAddress);;
+  // Default to fallback symbol
+  return generateFallbackSymbol(tokenAddress);
 }
 
-/**
- * Get token address from symbol (reverse lookup)
- */
-export function getTokenAddress(symbol: string): string | null {
-  const token = Object.values(KNOWN_TOKENS).find(t => t.symbol.toUpperCase() === symbol.toUpperCase());
-  return token ? token.address : null;
-}
-
-/**
- * Check if token symbol is known
- */
-export function isKnownTokenSymbol(symbol: string): boolean {
-  return Object.values(KNOWN_TOKENS).some(t => t.symbol.toUpperCase() === symbol.toUpperCase());
-}
 
 /**
  * Format number with proper decimal places

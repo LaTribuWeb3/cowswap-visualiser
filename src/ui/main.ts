@@ -28,8 +28,6 @@ import {
   calculateConversionRates,
   formatScientific,
   fetchTokenInfoAndUpdateDOM,
-  getRetryStatus,
-  retryAllUnresolvedTokens,
   clearAllCaches,
 } from "./utils";
 import {
@@ -669,8 +667,6 @@ async function init(): Promise<void> {
   // Add manual refresh button
   addManualRefreshButton();
   
-  // Add token retry status UI
-  addTokenRetryStatusUI();
 
   // Check API health
   const isHealthy = await checkAPIHealth();
@@ -732,153 +728,6 @@ function addManualRefreshButton(): void {
   console.log("✅ Manual refresh button added");
 }
 
-/**
- * Add token retry status UI to show unresolved tokens and retry options
- */
-function addTokenRetryStatusUI(): void {
-  // Find a good place to add the retry status UI
-  const tradesCountElement = document.getElementById("tradesCount");
-  if (!tradesCountElement) {
-    console.warn("⚠️ Could not find tradesCount element to add retry status UI");
-    return;
-  }
-
-  // Create retry status container
-  const retryStatusContainer = document.createElement("div");
-  retryStatusContainer.id = "tokenRetryStatus";
-  retryStatusContainer.className = "retry-status-container";
-  retryStatusContainer.style.cssText = `
-    margin: 10px 0;
-    padding: 10px;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    font-size: 14px;
-    display: none;
-  `;
-
-  // Create retry status content
-  const retryStatusContent = document.createElement("div");
-  retryStatusContent.id = "retryStatusContent";
-  retryStatusContent.style.cssText = `
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  `;
-
-  // Create retry button
-  const retryButton = document.createElement("button");
-  retryButton.id = "retryTokensButton";
-  retryButton.className = "retry-tokens-button";
-  retryButton.innerHTML = '<i class="fas fa-redo"></i> Retry Unresolved Tokens';
-  retryButton.style.cssText = `
-    background: #007bff;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  `;
-  retryButton.title = "Retry fetching names for unresolved token addresses";
-
-  // Create clear cache button
-  const clearCacheButton = document.createElement("button");
-  clearCacheButton.id = "clearCacheButton";
-  clearCacheButton.className = "clear-cache-button";
-  clearCacheButton.innerHTML = '<i class="fas fa-trash"></i> Clear Cache';
-  clearCacheButton.style.cssText = `
-    background: #dc3545;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  `;
-  clearCacheButton.title = "Clear all token caches (for debugging)";
-
-  // Create status text
-  const statusText = document.createElement("span");
-  statusText.id = "retryStatusText";
-  statusText.style.cssText = `
-    color: #6c757d;
-    font-size: 12px;
-  `;
-
-  // Add event listeners
-  retryButton.addEventListener("click", async () => {
-    retryButton.disabled = true;
-    retryButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...';
-    
-    try {
-      await retryAllUnresolvedTokens();
-      showToast("Retrying unresolved tokens...", "info");
-      setTimeout(updateRetryStatusUI, 2000); // Update UI after 2 seconds
-    } catch (error) {
-      console.error("❌ Error during token retry:", error);
-      showToast("Failed to retry tokens", "error");
-    } finally {
-      retryButton.disabled = false;
-      retryButton.innerHTML = '<i class="fas fa-redo"></i> Retry Unresolved Tokens';
-    }
-  });
-
-  clearCacheButton.addEventListener("click", () => {
-    if (confirm("Are you sure you want to clear all token caches? This will remove all cached token information.")) {
-      clearAllCaches();
-      showToast("Token caches cleared", "success");
-      updateRetryStatusUI();
-    }
-  });
-
-  // Assemble the UI
-  retryStatusContent.appendChild(statusText);
-  retryStatusContent.appendChild(retryButton);
-  retryStatusContent.appendChild(clearCacheButton);
-  retryStatusContainer.appendChild(retryStatusContent);
-
-  // Insert after the trades count element
-  tradesCountElement.parentNode?.insertBefore(retryStatusContainer, tradesCountElement.nextSibling);
-
-  // Initial update
-  updateRetryStatusUI();
-
-  // Update periodically
-  setInterval(updateRetryStatusUI, 10000); // Update every 10 seconds
-
-  console.log("✅ Token retry status UI added");
-}
-
-/**
- * Update the retry status UI based on current state
- */
-function updateRetryStatusUI(): void {
-  const retryStatusContainer = document.getElementById("tokenRetryStatus");
-  const statusText = document.getElementById("retryStatusText");
-  const retryButton = document.getElementById("retryTokensButton") as HTMLButtonElement;
-
-  if (!retryStatusContainer || !statusText || !retryButton) {
-    return;
-  }
-
-  const status = getRetryStatus();
-  
-  if (status.unresolvedCount > 0) {
-    retryStatusContainer.style.display = "block";
-    statusText.textContent = `${status.unresolvedCount} token${status.unresolvedCount === 1 ? '' : 's'} unresolved${status.isRetrying ? ' (retrying...)' : ''}`;
-    retryButton.disabled = status.isRetrying;
-  } else {
-    retryStatusContainer.style.display = "none";
-  }
-}
 
 /**
  * Set up event listeners
