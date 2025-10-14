@@ -1,4 +1,4 @@
-import { EthereumService } from "../services/ethereum";
+// EthereumService is now accessed via API calls to the backend
 
 // TypeScript interfaces for the script
 interface TokenInfo {
@@ -223,8 +223,6 @@ const tokenInfo: Record<`0x${string}`, TokenInfo> = {};
 // Global variables
 let currentTradeData: TradeData | null = null;
 
-const ethereumService = new EthereumService();
-
 // Enhanced utility functions for better formatting
 function formatNumber(num: number): string {
   if (num >= 1000000) {
@@ -438,7 +436,43 @@ function populateTradesList(): void {
     const tradeElement = document.createElement('div');
     tradeElement.className = 'trade-card';
     tradeElement.setAttribute('data-trade-index', index.toString());
-    tradeElement.addEventListener('click', () => showTradeDetails(index));
+    tradeElement.style.cursor = 'pointer';
+    
+    // Add click event listener with proper event handling
+    tradeElement.addEventListener('click', (event) => {
+      // Don't trigger if clicking on links or buttons
+      if (event.target instanceof HTMLElement) {
+        const target = event.target as HTMLElement;
+        if (target.closest('a') || target.closest('button')) {
+          return; // Let the link/button handle its own click
+        }
+      }
+      // Use the main.ts showTradeDetails function that creates a popup
+      // Convert the static trade data to Transaction format
+      const tradeData = tradesData[index];
+      const transaction: any = {
+        hash: tradeData.hash,
+        blockNumber: tradeData.blockNumber,
+        timestamp: tradeData.timestamp,
+        from: tradeData.from,
+        to: tradeData.to,
+        value: tradeData.value,
+        gasPrice: tradeData.gasPrice,
+        gasUsed: tradeData.gasUsed,
+        status: tradeData.status,
+        parsedData: tradeData.parsedData
+      };
+      
+      // Call the main showTradeDetails function
+      console.log('🔍 Attempting to call showTradeDetails with transaction:', transaction);
+      if (typeof (window as any).showTradeDetails === 'function') {
+        console.log('✅ showTradeDetails function found, calling it...');
+        (window as any).showTradeDetails(transaction);
+      } else {
+        console.error('❌ showTradeDetails function not found on window object');
+        console.log('🔍 Available window functions:', Object.keys(window).filter(key => key.includes('show')));
+      }
+    });
     
     tradeElement.innerHTML = `
       <div class="trade-header">
@@ -480,21 +514,7 @@ function populateTradesList(): void {
   });
 }
 
-function showTradeDetails(tradeIndex: number): void {
-  currentTradeData = tradesData[tradeIndex];
-  
-  // Hide trades list and show details
-  const tradesList = document.querySelector('.trades-list') as HTMLElement;
-  const tradeDetailsSection = document.getElementById('tradeDetailsSection');
-  
-  if (tradesList) tradesList.style.display = 'none';
-  if (tradeDetailsSection) tradeDetailsSection.style.display = 'block';
-  
-  // Populate trade details
-  populateTradeOverview();
-  populateTokensAndPrices();
-  populateInteractions();
-}
+// showTradeDetails function removed - now using the popup version from main.ts
 
 function showTradesList(): void {
   // Show trades list and hide details
@@ -684,9 +704,9 @@ async function populateConversionRates(trade: Trade, sellToken: TokenInfo, buyTo
   const sellTokenClearingPrice = parseFloat(clearingPrices[trade.sellTokenIndex]);
   const buyTokenClearingPrice = parseFloat(clearingPrices[trade.buyTokenIndex]);
   
-  // Fetch token decimals if not already cached
-  const sellTokenDecimals = await ethereumService.getTokenDecimals(trade.sellToken);
-  const buyTokenDecimals = await ethereumService.getTokenDecimals(trade.buyToken);
+  // Use cached token decimals or default to 18
+  const sellTokenDecimals = sellToken.decimals || 18;
+  const buyTokenDecimals = buyToken.decimals || 18;
   
   // Calculate amounts in human-readable format using actual decimals
   const sellAmount = parseFloat(trade.sellAmount) / Math.pow(10, sellTokenDecimals);

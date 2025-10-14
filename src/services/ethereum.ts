@@ -11,18 +11,7 @@ import {
 } from "viem";
 import * as chains from "viem/chains";
 import { GPv2SettlementABI } from "../abi/GPv2SettlementABI";
-import dotenv from "dotenv";
-dotenv.config();
-
-type NetworkInfo = {
-  name: string;
-  rpcUrl: string;
-  chainId: number;
-  chainSlug: string;
-  explorerUrl: string;
-  success: boolean | null;
-  errors: {code: number, message: string}[];
-};
+import { getNetworkConfig } from "../config/networks";
 
 // CoW Protocol contract address (mainnet)
 const COW_PROTOCOL_ADDRESS =
@@ -70,38 +59,46 @@ export class EthereumService {
   }
 
   public async switchNetwork(networkId?: string) {
-    const tokenMetadataApiUrl =
-      process.env.TOKENS_METADATA_API_URL ||
-      "https://tokens-metadata.la-tribu.xyz";
-    const tokenMetadataApiToken =
-      process.env.TOKEN_METADATA_API_TOKEN ||
-      "your_token_metadata_api_token_here";
-    const networkInfoData = await fetch(
-      `${tokenMetadataApiUrl}/network/${networkId}/info`,
-      {
-        headers: {
-          Authorization: `Bearer ${tokenMetadataApiToken}`,
-          "Content-Type": "application/json",
-        },  
-      }
-    );
-    const networkInfo: NetworkInfo = await networkInfoData.json() as NetworkInfo;
+    // Construct RPC URL from environment variables
+    const rpcBaseUrl = process.env.RPC_BASE_URL || "https://rpc.example.com";
+    // Use provided networkId, or default to 1 (Ethereum Mainnet)
+    const actualNetworkId = networkId || "1";
+    const rpcToken = process.env.RPC_TOKEN || "demo";
+    const rpcUrl = `${rpcBaseUrl}/${actualNetworkId}/${rpcToken}`;
 
-    if (networkInfo.success === false) {
-      throw new Error(JSON.stringify(networkInfo.errors));
-    }
+    console.log(`🔗 Switching to network ${actualNetworkId}`);
+    console.log(`🔗 Using RPC URL: ${rpcUrl}`);
 
-    console.log(`🔗 Switching to network ${networkId}`);
+    // Get network configuration
+    const networkConfig = getNetworkConfig(actualNetworkId);
+    const chainId = networkConfig?.chainId || parseInt(actualNetworkId);
 
-    const networkName = Object.keys(chains).filter(
-      (chainName) =>
-        chains[chainName as keyof typeof chains].id === networkInfo.chainId
-    )[0] as keyof typeof chains;
+    // Get the chain from viem/chains
+    // Convert chains object to array and find matching chain
+    const viemChains = Object.values(chains) as Chain[];
+    const matchingChain = viemChains.find((chain: Chain) => chain.id === chainId);
+    
+    // Use matching chain or create a basic chain config
+    const chain: Chain = matchingChain || ({
+      id: chainId,
+      name: networkConfig?.name || `Chain ${chainId}`,
+      nativeCurrency: networkConfig?.nativeCurrency || {
+        name: 'Ether',
+        symbol: 'ETH',
+        decimals: 18,
+      },
+      rpcUrls: {
+        default: { http: [rpcUrl] },
+        public: { http: [rpcUrl] },
+      },
+    } as Chain);
 
-    // Create public client for Mainnet
+    console.log(`⛓️ Using chain: ${chain.name} (ID: ${chain.id})`);
+
+    // Create public client
     this.client = createPublicClient({
-      chain: chains[networkName] as Chain,
-      transport: http(networkInfo.rpcUrl),
+      chain: chain,
+      transport: http(rpcUrl),
     });
 
     // Create contract instance

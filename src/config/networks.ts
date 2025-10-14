@@ -24,7 +24,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
   '1': {
     chainId: 1,
     name: 'Ethereum Mainnet',
-    databaseName: 'mainnet-visualizer',
+    databaseName: 'mainnet-visualiser',
     explorerUrl: 'https://etherscan.io',
     nativeCurrency: {
       name: 'Ether',
@@ -35,7 +35,7 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
   '42161': {
     chainId: 42161,
     name: 'Arbitrum One',
-    databaseName: 'arbitrum-visualizer',
+    databaseName: 'arbitrum-visualiser',
     explorerUrl: 'https://arbiscan.io',
     nativeCurrency: {
       name: 'Ether',

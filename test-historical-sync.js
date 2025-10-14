@@ -89,8 +89,6 @@ try {
   const envContent = fs.readFileSync('.env', 'utf8');
   const envVars = {
     'MONGODB_URI': envContent.includes('MONGODB_URI'),
-    'RPC_BASE_URL': envContent.includes('RPC_BASE_URL'),
-    'RPC_TOKEN': envContent.includes('RPC_TOKEN')
   };
   
   Object.entries(envVars).forEach(([varName, exists]) => {

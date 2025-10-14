@@ -48,10 +48,6 @@ npm install
 
 3. Create a `.env` file (required):
 ```bash
-# Ethereum RPC Configuration (REQUIRED) - Load Balancer Format
-RPC_BASE_URL=https://rpc.example.com
-RPC_TOKEN=your_rpc_token_here
-
 # CoW Protocol API configuration
 COW_API_KEY=your_api_key_here
 
@@ -114,18 +110,6 @@ See `NETWORK_DATABASE_CONFIGURATION.md` for detailed information.
 ## Ethereum Integration
 
 The project uses viem to connect to Ethereum mainnet and interact with the CoW Protocol contract. You can configure the RPC endpoint by setting the RPC load balancer configuration in your `.env` file.
-
-### RPC Configuration
-
-- **Required**: You must set `RPC_BASE_URL` and `RPC_TOKEN` in your `.env` file
-- **Load Balancer Format**: The RPC URL is constructed as `RPC_BASE_URL/NETWORK_ID/RPC_TOKEN`
-- **Network Selection**: Users can switch networks via the UI dropdown (no need to set NETWORK_ID in .env)
-- **Supported Networks**:
-  - Ethereum Mainnet (Chain ID: 1) - Database: `mainnet-visualizer`
-  - Arbitrum One (Chain ID: 42161) - Database: `arbitrum-visualizer`
-- **Example**:
-  - `RPC_BASE_URL=https://rpc.example.com`
-  - `RPC_TOKEN=your_rpc_token_here`
 
 ### Blockchain Explorer Configuration
 

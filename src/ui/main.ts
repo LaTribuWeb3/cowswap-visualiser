@@ -643,50 +643,65 @@ let elements: DOMElements;
 async function init(): Promise<void> {
   console.log("🚀 Initializing CoW Protocol Trade Visualizer...");
 
-  // Cache DOM elements
-  elements = {
-    tradesGrid: document.getElementById("tradesGrid") as HTMLElement,
-    tradesCount: document.getElementById("tradesCount") as HTMLElement,
-    tradeDetailsSection: document.getElementById(
-      "tradeDetailsSection"
-    ) as HTMLElement,
-    filterContainer: document.getElementById("filterContent") as HTMLElement,
-    filterForm: document.getElementById("filterForm") as HTMLElement,
-    startDateInput: document.getElementById("startDate") as HTMLInputElement,
-    endDateInput: document.getElementById("endDate") as HTMLInputElement,
-    sellTokenInput: document.getElementById("sellToken") as HTMLInputElement,
-    buyTokenInput: document.getElementById("buyToken") as HTMLInputElement,
-    clearFiltersButton: document.getElementById("clearFiltersButton") as HTMLButtonElement,
-    applyFiltersButton: document.getElementById("applyFiltersButton") as HTMLButtonElement,
-  };
+  try {
+    // Cache DOM elements
+    console.log("🔍 Caching DOM elements...");
+    elements = {
+      tradesGrid: document.getElementById("tradesGrid") as HTMLElement,
+      tradesCount: document.getElementById("tradesCount") as HTMLElement,
+      tradeDetailsSection: document.getElementById(
+        "tradeDetailsSection"
+      ) as HTMLElement,
+      filterContainer: document.getElementById("filterContent") as HTMLElement,
+      filterForm: document.getElementById("filterForm") as HTMLElement,
+      startDateInput: document.getElementById("startDate") as HTMLInputElement,
+      endDateInput: document.getElementById("endDate") as HTMLInputElement,
+      sellTokenInput: document.getElementById("sellToken") as HTMLInputElement,
+      buyTokenInput: document.getElementById("buyToken") as HTMLInputElement,
+      clearFiltersButton: document.getElementById("clearFiltersButton") as HTMLButtonElement,
+      applyFiltersButton: document.getElementById("applyFiltersButton") as HTMLButtonElement,
+    };
+    console.log("✅ DOM elements cached successfully");
 
-  // Set up event listeners
-  setupEventListeners();
-  
-  // Initialize filters
-  initializeFilters();
-  
-  // Add manual refresh button
-  addManualRefreshButton();
-  
+    // Set up event listeners
+    console.log("👂 Setting up event listeners...");
+    setupEventListeners();
+    
+    // Initialize filters
+    console.log("🔧 Initializing filters...");
+    initializeFilters();
+    
+    // Add manual refresh button
+    console.log("🔄 Adding manual refresh button...");
+    addManualRefreshButton();
+    
+    // Check API health
+    console.log("🏥 Checking API health...");
+    const isHealthy = await checkAPIHealth();
+    if (!isHealthy) {
+      console.warn(
+        "⚠️ API server is not running. Please start the backend server."
+      );
+      showError(
+        "Backend server is not running. Please start the server with: npm run server:dev"
+      );
+      return;
+    }
+    console.log("✅ API health check passed");
 
-  // Check API health
-  const isHealthy = await checkAPIHealth();
-  if (!isHealthy) {
-    console.warn(
-      "⚠️ API server is not running. Please start the backend server."
-    );
-    showError(
-      "Backend server is not running. Please start the server with: npm run server:dev"
-    );
-    return;
+    // Load initial data
+    console.log("📊 Loading initial trades data...");
+    await loadTrades(1);
+    
+    // Update filter display
+    console.log("🎨 Updating filter display...");
+    updateFilterDisplay();
+    
+    console.log("✅ CoW Protocol Trade Visualizer initialization completed successfully");
+  } catch (error) {
+    console.error("❌ Error during initialization:", error);
+    throw error;
   }
-
-  // Load initial data
-  await loadTrades(1);
-  
-  // Update filter display
-  updateFilterDisplay();
 }
 
 /**
@@ -1809,8 +1824,8 @@ async function createTradeTableRow(
       // Don't trigger if clicking on retry button or other interactive elements
       if (event.target instanceof HTMLElement) {
         const target = event.target as HTMLElement;
-        if (target.closest('.retry-button') || target.closest('button')) {
-          return; // Let the button handle its own click
+        if (target.closest('.retry-button') || target.closest('button') || target.closest('a')) {
+          return; // Let the button/link handle its own click
         }
       }
       
@@ -1924,8 +1939,8 @@ async function createTradeTableRow(
       // Don't trigger if clicking on retry button or other interactive elements
       if (event.target instanceof HTMLElement) {
         const target = event.target as HTMLElement;
-        if (target.closest('.retry-button') || target.closest('button')) {
-          return; // Let the button handle its own click
+        if (target.closest('.retry-button') || target.closest('button') || target.closest('a')) {
+          return; // Let the button/link handle its own click
         }
       }
       
@@ -2107,21 +2122,38 @@ async function toggleSolverCompetition(txHash: string, button: HTMLButtonElement
  */
 async function showTradeDetails(trade: Transaction): Promise<void> {
   console.log(`🔍 showTradeDetails called with trade:`, trade);
+  console.log(`🔍 Trade hash: ${trade.hash}`);
+  console.log(`🔍 Trade structure:`, {
+    hasBuyAmount: !!trade.buyAmount,
+    hasSellToken: !!trade.sellToken,
+    hasBuyToken: !!trade.buyToken,
+    hasParsedData: !!trade.parsedData,
+    hasTrades: !!(trade.parsedData?.trades?.length)
+  });
+  
   try {
     state.currentTrade = trade;
 
     // Create and display info frame overlay
+    console.log("🔍 Creating trade info frame overlay...");
     const infoFrameOverlay = await createTradeInfoFrameOverlay(trade);
+    console.log("🔍 Trade info frame overlay created:", infoFrameOverlay);
 
     // Add the overlay to the body
+    console.log("🔍 Adding overlay to document body...");
     document.body.appendChild(infoFrameOverlay);
+    console.log("🔍 Overlay added to body");
 
-    console.log("✅ Trade info frame overlay loaded");
+    console.log("✅ Trade info frame overlay loaded and displayed");
   } catch (error) {
     console.error("❌ Error loading trade details:", error);
+    console.error("❌ Error stack:", error);
     showError("Failed to load trade details");
   }
 }
+
+// Make showTradeDetails globally accessible
+(window as any).showTradeDetails = showTradeDetails;
 
 /**
  * Create trade info frame overlay
@@ -3417,26 +3449,37 @@ async function fetchNetworks(): Promise<ChainNetwork[]> {
 }
 
 async function initializeNetworkSelector() {
+  console.log("🔍 Starting network selector initialization...");
+  
   const networkSelect = document.getElementById('networkSelect') as HTMLSelectElement;
   
   if (!networkSelect) {
-    console.warn('Network selector not found');
+    console.error('❌ Network selector element not found in DOM');
     return;
   }
+  
+  console.log("✅ Network selector element found");
 
   try {
+    console.log("📡 Fetching networks...");
     const networks = await fetchNetworks();
+    console.log(`📡 Fetched ${networks.length} networks:`, networks);
     
     // Get current network ID from sessionStorage or default to 1 (Ethereum Mainnet)
     const storedNetworkId = sessionStorage.getItem('NETWORK_ID');
     const currentNetworkId = storedNetworkId || '1';
     const currentNetworkIdNum = parseInt(currentNetworkId);
     
+    console.log(`🔗 Current network ID: ${currentNetworkId} (parsed: ${currentNetworkIdNum})`);
+    
     // Clear existing options
     networkSelect.innerHTML = '';
+    console.log("🧹 Cleared existing network options");
     
     // Add networks to dropdown
-    networks.forEach(network => {
+    networks.forEach((network, index) => {
+      console.log(`➕ Adding network ${index + 1}: ${network.name} (ID: ${network.chainId})`);
+      
       const option = document.createElement('option');
       option.value = network.chainId.toString();
       option.textContent = `${network.name} (Chain ID: ${network.chainId})`;
@@ -3444,6 +3487,7 @@ async function initializeNetworkSelector() {
       // Select current network
       if (network.chainId === currentNetworkIdNum) {
         option.selected = true;
+        console.log(`✅ Selected current network: ${network.name}`);
       }
       
       networkSelect.appendChild(option);
@@ -3451,12 +3495,14 @@ async function initializeNetworkSelector() {
     
     // Add change event listener
     networkSelect.addEventListener('change', handleNetworkChange);
+    console.log("👂 Added change event listener to network selector");
     
     console.log(`✅ Network selector initialized with ${networks.length} networks`);
     console.log(`🔗 Current network: ${currentNetworkId}`);
     
   } catch (error) {
     console.error('❌ Error initializing network selector:', error);
+    console.error('❌ Error details:', error);
     networkSelect.innerHTML = '<option value="">Error loading networks</option>';
   }
 }
@@ -3535,6 +3581,28 @@ if (typeof window !== 'undefined' && !sessionStorage.getItem('NETWORK_ID')) {
 
 // Initialize the application when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
-  init();
-  initializeNetworkSelector();
+  console.log("📄 DOM Content Loaded - Starting initialization...");
+  
+  // Initialize network ID in sessionStorage if not present
+  if (typeof window !== 'undefined' && !sessionStorage.getItem('NETWORK_ID')) {
+    sessionStorage.setItem('NETWORK_ID', '1');
+    console.log(`🔗 Initialized network ID to: 1 (Ethereum Mainnet)`);
+  } else if (typeof window !== 'undefined') {
+    const storedNetworkId = sessionStorage.getItem('NETWORK_ID');
+    console.log(`🔗 Using stored network ID: ${storedNetworkId}`);
+  }
+  
+  console.log("🚀 Starting main init()...");
+  init().then(() => {
+    console.log("✅ Main init() completed successfully");
+  }).catch((error) => {
+    console.error("❌ Main init() failed:", error);
+  });
+  
+  console.log("🌐 Starting network selector initialization...");
+  initializeNetworkSelector().then(() => {
+    console.log("✅ Network selector initialization completed");
+  }).catch((error) => {
+    console.error("❌ Network selector initialization failed:", error);
+  });
 });

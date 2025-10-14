@@ -99,6 +99,10 @@ export async function fetchTradesWithPagination(
   };
 }> {
   try {
+    console.log(`🌐 API: Fetching trades with pagination - limit: ${limit}, offset: ${offset}`);
+    console.log(`🌐 API: Filters:`, filters);
+    console.log(`🌐 API: Base URL: ${API_BASE_URL}`);
+    
     const url = new URL(`${API_BASE_URL}/api/trades`);
     url.searchParams.append('limit', limit.toString());
     url.searchParams.append('offset', offset.toString());
@@ -125,17 +129,26 @@ export async function fetchTradesWithPagination(
       }
     }
     
+    console.log(`🌐 API: Full URL: ${url.toString()}`);
+    
     const response = await fetch(url.toString());
+    console.log(`🌐 API: Response status: ${response.status} ${response.statusText}`);
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`🌐 API: Error response body:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json() as any;
+    console.log(`🌐 API: Response data:`, data);
     
     if (!data.success || !data.data) {
+      console.error(`🌐 API: Invalid response structure:`, data);
       throw new Error(data.error || 'Failed to fetch trades');
     }
+    
+    console.log(`🌐 API: Successfully fetched ${data.data.length} trades`);
     
     return {
       trades: data.data,
@@ -147,7 +160,7 @@ export async function fetchTradesWithPagination(
       }
     };
   } catch (error) {
-    console.error('Error fetching trades with pagination:', error);
+    console.error('❌ API: Error fetching trades with pagination:', error);
     throw error;
   }
 }
@@ -207,10 +220,18 @@ export async function fetchRecentEvents(): Promise<any[]> {
  */
 export async function checkAPIHealth(): Promise<boolean> {
   try {
+    console.log(`🏥 API: Checking health at ${API_BASE_URL}/health`);
     const response = await fetch(`${API_BASE_URL}/health`);
+    console.log(`🏥 API: Health check response status: ${response.status} ${response.statusText}`);
+    
+    if (response.ok) {
+      const healthData = await response.json();
+      console.log(`🏥 API: Health check data:`, healthData);
+    }
+    
     return response.ok;
   } catch (error) {
-    console.error('API health check failed:', error);
+    console.error('❌ API: Health check failed:', error);
     return false;
   }
 }
