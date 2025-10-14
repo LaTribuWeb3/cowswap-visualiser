@@ -3375,49 +3375,45 @@ function showToast(
 interface ChainNetwork {
   chainId: number;
   name: string;
+  databaseName?: string;
   nativeCurrency?: {
     name: string;
     symbol: string;
     decimals: number;
   };
-  rpc?: string[];
 }
 
-let networksCache: ChainNetwork[] | null = null;
+/**
+ * Supported networks configuration
+ * Limited to mainnet and arbitrum
+ */
+const SUPPORTED_NETWORKS: ChainNetwork[] = [
+  {
+    chainId: 1,
+    name: 'Ethereum Mainnet',
+    databaseName: 'mainnet-visualizer',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18
+    }
+  },
+  {
+    chainId: 42161,
+    name: 'Arbitrum One',
+    databaseName: 'arbitrum-visualizer',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18
+    }
+  }
+];
 
 async function fetchNetworks(): Promise<ChainNetwork[]> {
-  if (networksCache) {
-    return networksCache;
-  }
-
-  try {
-    console.log('🌐 Fetching networks from chainlist.org...');
-    const response = await fetch('https://chainlist.org/rpcs.json');
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch networks: ${response.status}`);
-    }
-
-    const networks: ChainNetwork[] = await response.json();
-    
-    // Sort networks by chainId
-    networks.sort((a, b) => a.chainId - b.chainId);
-    
-    networksCache = networks;
-    console.log(`✅ Loaded ${networks.length} networks`);
-    
-    return networks;
-  } catch (error) {
-    console.error('❌ Error fetching networks:', error);
-    // Return some popular networks as fallback
-    return [
-      { chainId: 1, name: 'Ethereum Mainnet' },
-      { chainId: 10, name: 'Optimism' },
-      { chainId: 137, name: 'Polygon' },
-      { chainId: 42161, name: 'Arbitrum One' },
-      { chainId: 8453, name: 'Base' },
-    ];
-  }
+  console.log('🌐 Loading supported networks...');
+  console.log(`✅ Loaded ${SUPPORTED_NETWORKS.length} networks (Mainnet and Arbitrum)`);
+  return SUPPORTED_NETWORKS;
 }
 
 async function initializeNetworkSelector() {

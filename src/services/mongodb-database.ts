@@ -1,5 +1,6 @@
 import { MongoClient, Db, Collection } from 'mongodb';
 import { EthereumService } from './ethereum';
+import { getDatabaseName } from '../config/networks';
 
 export interface DatabaseConfig {
   databases: {
@@ -15,10 +16,12 @@ export class MongoDBDatabaseService {
   private client: MongoClient;
   private db: Db | null = null;
   private transactionsCollection: Collection | null = null;
+  private currentNetworkId: string = '1';
 
-  constructor() {
+  constructor(networkId?: string) {
     const mongoUri = process.env.MONGODB_URI;
-    this.ethereumService = new EthereumService();
+    this.currentNetworkId = networkId || '1';
+    this.ethereumService = new EthereumService(this.currentNetworkId);
 
     if (!mongoUri) {
       throw new Error('MONGODB_URI environment variable is required');
@@ -31,9 +34,8 @@ export class MongoDBDatabaseService {
     try {
       await this.client.connect();
 
-      const network = process.env.NETWORK || 'mainnet';
-
-      const dbName = network + "-visualiser";
+      // Use network configuration to get database name
+      const dbName = getDatabaseName(this.currentNetworkId);
       this.db = this.client.db(dbName);
       
       this.transactionsCollection = this.db.collection("transactions");
@@ -41,9 +43,36 @@ export class MongoDBDatabaseService {
       // Create indexes for efficient querying
       await this.createIndexes();
       
-      console.log('🔌 MongoDB connected successfully');
+      console.log(`🔌 MongoDB connected successfully to database: ${dbName}`);
     } catch (error) {
       console.error('❌ Failed to connect to MongoDB:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Switch to a different network database
+   */
+  async switchNetwork(networkId: string): Promise<void> {
+    try {
+      console.log(`🔄 Switching database from network ${this.currentNetworkId} to ${networkId}...`);
+      
+      this.currentNetworkId = networkId;
+      
+      // Get new database name
+      const dbName = getDatabaseName(networkId);
+      this.db = this.client.db(dbName);
+      this.transactionsCollection = this.db.collection("transactions");
+      
+      // Create indexes for the new database
+      await this.createIndexes();
+      
+      // Switch network in ethereum service
+      this.ethereumService.switchNetwork(networkId);
+      
+      console.log(`✅ Switched to database: ${dbName}`);
+    } catch (error) {
+      console.error('❌ Error switching network database:', error);
       throw error;
     }
   }

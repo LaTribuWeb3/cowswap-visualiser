@@ -91,6 +91,14 @@ function getEthereumService(networkId?: string): any {
     console.log(`🔄 Switching network from ${currentNetworkId} to ${targetNetworkId} on existing instance`);
     ethereumServiceInstance.switchNetwork(targetNetworkId);
     currentNetworkId = targetNetworkId;
+    
+    // Also switch database network if connected
+    if (databaseService && typeof databaseService.switchNetwork === 'function') {
+      console.log(`🔄 Switching database network to ${targetNetworkId}...`);
+      databaseService.switchNetwork(targetNetworkId).catch((error: any) => {
+        console.error('❌ Error switching database network:', error);
+      });
+    }
   } else {
     console.log(`✓ Using existing EthereumService instance (already on network ${currentNetworkId})`);
   }
@@ -98,12 +106,14 @@ function getEthereumService(networkId?: string): any {
   return ethereumServiceInstance;
 }
 
-async function initializeDatabase() {
+async function initializeDatabase(networkId?: string) {
   try {
+    const targetNetworkId = networkId || currentNetworkId || '1';
+    
     if (process.env.MONGODB_URI) {
-      console.log('🔌 Initializing MongoDB database...');
+      console.log(`🔌 Initializing MongoDB database for network ${targetNetworkId}...`);
       const { MongoDBDatabaseService } = await import('./services/mongodb-database');
-      databaseService = new MongoDBDatabaseService();
+      databaseService = new MongoDBDatabaseService(targetNetworkId);
       await databaseService.connect();
       isDatabaseConnected = true;
       console.log('✅ MongoDB database connected successfully');

@@ -103,7 +103,13 @@ The `CowApiService` class provides methods to:
 
 ## Database Integration
 
-Currently using a mock database service that stores data in memory. The `DatabaseService` interface is designed to be easily replaced with real database implementations (PostgreSQL, MongoDB, etc.).
+The application uses MongoDB with network-specific databases:
+- **Ethereum Mainnet**: `mainnet-visualizer`
+- **Arbitrum One**: `arbitrum-visualizer`
+
+When you switch networks in the UI, the backend automatically switches to the corresponding database. This ensures clean separation of data between networks.
+
+See `NETWORK_DATABASE_CONFIGURATION.md` for detailed information.
 
 ## Ethereum Integration
 
@@ -111,11 +117,14 @@ The project uses viem to connect to Ethereum mainnet and interact with the CoW P
 
 ### RPC Configuration
 
-- **Required**: You must set `RPC_BASE_URL`, `NETWORK_ID`, and `RPC_TOKEN` in your `.env` file
+- **Required**: You must set `RPC_BASE_URL` and `RPC_TOKEN` in your `.env` file
 - **Load Balancer Format**: The RPC URL is constructed as `RPC_BASE_URL/NETWORK_ID/RPC_TOKEN`
+- **Network Selection**: Users can switch networks via the UI dropdown (no need to set NETWORK_ID in .env)
+- **Supported Networks**:
+  - Ethereum Mainnet (Chain ID: 1) - Database: `mainnet-visualizer`
+  - Arbitrum One (Chain ID: 42161) - Database: `arbitrum-visualizer`
 - **Example**:
   - `RPC_BASE_URL=https://rpc.example.com`
-  - `NETWORK_ID=1` (1 for Ethereum mainnet, 42161 for Arbitrum, etc.)
   - `RPC_TOKEN=your_rpc_token_here`
 
 ### Blockchain Explorer Configuration
