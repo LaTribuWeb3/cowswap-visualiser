@@ -20,10 +20,6 @@ module.exports = {
         CORS_ALLOWED_ORIGINS:
           "https://yourdomain.com,https://www.yourdomain.com,http://localhost:3000,http://localhost:5001",
 
-        // Ethereum Settings (Production) - RPC Load Balancer
-        RPC_BASE_URL: "https://rpc.example.com",
-        RPC_TOKEN: "your-rpc-token",
-
         // CoW Protocol Settings
         COW_PROTOCOL_CONTRACT: "0x9008D19f58AAbD9eD0d60971565AA8510560ab41",
 
@@ -61,11 +57,6 @@ module.exports = {
         CORS_ALLOWED_ORIGINS:
           "https://yourdomain.com,https://www.yourdomain.com,http://localhost:3000,http://localhost:5001",
 
-        // Ethereum Settings (Production) - RPC Load Balancer
-        RPC_BASE_URL: "https://rpc.example.com",
-        NETWORK_ID: "1",
-        RPC_TOKEN: "your-rpc-token",
-
         // CoW Protocol Settings
         COW_PROTOCOL_CONTRACT: "0x9008D19f58AAbD9eD0d60971565AA8510560ab41",
 
@@ -101,11 +92,6 @@ module.exports = {
         CORS_CREDENTIALS: "true",
         CORS_ALLOWED_ORIGINS:
           "https://yourdomain.com,https://www.yourdomain.com,http://localhost:3000,http://localhost:5001",
-
-        // Ethereum Settings (Production) - RPC Load Balancer
-        RPC_BASE_URL: "https://rpc.example.com",
-        NETWORK_ID: "1",
-        RPC_TOKEN: "your-rpc-token",
 
         // CoW Protocol Settings
         COW_PROTOCOL_CONTRACT: "0x9008D19f58AAbD9eD0d60971565AA8510560ab41",

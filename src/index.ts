@@ -35,8 +35,6 @@ if (!envFileFound) {
 
 console.log('🔍 Environment variables after dotenv:');
 console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
-console.log('🔍 RPC_BASE_URL:', process.env.RPC_BASE_URL);
-console.log('🔍 RPC_TOKEN:', process.env.RPC_TOKEN ? 'SET' : 'NOT SET');
 console.log('🔍 PAIR_API_TOKEN:', process.env.PAIR_API_TOKEN ? 'SET' : 'NOT SET');
 if(!process.env.PAIR_API_TOKEN) {
   console.error('❌ PAIR_API_TOKEN is not set');
