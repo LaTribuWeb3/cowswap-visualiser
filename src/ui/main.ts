@@ -41,6 +41,7 @@ import {
   getCurrentNetworkId,
   switchNetwork as switchNetworkAPI,
 } from "./api";
+import { getNetworkConfig } from "../config/networks";
 // EthereumService is now accessed via API calls to the backend
 
 // Global state
@@ -2301,7 +2302,7 @@ async function createTradeInfoFrameOverlay(
                 <div class="info-item">
                   <span class="info-label">Transaction Hash</span>
                   <span class="info-value hash-value">
-                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/tx/${
+                    <a href="${getNetworkConfig(getCurrentNetworkId())?.explorerUrl}/tx/${
                       trade.hash
                     }" target="_blank" class="address-link">
                       ${formatAddress(trade.hash)}
@@ -2340,7 +2341,7 @@ async function createTradeInfoFrameOverlay(
                 <div class="receiver-info">
                   <span class="receiver-label">Receiver</span>
                   <span class="receiver-value hash-value">
-                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                    <a href="${getNetworkConfig(getCurrentNetworkId())?.explorerUrl}/address/${
                       trade.receiver || trade.from || "Unknown"
                     }" target="_blank" class="address-link">
                       ${formatAddress(
@@ -2360,7 +2361,7 @@ async function createTradeInfoFrameOverlay(
                         <span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">SELL</span>
                         <span data-token-address="${sellTokenAddress}" data-token-field="symbol" style="font-weight: 600; color: #dc3545; font-size: 1.1rem;">${sellToken.symbol}</span>
                       </div>
-                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                      <a href="${getNetworkConfig(getCurrentNetworkId())?.explorerUrl}/address/${
                         trade.sellToken ||
                         trade.parsedData?.trades?.[0]?.sellToken ||
                         "Unknown"
@@ -2431,7 +2432,7 @@ async function createTradeInfoFrameOverlay(
                         <span style="background: #198754; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">BUY</span>
                         <span data-token-address="${buyTokenAddress}" data-token-field="symbol" style="font-weight: 600; color: #198754; font-size: 1.1rem;">${buyToken.symbol}</span>
                       </div>
-                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                      <a href="${getNetworkConfig(getCurrentNetworkId())?.explorerUrl}/address/${
                         trade.buyToken ||
                         trade.parsedData?.trades?.[0]?.buyToken ||
                         "Unknown"
@@ -3195,7 +3196,7 @@ async function createTradeInfoFrameOverlay(
                     <div data-token-address="${trade.sellToken}" data-token-field="symbol" class="token-symbol">${sellToken.symbol}</div>
                     <div data-token-address="${trade.sellToken}" data-token-field="name" class="token-name">${sellToken.name}</div>
                     <div class="token-address">
-                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                      <a href="${getNetworkConfig(getCurrentNetworkId())?.explorerUrl}/address/${
                         trade.sellToken
                       }" target="_blank" class="address-link">
                         ${formatAddress(trade.sellToken)}
@@ -3212,7 +3213,7 @@ async function createTradeInfoFrameOverlay(
                     <div data-token-address="${trade.buyToken}" data-token-field="symbol" class="token-symbol">${buyToken.symbol}</div>
                     <div data-token-address="${trade.buyToken}" data-token-field="name" class="token-name">${buyToken.name}</div>
                     <div class="token-address">
-                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                      <a href="${getNetworkConfig(getCurrentNetworkId())?.explorerUrl}/address/${
                         trade.buyToken
                       }" target="_blank" class="address-link">
                         ${formatAddress(trade.buyToken)}

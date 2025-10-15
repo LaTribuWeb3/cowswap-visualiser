@@ -111,15 +111,6 @@ See `NETWORK_DATABASE_CONFIGURATION.md` for detailed information.
 
 The project uses viem to connect to Ethereum mainnet and interact with the CoW Protocol contract. You can configure the RPC endpoint by setting the RPC load balancer configuration in your `.env` file.
 
-### Blockchain Explorer Configuration
-
-- **Optional**: Set `BLOCKCHAIN_EXPLORER_URL` in your `.env` file to configure the blockchain explorer links
-- **Default**: `https://etherscan.io` (Ethereum mainnet)
-- **Examples**:
-  - Arbitrum: `BLOCKCHAIN_EXPLORER_URL=https://arbiscan.io`
-  - Polygon: `BLOCKCHAIN_EXPLORER_URL=https://polygonscan.com`
-  - BSC: `BLOCKCHAIN_EXPLORER_URL=https://bscscan.com`
-
 ## Binance Price Comparison
 
 The application now includes Binance price comparison functionality to help analyze trade execution quality:
