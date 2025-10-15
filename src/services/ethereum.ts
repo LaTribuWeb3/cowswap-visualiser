@@ -1067,7 +1067,7 @@ export class EthereumService {
   }
 
   /**
-   * Fetch complete token metadata from la-tribu API
+   * Fetch complete token metadata from la-tribu API with enhanced error handling
    */
   async fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{
     address: string;
@@ -1078,54 +1078,101 @@ export class EthereumService {
     cached: boolean;
     timestamp: string;
   }> {
-    try {
-      console.log(`🔍 Fetching complete token metadata for: ${tokenAddress}`);
+    const maxRetries = 3;
+    const timeoutMs = 10000; // 10 seconds timeout for backend
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      let abortController: AbortController | null = null;
+      
+      try {
+        console.log(`🔍 Fetching complete token metadata for: ${tokenAddress} (attempt ${attempt}/${maxRetries})`);
 
-      const response = await fetch(
-        `${
-          process.env.TOKENS_METADATA_API_URL ||
-          "https://tokens-metadata.la-tribu.xyz"
-        }/tokens/ethereum/${tokenAddress}`,
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
-            "Content-Type": "application/json",
-          },
+        // Create abort controller for timeout handling
+        abortController = new AbortController();
+        
+        // Set up timeout
+        const timeoutId = setTimeout(() => {
+          abortController?.abort();
+        }, timeoutMs);
+
+        const response = await fetch(
+          `${
+            process.env.TOKENS_METADATA_API_URL ||
+            "https://tokens-metadata.la-tribu.xyz"
+          }/tokens/ethereum/${tokenAddress}`,
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
+              "Content-Type": "application/json",
+              "User-Agent": "COW-Swap-Visualizer-Backend/1.0"
+            },
+            signal: abortController.signal,
+            cache: 'no-cache'
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
         }
-      );
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+
+        if (!data.symbol || !data.name) {
+          throw new Error("Invalid token metadata response - missing symbol or name");
+        }
+
+        console.log(
+          `✅ Fetched token metadata: ${data.symbol} - ${data.name} (${
+            data.decimals || 18
+          } decimals)`
+        );
+
+        return {
+          address: data.address,
+          network: data.network,
+          name: data.name,
+          symbol: data.symbol,
+          decimals: data.decimals || 18,
+          cached: data.cached || false,
+          timestamp: data.timestamp,
+        };
+      } catch (error) {
+        // Handle different types of errors
+        if (error instanceof Error) {
+          if (error.name === 'AbortError' || error.message.includes('aborted')) {
+            console.warn(`⚠️ Request aborted for ${tokenAddress} (attempt ${attempt}/${maxRetries})`);
+            if (attempt === maxRetries) {
+              throw new Error(`Request aborted after ${maxRetries} attempts: ${error.message}`);
+            }
+          } else if (error.message.includes('timeout')) {
+            console.warn(`⚠️ Request timeout for ${tokenAddress} (attempt ${attempt}/${maxRetries})`);
+          } else {
+            console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for ${tokenAddress}:`, error.message);
+          }
+        } else {
+          console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for ${tokenAddress}:`, error);
+        }
+        
+        if (attempt < maxRetries) {
+          // Exponential backoff with jitter
+          const baseDelay = 1000 * Math.pow(1.5, attempt - 1);
+          const jitter = Math.random() * 500;
+          const delayMs = Math.min(baseDelay + jitter, 5000);
+          
+          console.log(`⏳ Retrying in ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        } else {
+          console.error(`Failed to fetch token metadata for ${tokenAddress} after ${maxRetries} attempts`);
+          throw error;
+        }
       }
-
-      const data = await response.json();
-
-      if (!data.symbol || !data.name) {
-        throw new Error("Invalid token metadata response");
-      }
-
-      console.log(
-        `✅ Fetched token metadata: ${data.symbol} - ${data.name} (${
-          data.decimals || 18
-        } decimals)`
-      );
-
-      return {
-        address: data.address,
-        network: data.network,
-        name: data.name,
-        symbol: data.symbol,
-        decimals: data.decimals || 18,
-        cached: data.cached || false,
-        timestamp: data.timestamp,
-      };
-    } catch (error) {
-      console.warn(
-        `Failed to fetch token metadata for ${tokenAddress}:`,
-        error
-      );
-      throw error;
     }
+    
+    // This should never be reached, but TypeScript requires it
+    throw new Error(`Failed to fetch token metadata for ${tokenAddress}`);
   }
 
   /**

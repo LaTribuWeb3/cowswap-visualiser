@@ -109,64 +109,154 @@ export function getTokenInfo(tokenAddress: `0x${string}`): TokenInfo {
   };
 }
 
+// Track ongoing requests to prevent duplicates
+const ongoingRequests = new Map<string, Promise<{ symbol: string; name: string; decimals: number }>>();
+
+// Track abort controllers for cleanup on page navigation
+const activeAbortControllers = new Set<AbortController>();
+
+// Clean up requests on page navigation to prevent NS_BINDING_ABORTED errors
+window.addEventListener('beforeunload', () => {
+  console.log('🧹 Cleaning up active requests before page unload');
+  activeAbortControllers.forEach(controller => {
+    controller.abort();
+  });
+  activeAbortControllers.clear();
+  ongoingRequests.clear();
+});
+
+// Also clean up on page hide (mobile browsers)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    console.log('🧹 Cleaning up active requests on page hide');
+    activeAbortControllers.forEach(controller => {
+      controller.abort();
+    });
+    activeAbortControllers.clear();
+    ongoingRequests.clear();
+  }
+});
+
 /**
  * Fetch token metadata with enhanced retry logic and multiple fallback sources
+ * Includes request deduplication to prevent multiple simultaneous requests for the same token
  */
 async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
+  // Check if there's already an ongoing request for this token
+  const existingRequest = ongoingRequests.get(tokenAddress);
+  if (existingRequest) {
+    console.log(`🔄 Reusing existing request for token: ${tokenAddress}`);
+    return existingRequest;
+  }
+  
+  // Create new request and store it
+  const requestPromise = performFetchTokenMetadata(tokenAddress);
+  ongoingRequests.set(tokenAddress, requestPromise);
+  
+  try {
+    const result = await requestPromise;
+    return result;
+  } finally {
+    // Clean up the ongoing request
+    ongoingRequests.delete(tokenAddress);
+  }
+}
+
+/**
+ * Internal function to perform the actual fetch with retry logic
+ */
+async function performFetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
   const maxRetries = 5;
   const timeoutMs = 15000; // 15 seconds timeout
   const retryDelayMs = 2000; // 2 seconds between retries
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let abortController: AbortController | null = null;
+    
     try {
       console.log(`🔍 Attempt ${attempt}/${maxRetries} to fetch token metadata for: ${tokenAddress}`);
       
+      // Create abort controller for cross-browser compatibility
+      abortController = new AbortController();
+      
+      // Register abort controller for cleanup
+      activeAbortControllers.add(abortController);
+      
       // Create a timeout promise
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
+        setTimeout(() => {
+          abortController?.abort();
+          reject(new Error('Request timeout'));
+        }, timeoutMs);
       });
 
       // Create the fetch promise with enhanced error handling
       const fetchPromise = fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/ethereum/${tokenAddress}`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
           'Content-Type': 'application/json',
           'User-Agent': 'COW-Swap-Visualizer/1.0'
         },
-        // Add timeout to the fetch itself
-        signal: AbortSignal.timeout(timeoutMs)
+        // Use AbortController instead of AbortSignal.timeout for better compatibility
+        signal: abortController.signal,
+        // Add cache control to prevent stale requests
+        cache: 'no-cache'
       });
       
       // Race between timeout and fetch
       const response = await Promise.race([fetchPromise, timeoutPromise]);
 
-    if (!response.ok) {
+      if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
-    }
+      }
 
-    const data = await response.json();
-    
-    if (!data.symbol || !data.name) {
+      const data = await response.json();
+      
+      if (!data.symbol || !data.name) {
         throw new Error('Invalid token metadata response - missing symbol or name');
-    }
+      }
 
       console.log(`✅ Fetched token metadata on attempt ${attempt}: ${data.symbol} - ${data.name} (${data.decimals || 18} decimals)`);
-    
-    // Debug: Check if decimals are missing or suspicious
-    if (!data.decimals || data.decimals === 0) {
-      console.warn(`⚠️ Token ${tokenAddress} (${data.symbol}) has missing or zero decimals, using default 18`);
+      
+      // Debug: Check if decimals are missing or suspicious
+      if (!data.decimals || data.decimals === 0) {
+        console.warn(`⚠️ Token ${tokenAddress} (${data.symbol}) has missing or zero decimals, using default 18`);
+      }
+      
+      // Clean up abort controller on success
+      if (abortController) {
+        activeAbortControllers.delete(abortController);
+      }
+      
+      return {
+        symbol: data.symbol,
+        name: data.name,
+        decimals: data.decimals || 18
+      };
+
+    } catch (error) {
+      // Handle different types of errors
+      if (error instanceof Error) {
+        if (error.name === 'AbortError' || error.message.includes('aborted')) {
+          console.warn(`⚠️ Request aborted for ${tokenAddress} (attempt ${attempt}/${maxRetries}) - likely due to page navigation or race condition`);
+        // Don't retry on abort errors - they're usually intentional
+        throw new Error(`Request aborted: ${error.message}`);
+      } else if (error.message.includes('timeout') || error.message.includes('Request timeout')) {
+        console.warn(`⚠️ Request timeout for ${tokenAddress} (attempt ${attempt}/${maxRetries})`);
+      } else {
+        console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for ${tokenAddress}:`, error.message);
+      }
+    } else {
+      console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for ${tokenAddress}:`, error);
     }
     
-    return {
-      symbol: data.symbol,
-      name: data.name,
-      decimals: data.decimals || 18
-    };
-
-  } catch (error) {
-      console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for ${tokenAddress}:`, error);
-      
-      if (attempt < maxRetries) {
+    // Clean up abort controller
+    if (abortController) {
+      activeAbortControllers.delete(abortController);
+    }
+    
+    if (attempt < maxRetries) {
         // Exponential backoff with jitter
         const baseDelay = retryDelayMs * Math.pow(1.5, attempt - 1);
         const jitter = Math.random() * 1000; // Add up to 1 second of jitter
