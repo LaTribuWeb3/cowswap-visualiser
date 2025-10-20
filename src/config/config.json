@@ -1,0 +1,28 @@
+{
+    "1": {
+        "chainId": 1,
+        "name": "Ethereum Mainnet",
+        "databaseName": "mainnet-visualiser",
+        "explorerUrl": "https://etherscan.io",
+        "cowNetwork": "mainnet",
+        "rpc": "xxx",
+        "nativeCurrency": {
+            "name": "Ether",
+            "symbol": "ETH",
+            "decimals": 18
+        }
+    },
+    "42161": {
+        "chainId": 42161,
+        "name": "Arbitrum One",
+        "databaseName": "arbitrum-visualiser",
+        "explorerUrl": "https://arbiscan.io",
+        "cowNetwork": "arbitrum_one",
+        "rpc": "xxx",
+        "nativeCurrency": {
+            "name": "Ether",
+            "symbol": "ETH",
+            "decimals": 18
+        }
+    }
+}

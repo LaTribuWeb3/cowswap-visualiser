@@ -1,4 +1,3 @@
-import "./styles.css";
 import "./script";
 import {
   Transaction,
@@ -23,11 +22,13 @@ import {
   getTokenInfo,
   getTokenInfoSync,
   getTokenInfoAsync,
+  prefetchTokens,
   getTokenDecimals,
   getTokenSymbol,
   calculateConversionRates,
   formatScientific,
   fetchTokenInfoAndUpdateDOM,
+  fetchBatchTokenInfoAndUpdateDOM,
   clearAllCaches,
 } from "./utils";
 import {
@@ -38,7 +39,62 @@ import {
   fetchBinancePrice,
   getBlockTimestamp,
   fetchSolverCompetition,
+  getCurrentNetworkId,
+  switchNetwork as switchNetworkAPI,
+  getNetworkConfigs,
 } from "./api";
+// Cache for network configurations to avoid repeated API calls
+let networkConfigCache: Record<string, any> | null = null;
+
+/**
+ * Get explorer URL for a network from backend API
+ */
+async function getExplorerUrl(networkId: string): Promise<string> {
+  try {
+    if (!networkConfigCache) {
+      networkConfigCache = await getNetworkConfigs();
+    }
+    
+    const network = networkConfigCache[networkId];
+    return network?.explorerUrl || 'https://etherscan.io'; // Default to mainnet
+  } catch (error) {
+    console.warn(`Failed to get explorer URL for network ${networkId}, using default:`, error);
+    return 'https://etherscan.io'; // Default to mainnet
+  }
+}
+
+// Function to batch fetch token metadata for all trades
+async function batchFetchTokenMetadataForTrades(trades: Transaction[]): Promise<void> {
+  const tokenAddresses = new Set<`0x${string}`>();
+  
+  // Collect all unique token addresses from trades
+  trades.forEach(trade => {
+    if (trade.sellToken) {
+      tokenAddresses.add(trade.sellToken as `0x${string}`);
+    }
+    if (trade.buyToken) {
+      tokenAddresses.add(trade.buyToken as `0x${string}`);
+    }
+    
+    // Also check parsedData if it exists
+    if (trade.parsedData?.trades) {
+      trade.parsedData.trades.forEach(tradeData => {
+        if (tradeData.sellToken) {
+          tokenAddresses.add(tradeData.sellToken as `0x${string}`);
+        }
+        if (tradeData.buyToken) {
+          tokenAddresses.add(tradeData.buyToken as `0x${string}`);
+        }
+      });
+    }
+  });
+  
+  // Batch fetch metadata for all tokens
+  if (tokenAddresses.size > 0) {
+    console.log(`🔍 Batch fetching metadata for ${tokenAddresses.size} unique tokens`);
+    await fetchBatchTokenInfoAndUpdateDOM(Array.from(tokenAddresses));
+  }
+}
 // EthereumService is now accessed via API calls to the backend
 
 // Global state
@@ -641,50 +697,65 @@ let elements: DOMElements;
 async function init(): Promise<void> {
   console.log("🚀 Initializing CoW Protocol Trade Visualizer...");
 
-  // Cache DOM elements
-  elements = {
-    tradesGrid: document.getElementById("tradesGrid") as HTMLElement,
-    tradesCount: document.getElementById("tradesCount") as HTMLElement,
-    tradeDetailsSection: document.getElementById(
-      "tradeDetailsSection"
-    ) as HTMLElement,
-    filterContainer: document.getElementById("filterContent") as HTMLElement,
-    filterForm: document.getElementById("filterForm") as HTMLElement,
-    startDateInput: document.getElementById("startDate") as HTMLInputElement,
-    endDateInput: document.getElementById("endDate") as HTMLInputElement,
-    sellTokenInput: document.getElementById("sellToken") as HTMLInputElement,
-    buyTokenInput: document.getElementById("buyToken") as HTMLInputElement,
-    clearFiltersButton: document.getElementById("clearFiltersButton") as HTMLButtonElement,
-    applyFiltersButton: document.getElementById("applyFiltersButton") as HTMLButtonElement,
-  };
+  try {
+    // Cache DOM elements
+    console.log("🔍 Caching DOM elements...");
+    elements = {
+      tradesGrid: document.getElementById("tradesGrid") as HTMLElement,
+      tradesCount: document.getElementById("tradesCount") as HTMLElement,
+      tradeDetailsSection: document.getElementById(
+        "tradeDetailsSection"
+      ) as HTMLElement,
+      filterContainer: document.getElementById("filterContent") as HTMLElement,
+      filterForm: document.getElementById("filterForm") as HTMLElement,
+      startDateInput: document.getElementById("startDate") as HTMLInputElement,
+      endDateInput: document.getElementById("endDate") as HTMLInputElement,
+      sellTokenInput: document.getElementById("sellToken") as HTMLInputElement,
+      buyTokenInput: document.getElementById("buyToken") as HTMLInputElement,
+      clearFiltersButton: document.getElementById("clearFiltersButton") as HTMLButtonElement,
+      applyFiltersButton: document.getElementById("applyFiltersButton") as HTMLButtonElement,
+    };
+    console.log("✅ DOM elements cached successfully");
 
-  // Set up event listeners
-  setupEventListeners();
-  
-  // Initialize filters
-  initializeFilters();
-  
-  // Add manual refresh button
-  addManualRefreshButton();
-  
+    // Set up event listeners
+    console.log("👂 Setting up event listeners...");
+    setupEventListeners();
+    
+    // Initialize filters
+    console.log("🔧 Initializing filters...");
+    initializeFilters();
+    
+    // Add manual refresh button
+    console.log("🔄 Adding manual refresh button...");
+    addManualRefreshButton();
+    
+    // Check API health
+    console.log("🏥 Checking API health...");
+    const isHealthy = await checkAPIHealth();
+    if (!isHealthy) {
+      console.warn(
+        "⚠️ API server is not running. Please start the backend server."
+      );
+      showError(
+        "Backend server is not running. Please start the server with: npm run server:dev"
+      );
+      return;
+    }
+    console.log("✅ API health check passed");
 
-  // Check API health
-  const isHealthy = await checkAPIHealth();
-  if (!isHealthy) {
-    console.warn(
-      "⚠️ API server is not running. Please start the backend server."
-    );
-    showError(
-      "Backend server is not running. Please start the server with: npm run server:dev"
-    );
-    return;
+    // Load initial data
+    console.log("📊 Loading initial trades data...");
+    await loadTrades(1);
+    
+    // Update filter display
+    console.log("🎨 Updating filter display...");
+    updateFilterDisplay();
+    
+    console.log("✅ CoW Protocol Trade Visualizer initialization completed successfully");
+  } catch (error) {
+    console.error("❌ Error during initialization:", error);
+    throw error;
   }
-
-  // Load initial data
-  await loadTrades(1);
-  
-  // Update filter display
-  updateFilterDisplay();
 }
 
 /**
@@ -890,7 +961,8 @@ async function loadTrades(page: number = 1): Promise<void> {
     state.pagination.currentPage = page;
     const offset = (page - 1) * state.pagination.pageSize;
     
-    console.log(`📡 Fetching trades (page ${page}, offset ${offset})...`);
+    const currentNetworkId = getCurrentNetworkId();
+    console.log(`📡 Fetching trades (page ${page}, offset ${offset}) for network ${currentNetworkId}...`);
     console.log(`🔍 Current filters:`, state.filters);
     
     const result = await fetchTradesWithPagination(state.pagination.pageSize, offset, state.filters);
@@ -1171,6 +1243,10 @@ async function populateTradesList(): Promise<void> {
       console.log(`🔍 Trade row ${index} appended successfully`);
     }
   }
+  
+  // Batch fetch token metadata for all trades after the UI is populated
+  console.log("🔍 Batch fetching token metadata for all trades...");
+  await batchFetchTokenMetadataForTrades(state.trades);
 
   console.log(
     `🔍 Finished populating trades list. Grid now has ${elements.tradesGrid.children.length} children`
@@ -1605,9 +1681,95 @@ async function updateTradeDateAsync(trade: Transaction, index: number): Promise<
     
   } catch (error) {
     console.warn(`⚠️ Failed to update date for trade ${index}:`, error);
-    // Keep the "Block X" display if timestamp fetch fails
+    
+    // Retry the timestamp fetch after a delay
+    setTimeout(async () => {
+      try {
+        console.log(`🔄 Retrying timestamp fetch for trade ${index} (block ${trade.blockNumber})`);
+        const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+        const fullTimestamp = timestampToDateTime(blockTimestamp);
+        updateTradeDateElement(index, fullTimestamp);
+        console.log(`✅ Retry successful - updated date for trade ${index}: ${fullTimestamp}`);
+      } catch (retryError) {
+        console.warn(`⚠️ Retry failed for trade ${index}:`, retryError);
+        
+        // Try one more time after a longer delay
+        setTimeout(async () => {
+          try {
+            console.log(`🔄 Final retry for trade ${index} (block ${trade.blockNumber})`);
+            const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+            const fullTimestamp = timestampToDateTime(blockTimestamp);
+            updateTradeDateElement(index, fullTimestamp);
+            console.log(`✅ Final retry successful - updated date for trade ${index}: ${fullTimestamp}`);
+          } catch (finalError) {
+            console.error(`❌ All retries failed for trade ${index}:`, finalError);
+          }
+        }, 10000); // Wait 10 seconds before final retry
+      }
+    }, 5000); // Wait 5 seconds before first retry
   }
 }
+
+/**
+ * Manually retry timestamp updates for all trades that are still showing "Block X"
+ */
+export async function retryAllBlockTimestamps(): Promise<void> {
+  console.log('🔄 Retrying timestamp updates for all trades...');
+  
+  const tradeRows = document.querySelectorAll('tr[data-trade-index]');
+  let retryCount = 0;
+  
+  for (const row of Array.from(tradeRows)) {
+    const index = parseInt(row.getAttribute('data-trade-index') || '0');
+    const dateCell = row.querySelector('.trade-date');
+    
+    if (dateCell && dateCell.textContent?.includes('Block ')) {
+      console.log(`🔄 Retrying timestamp for trade row ${index}`);
+      retryCount++;
+      
+      // Get the trade data from the row
+      const tradeHash = row.querySelector('.trade-hash')?.textContent;
+      const blockNumber = row.querySelector('.trade-block')?.textContent;
+      
+      if (blockNumber && !isNaN(parseInt(blockNumber))) {
+        try {
+          const blockTimestamp = await getBlockTimestamp(parseInt(blockNumber));
+          const fullTimestamp = timestampToDateTime(blockTimestamp);
+          updateTradeDateElement(index, fullTimestamp);
+          console.log(`✅ Updated timestamp for trade ${index}: ${fullTimestamp}`);
+        } catch (error) {
+          console.warn(`⚠️ Failed to retry timestamp for trade ${index}:`, error);
+        }
+      }
+    }
+  }
+  
+  console.log(`✅ Retry completed for ${retryCount} trades`);
+}
+
+// Make the function available globally for manual triggering
+if (typeof window !== 'undefined') {
+  (window as any).retryAllBlockTimestamps = retryAllBlockTimestamps;
+  console.log('🔧 Manual retry function available as window.retryAllBlockTimestamps()');
+}
+
+// Auto-retry failed timestamps every 30 seconds
+setInterval(async () => {
+  const tradeRows = document.querySelectorAll('tr[data-trade-index]');
+  let blockTimestampCount = 0;
+  
+  for (const row of Array.from(tradeRows)) {
+    const dateCell = row.querySelector('.trade-date');
+    if (dateCell && dateCell.textContent?.includes('Block ')) {
+      blockTimestampCount++;
+    }
+  }
+  
+  if (blockTimestampCount > 0) {
+    console.log(`🔄 Auto-retry: Found ${blockTimestampCount} trades with block timestamps, retrying...`);
+    await retryAllBlockTimestamps();
+  }
+}, 30000); // Check every 30 seconds
 
 /**
  * Update the date element in the DOM
@@ -1693,7 +1855,15 @@ async function createTradeTableRow(
       console.log(`🔍 Sell token address: ${trade.sellToken}`);
       console.log(`🔍 Buy token address: ${trade.buyToken}`);
 
-      // Get instant token info (will show addresses if not cached)
+      // Prefetch tokens to ensure they're in cache
+      try {
+        await prefetchTokens([trade.sellToken as `0x${string}`, trade.buyToken as `0x${string}`]);
+      } catch (error) {
+        console.error(`❌ Failed to prefetch tokens for trade ${index}:`, error);
+        throw new Error(`Failed to load token metadata for trade ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
+      // Get token info (should be in cache now)
       const sellToken = getTokenInfoSync(trade.sellToken);
       const buyToken = getTokenInfoSync(trade.buyToken);
       console.log(`✅ Token info loaded (sync):`, { sellToken, buyToken });
@@ -1727,9 +1897,7 @@ async function createTradeTableRow(
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
       `;
 
-      // Asynchronously fetch token metadata and update all tagged elements
-      fetchTokenInfoAndUpdateDOM(trade.sellToken);
-      fetchTokenInfoAndUpdateDOM(trade.buyToken);
+      // Token metadata will be fetched in batch after all trades are loaded
       
       // Asynchronously fetch full timestamp and update date
       updateTradeDateAsync(trade, index);
@@ -1783,13 +1951,7 @@ async function createTradeTableRow(
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
       `;
 
-      // Still try to fetch token metadata for async updates if we have token addresses
-      if (trade.sellToken) {
-        fetchTokenInfoAndUpdateDOM(trade.sellToken);
-      }
-      if (trade.buyToken) {
-        fetchTokenInfoAndUpdateDOM(trade.buyToken);
-      }
+      // Token metadata will be fetched in batch after all trades are loaded
       
       // Asynchronously fetch full timestamp and update date
       updateTradeDateAsync(trade, index);
@@ -1807,8 +1969,8 @@ async function createTradeTableRow(
       // Don't trigger if clicking on retry button or other interactive elements
       if (event.target instanceof HTMLElement) {
         const target = event.target as HTMLElement;
-        if (target.closest('.retry-button') || target.closest('button')) {
-          return; // Let the button handle its own click
+        if (target.closest('.retry-button') || target.closest('button') || target.closest('a')) {
+          return; // Let the button/link handle its own click
         }
       }
       
@@ -1889,7 +2051,15 @@ async function createTradeTableRow(
       return row;
     }
 
-    // Get instant token info (will show addresses if not cached)
+    // Prefetch tokens to ensure they're in cache
+    try {
+      await prefetchTokens([tradeData.sellToken as `0x${string}`, tradeData.buyToken as `0x${string}`]);
+    } catch (error) {
+      console.error(`❌ Failed to prefetch tokens for trade ${index}:`, error);
+      throw new Error(`Failed to load token metadata for trade ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    // Get token info (should be in cache now)
     const sellToken = getTokenInfoSync(tradeData.sellToken as `0x${string}`);
     const buyToken = getTokenInfoSync(tradeData.buyToken as `0x${string}`);
 
@@ -1911,9 +2081,7 @@ async function createTradeTableRow(
       <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
     `;
 
-    // Asynchronously fetch token metadata and update all tagged elements
-    fetchTokenInfoAndUpdateDOM(tradeData.sellToken as `0x${string}`);
-    fetchTokenInfoAndUpdateDOM(tradeData.buyToken as `0x${string}`);
+    // Token metadata will be fetched in batch after all trades are loaded
 
     console.log(`🔍 Adding click listener to trade row ${index} (with data)`);
     
@@ -1922,8 +2090,8 @@ async function createTradeTableRow(
       // Don't trigger if clicking on retry button or other interactive elements
       if (event.target instanceof HTMLElement) {
         const target = event.target as HTMLElement;
-        if (target.closest('.retry-button') || target.closest('button')) {
-          return; // Let the button handle its own click
+        if (target.closest('.retry-button') || target.closest('button') || target.closest('a')) {
+          return; // Let the button/link handle its own click
         }
       }
       
@@ -2105,21 +2273,38 @@ async function toggleSolverCompetition(txHash: string, button: HTMLButtonElement
  */
 async function showTradeDetails(trade: Transaction): Promise<void> {
   console.log(`🔍 showTradeDetails called with trade:`, trade);
+  console.log(`🔍 Trade hash: ${trade.hash}`);
+  console.log(`🔍 Trade structure:`, {
+    hasBuyAmount: !!trade.buyAmount,
+    hasSellToken: !!trade.sellToken,
+    hasBuyToken: !!trade.buyToken,
+    hasParsedData: !!trade.parsedData,
+    hasTrades: !!(trade.parsedData?.trades?.length)
+  });
+  
   try {
     state.currentTrade = trade;
 
     // Create and display info frame overlay
+    console.log("🔍 Creating trade info frame overlay...");
     const infoFrameOverlay = await createTradeInfoFrameOverlay(trade);
+    console.log("🔍 Trade info frame overlay created:", infoFrameOverlay);
 
     // Add the overlay to the body
+    console.log("🔍 Adding overlay to document body...");
     document.body.appendChild(infoFrameOverlay);
+    console.log("🔍 Overlay added to body");
 
-    console.log("✅ Trade info frame overlay loaded");
+    console.log("✅ Trade info frame overlay loaded and displayed");
   } catch (error) {
     console.error("❌ Error loading trade details:", error);
+    console.error("❌ Error stack:", error);
     showError("Failed to load trade details");
   }
 }
+
+// Make showTradeDetails globally accessible
+(window as any).showTradeDetails = showTradeDetails;
 
 /**
  * Create trade info frame overlay
@@ -2127,18 +2312,24 @@ async function showTradeDetails(trade: Transaction): Promise<void> {
 async function createTradeInfoFrameOverlay(
   trade: Transaction
 ): Promise<HTMLElement> {
-  const overlay = document.createElement("div");
-  overlay.className = "trade-info-overlay";
+  console.log("🔍 createTradeInfoFrameOverlay called with trade:", trade);
+  
+  // Get explorer URL for the current network
+  const explorerUrl = await getExplorerUrl(getCurrentNetworkId());
+  
+  try {
+    const overlay = document.createElement("div");
+    overlay.className = "trade-info-overlay";
 
-  // Check if this is a simplified trade structure (flat fields) or old parsedData structure
-  if (
-    (trade.buyAmount && trade.sellToken && trade.buyToken) ||
-    (trade.parsedData &&
-      trade.parsedData.trades &&
-      trade.parsedData.trades.length > 0)
-  ) {
-    // This is a simplified trade structure with flat fields or parsedData structure
-    console.log(`🔍 Displaying clean trade structure:`, trade);
+    // Check if this is a simplified trade structure (flat fields) or old parsedData structure
+    if (
+      (trade.buyAmount && trade.sellToken && trade.buyToken) ||
+      (trade.parsedData &&
+        trade.parsedData.trades &&
+        trade.parsedData.trades.length > 0)
+    ) {
+      // This is a simplified trade structure with flat fields or parsedData structure
+      console.log(`🔍 Displaying clean trade structure:`, trade);
 
     let sellTokenAddress,
       buyTokenAddress,
@@ -2177,13 +2368,33 @@ async function createTradeInfoFrameOverlay(
       realSellAmount = "0";
     }
 
-    // Get instant token info (will show addresses if not cached)
+    // Prefetch tokens to ensure they're in cache
+    console.log("🔍 Prefetching tokens:", sellTokenAddress, buyTokenAddress);
+    try {
+      await prefetchTokens([sellTokenAddress as `0x${string}`, buyTokenAddress as `0x${string}`]);
+    } catch (error) {
+      console.error(`❌ Failed to prefetch tokens for trade overlay:`, error);
+      throw new Error(`Failed to load token metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    // Get token info (should be in cache now)
+    console.log("🔍 Getting token info for sellToken:", sellTokenAddress);
     const sellToken = getTokenInfoSync(sellTokenAddress as `0x${string}`);
+    console.log("🔍 Sell token info:", sellToken);
+    
+    console.log("🔍 Getting token info for buyToken:", buyTokenAddress);
     const buyToken = getTokenInfoSync(buyTokenAddress as `0x${string}`);
+    console.log("🔍 Buy token info:", buyToken);
 
     // Format amounts with proper decimals
+    console.log("🔍 Formatting sell amount:", sellAmount);
     const formattedSellAmount = await formatTokenAmount(sellAmount, sellTokenAddress as `0x${string}`);
+    console.log("🔍 Formatted sell amount:", formattedSellAmount);
+    
+    console.log("🔍 Formatting buy amount:", buyAmount);
     const formattedBuyAmount = await formatTokenAmount(buyAmount, buyTokenAddress as `0x${string}`);
+    console.log("🔍 Formatted buy amount:", formattedBuyAmount);
+    
     const formattedExecutedAmount = await formatTokenAmount(executedAmount, buyTokenAddress as `0x${string}`);
     const formattedRealSellAmount = await formatTokenAmount(realSellAmount, sellTokenAddress as `0x${string}`);
     const formattedExecutedBuyAmount = await formatTokenAmount(trade.executedBuyAmount, buyTokenAddress as `0x${string}`);
@@ -2204,19 +2415,26 @@ async function createTradeInfoFrameOverlay(
     });
 
     // Format timestamp with proper fallback logic
+    console.log("🔍 Formatting timestamp, creationDate:", creationDate);
     let formattedTimestamp: string;
     if (creationDate) {
+      console.log("🔍 Using creationDate for timestamp");
       const formattedDate = formatDatabaseDate(creationDate);
+      console.log("🔍 Formatted date:", formattedDate);
       if (formattedDate !== 'No Date' && formattedDate !== 'Invalid Date') {
         formattedTimestamp = formattedDate;
       } else {
         // Fallback to block timestamp if date is invalid
+        console.log("🔍 CreationDate invalid, falling back to block timestamp");
         const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+        console.log("🔍 Block timestamp:", blockTimestamp);
         formattedTimestamp = timestampToDateTime(blockTimestamp);
       }
     } else {
       // No creationDate, use block timestamp
+      console.log("🔍 No creationDate, using block timestamp");
       const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+      console.log("🔍 Block timestamp:", blockTimestamp);
       formattedTimestamp = timestampToDateTime(blockTimestamp);
     }
 
@@ -2267,7 +2485,7 @@ async function createTradeInfoFrameOverlay(
                 <div class="info-item">
                   <span class="info-label">Transaction Hash</span>
                   <span class="info-value hash-value">
-                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/tx/${
+                    <a href="${explorerUrl}/tx/${
                       trade.hash
                     }" target="_blank" class="address-link">
                       ${formatAddress(trade.hash)}
@@ -2306,7 +2524,7 @@ async function createTradeInfoFrameOverlay(
                 <div class="receiver-info">
                   <span class="receiver-label">Receiver</span>
                   <span class="receiver-value hash-value">
-                    <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                    <a href="${explorerUrl}/address/${
                       trade.receiver || trade.from || "Unknown"
                     }" target="_blank" class="address-link">
                       ${formatAddress(
@@ -2326,7 +2544,7 @@ async function createTradeInfoFrameOverlay(
                         <span style="background: #dc3545; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">SELL</span>
                         <span data-token-address="${sellTokenAddress}" data-token-field="symbol" style="font-weight: 600; color: #dc3545; font-size: 1.1rem;">${sellToken.symbol}</span>
                       </div>
-                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                      <a href="${explorerUrl}/address/${
                         trade.sellToken ||
                         trade.parsedData?.trades?.[0]?.sellToken ||
                         "Unknown"
@@ -2397,7 +2615,7 @@ async function createTradeInfoFrameOverlay(
                         <span style="background: #198754; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">BUY</span>
                         <span data-token-address="${buyTokenAddress}" data-token-field="symbol" style="font-weight: 600; color: #198754; font-size: 1.1rem;">${buyToken.symbol}</span>
                       </div>
-                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                      <a href="${explorerUrl}/address/${
                         trade.buyToken ||
                         trade.parsedData?.trades?.[0]?.buyToken ||
                         "Unknown"
@@ -3161,7 +3379,7 @@ async function createTradeInfoFrameOverlay(
                     <div data-token-address="${trade.sellToken}" data-token-field="symbol" class="token-symbol">${sellToken.symbol}</div>
                     <div data-token-address="${trade.sellToken}" data-token-field="name" class="token-name">${sellToken.name}</div>
                     <div class="token-address">
-                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                      <a href="${explorerUrl}/address/${
                         trade.sellToken
                       }" target="_blank" class="address-link">
                         ${formatAddress(trade.sellToken)}
@@ -3178,7 +3396,7 @@ async function createTradeInfoFrameOverlay(
                     <div data-token-address="${trade.buyToken}" data-token-field="symbol" class="token-symbol">${buyToken.symbol}</div>
                     <div data-token-address="${trade.buyToken}" data-token-field="name" class="token-name">${buyToken.name}</div>
                     <div class="token-address">
-                      <a href="${process.env.BLOCKCHAIN_EXPLORER_URL}/address/${
+                      <a href="${explorerUrl}/address/${
                         trade.buyToken
                       }" target="_blank" class="address-link">
                         ${formatAddress(trade.buyToken)}
@@ -3223,14 +3441,7 @@ async function createTradeInfoFrameOverlay(
       const actualSellToken = trade.sellToken || trade.parsedData?.trades?.[0]?.sellToken;
       const actualBuyToken = trade.buyToken || trade.parsedData?.trades?.[0]?.buyToken;
 
-      // Fetch and update all elements tagged with these token addresses
-      if (actualSellToken) {
-        fetchTokenInfoAndUpdateDOM(actualSellToken as `0x${string}`);
-      }
-      
-      if (actualBuyToken) {
-        fetchTokenInfoAndUpdateDOM(actualBuyToken as `0x${string}`);
-      }
+      // Token metadata will be fetched in batch after all trades are loaded
     }, 0);
   }
 
@@ -3263,7 +3474,42 @@ async function createTradeInfoFrameOverlay(
     document.addEventListener("keydown", handleEscape);
   }, 100);
 
-  return overlay;
+    return overlay;
+  } catch (error) {
+    console.error("❌ Error in createTradeInfoFrameOverlay:", error);
+    console.error("❌ Error stack:", error);
+    
+    // Create a simple error overlay
+    const errorOverlay = document.createElement("div");
+    errorOverlay.className = "trade-info-overlay";
+    errorOverlay.innerHTML = `
+      <div class="overlay-backdrop"></div>
+      <div class="info-frame">
+        <div class="info-frame-header">
+          <div class="info-frame-title">
+            <i class="fas fa-exclamation-triangle"></i>
+            Error Loading Trade Details
+          </div>
+        </div>
+        <div class="info-frame-content">
+          <div class="error-message">
+            <p>Failed to load trade details. Please try again.</p>
+            <p><strong>Error:</strong> ${error instanceof Error ? error.message : 'Unknown error'}</p>
+            <button onclick="this.closest('.trade-info-overlay').remove()" class="btn btn-primary">Close</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add close functionality
+    const closeButton = errorOverlay.querySelector('.info-frame-header') as HTMLElement;
+    if (closeButton) {
+      closeButton.style.cursor = 'pointer';
+      closeButton.onclick = () => errorOverlay.remove();
+    }
+    
+    return errorOverlay;
+  }
 }
 
 function timestampToDateTime(timestamp: number): string {
@@ -3369,5 +3615,259 @@ function showToast(
   console.log(`💬 Toast (${type}):`, message);
 }
 
+// Network selector functionality
+interface ChainNetwork {
+  chainId: number;
+  name: string;
+  databaseName?: string;
+  nativeCurrency?: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+}
+
+/**
+ * Supported networks configuration
+ * Limited to mainnet and arbitrum
+ */
+const SUPPORTED_NETWORKS: ChainNetwork[] = [
+  {
+    chainId: 1,
+    name: 'Ethereum Mainnet',
+    databaseName: 'mainnet-visualizer',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18
+    }
+  },
+  {
+    chainId: 42161,
+    name: 'Arbitrum One',
+    databaseName: 'arbitrum-visualizer',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18
+    }
+  }
+];
+
+async function fetchNetworks(): Promise<ChainNetwork[]> {
+  console.log('🌐 Loading supported networks...');
+  console.log(`✅ Loaded ${SUPPORTED_NETWORKS.length} networks (Mainnet and Arbitrum)`);
+  return SUPPORTED_NETWORKS;
+}
+
+async function initializeNetworkSelector() {
+  console.log("🔍 Starting network selector initialization...");
+  
+  const networkSelect = document.getElementById('networkSelect') as HTMLSelectElement;
+  
+  if (!networkSelect) {
+    console.error('❌ Network selector element not found in DOM');
+    return;
+  }
+  
+  console.log("✅ Network selector element found");
+
+  try {
+    console.log("📡 Fetching networks...");
+    const networks = await fetchNetworks();
+    console.log(`📡 Fetched ${networks.length} networks:`, networks);
+    
+    // Get current network ID from sessionStorage
+    const storedNetworkId = sessionStorage.getItem('NETWORK_ID');
+    if (!storedNetworkId) {
+      console.error('❌ No network ID found in sessionStorage. Please select a network first.');
+      return;
+    }
+    const currentNetworkId = storedNetworkId;
+    const currentNetworkIdNum = parseInt(currentNetworkId);
+    
+    console.log(`🔗 Current network ID: ${currentNetworkId} (parsed: ${currentNetworkIdNum})`);
+    
+    // Clear existing options
+    networkSelect.innerHTML = '';
+    console.log("🧹 Cleared existing network options");
+    
+    // Add networks to dropdown
+    networks.forEach((network, index) => {
+      console.log(`➕ Adding network ${index + 1}: ${network.name} (ID: ${network.chainId})`);
+      
+      const option = document.createElement('option');
+      option.value = network.chainId.toString();
+      option.textContent = `${network.name} (Chain ID: ${network.chainId})`;
+      
+      // Select current network
+      if (network.chainId === currentNetworkIdNum) {
+        option.selected = true;
+        console.log(`✅ Selected current network: ${network.name}`);
+      }
+      
+      networkSelect.appendChild(option);
+    });
+    
+    // Add change event listener
+    networkSelect.addEventListener('change', handleNetworkChange);
+    console.log("👂 Added change event listener to network selector");
+    
+    console.log(`✅ Network selector initialized with ${networks.length} networks`);
+    console.log(`🔗 Current network: ${currentNetworkId}`);
+    
+  } catch (error) {
+    console.error('❌ Error initializing network selector:', error);
+    console.error('❌ Error details:', error);
+    networkSelect.innerHTML = '<option value="">Error loading networks</option>';
+  }
+}
+
+async function handleNetworkChange(event: Event) {
+  const select = event.target as HTMLSelectElement;
+  const newNetworkId = select.value;
+  
+  if (!newNetworkId) {
+    return;
+  }
+  
+  const selectedOption = select.options[select.selectedIndex];
+  const networkName = selectedOption.textContent || `Chain ${newNetworkId}`;
+  
+  console.log(`🔄 Network changed to: ${networkName} (ID: ${newNetworkId})`);
+  
+  // Show confirmation dialog
+  const confirmed = confirm(
+    `Switch to ${networkName}?\n\n` +
+    `This will switch the network configuration and refresh the trade list.\n\n` +
+    `Note: This is a temporary change and will not persist across sessions.`
+  );
+  
+  if (confirmed) {
+    try {
+      // Show loading message
+      showToast(`Switching to ${networkName}...`, 'info');
+      
+      // Call backend to switch network
+      const success = await switchNetworkAPI(newNetworkId);
+      
+      if (success) {
+        // Store in sessionStorage for this session
+        sessionStorage.setItem('NETWORK_ID', newNetworkId);
+        
+        console.log(`✅ Network switched successfully to ${newNetworkId}`);
+        
+        // Clear all caches to ensure fresh data from new network
+        console.log('🗑️ Clearing caches...');
+        clearAllCaches();
+        
+        // Reset pagination to page 1
+        state.pagination.currentPage = 1;
+        state.pagination.total = 0;
+        state.pagination.totalPages = 0;
+        
+        // Clear current trades from state
+        state.trades = [];
+        
+        // Reset trade tracking variables for the new network
+        lastTradeHash = null;
+        hasNewTradesOnPage1 = false;
+        
+        // IMMEDIATELY clear the UI to show we're switching
+        console.log('🗑️ Clearing trades UI...');
+        if (elements.tradesGrid) {
+          elements.tradesGrid.innerHTML = `
+            <div style="text-align: center; padding: 60px; color: #666;">
+              <i class="fas fa-spinner fa-spin" style="font-size: 48px; margin-bottom: 20px;"></i>
+              <p style="font-size: 18px; font-weight: 600;">Switching to ${networkName}...</p>
+              <p style="font-size: 14px;">Loading trades from the new network...</p>
+            </div>
+          `;
+        }
+        
+        // Update trades count
+        if (elements.tradesCount) {
+          elements.tradesCount.textContent = 'Loading...';
+        }
+        
+        // Show updated message
+        showToast(`Network switched to ${networkName}. Loading trades...`, 'success');
+        
+        // Force refresh the trades list with the new network
+        console.log('🔄 Forcing trades refresh for new network...');
+        await loadTrades(1);
+        
+        console.log(`✅ Successfully loaded ${state.trades.length} trades for ${networkName}`);
+        showToast(`Now viewing ${state.trades.length} trades on ${networkName}`, 'success');
+      } else {
+        throw new Error('Failed to switch network on backend');
+      }
+    } catch (error) {
+      console.error('❌ Error switching network:', error);
+      showToast('Failed to switch network. Please try again.', 'error');
+      
+      // Reset to current network
+      const currentNetworkId = sessionStorage.getItem('NETWORK_ID');
+      if (!currentNetworkId) {
+        console.error('❌ No network ID found in sessionStorage. Please select a network first.');
+        return;
+      }
+      select.value = currentNetworkId;
+    }
+  } else {
+    // Reset to current network
+    const currentNetworkId = sessionStorage.getItem('NETWORK_ID');
+    if (!currentNetworkId) {
+      console.error('❌ No network ID found in sessionStorage. Please select a network first.');
+      return;
+    }
+    select.value = currentNetworkId;
+  }
+}
+
+// Initialize network ID - auto-select first available network
+if (typeof window !== 'undefined' && !sessionStorage.getItem('NETWORK_ID')) {
+  // Auto-select first available network
+  fetchNetworks().then(networks => {
+    if (networks.length > 0) {
+      const firstNetwork = networks[0];
+      sessionStorage.setItem('NETWORK_ID', firstNetwork.chainId.toString());
+      console.log(`🔗 Auto-selected first available network: ${firstNetwork.name} (${firstNetwork.chainId})`);
+    } else {
+      console.error('❌ No networks available. Please check your configuration.');
+    }
+  }).catch(error => {
+    console.error('❌ Failed to load networks:', error);
+  });
+} else if (typeof window !== 'undefined') {
+  const storedNetworkId = sessionStorage.getItem('NETWORK_ID');
+  console.log(`🔗 Using stored network ID: ${storedNetworkId}`);
+}
+
 // Initialize the application when DOM is loaded
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("📄 DOM Content Loaded - Starting initialization...");
+  
+  // Initialize network ID in sessionStorage if not present
+  if (typeof window !== 'undefined' && !sessionStorage.getItem('NETWORK_ID')) {
+    sessionStorage.setItem('NETWORK_ID', '1');
+    console.log(`🔗 Initialized network ID to: 1 (Ethereum Mainnet)`);
+  } else if (typeof window !== 'undefined') {
+    const storedNetworkId = sessionStorage.getItem('NETWORK_ID');
+    console.log(`🔗 Using stored network ID: ${storedNetworkId}`);
+  }
+  
+  console.log("🚀 Starting main init()...");
+  init().then(() => {
+    console.log("✅ Main init() completed successfully");
+  }).catch((error) => {
+    console.error("❌ Main init() failed:", error);
+  });
+  
+  console.log("🌐 Starting network selector initialization...");
+  initializeNetworkSelector().then(() => {
+    console.log("✅ Network selector initialization completed");
+  }).catch((error) => {
+    console.error("❌ Network selector initialization failed:", error);
+  });
+});

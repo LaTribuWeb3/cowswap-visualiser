@@ -5,6 +5,8 @@ import { config } from 'dotenv';
 import fs from 'fs';
 import { EthereumService } from './services/ethereum';
 import { CowApiService } from './services/cow-api';
+import { SqliteDatabaseService } from './services/sqlite-database';
+import { getNetworkConfigs, getDefaultNetworkId, getSupportedNetworks, getNetworkConfig } from './config/networks';
 
 // Load environment variables
 console.log('🔍 Loading environment variables...');
@@ -35,7 +37,6 @@ if (!envFileFound) {
 
 console.log('🔍 Environment variables after dotenv:');
 console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
-console.log('🔍 RPC_URL:', process.env.RPC_URL);
 console.log('🔍 PAIR_API_TOKEN:', process.env.PAIR_API_TOKEN ? 'SET' : 'NOT SET');
 if(!process.env.PAIR_API_TOKEN) {
   console.error('❌ PAIR_API_TOKEN is not set');
@@ -43,13 +44,39 @@ if(!process.env.PAIR_API_TOKEN) {
 }
 
 // Load configuration based on environment
-const NODE_ENV = process.env.NODE_ENV || 'development';
+const NODE_ENV = process.env.NODE_ENV;
+if (!NODE_ENV) {
+  console.error('❌ NODE_ENV environment variable is required but not set');
+  process.exit(1);
+}
+
+// Validate required environment variables
+if (!process.env.PORT) {
+  console.error('❌ PORT environment variable is required but not set');
+  process.exit(1);
+}
+if (!process.env.API_BASE_URL) {
+  console.error('❌ API_BASE_URL environment variable is required but not set');
+  process.exit(1);
+}
+if (!process.env.FRONTEND_URL) {
+  console.error('❌ FRONTEND_URL environment variable is required but not set');
+  process.exit(1);
+}
+if (!process.env.PAIR_PRICING_API_URL) {
+  console.error('❌ PAIR_PRICING_API_URL environment variable is required but not set');
+  process.exit(1);
+}
+if (!process.env.COW_PROTOCOL_CONTRACT) {
+  console.error('❌ COW_PROTOCOL_CONTRACT environment variable is required but not set');
+  process.exit(1);
+}
 
 // Configuration object using environment variables
 const configFile = {
-  PORT: parseInt(process.env.PORT || '8080'),
-  API_BASE_URL: process.env.API_BASE_URL || 'http://localhost:8080',
-  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
+  PORT: parseInt(process.env.PORT),
+  API_BASE_URL: process.env.API_BASE_URL,
+  FRONTEND_URL: process.env.FRONTEND_URL,
   CORS_ALLOW_ALL_ORIGINS: process.env.CORS_ALLOW_ALL_ORIGINS === 'true' || NODE_ENV === 'development',
   CORS_CREDENTIALS: process.env.CORS_CREDENTIALS === 'true' || NODE_ENV === 'development',
   CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(',') : [
@@ -61,33 +88,45 @@ const configFile = {
   ],
   PAIR_API_TOKEN: process.env.PAIR_API_TOKEN,
   // External API endpoints
-  TOKENS_METADATA_API_URL: process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz',
-  PAIR_PRICING_API_URL: process.env.PAIR_PRICING_API_URL || 'https://pair-pricing.la-tribu.xyz',
-  BLOCKCHAIN_EXPLORER_URL: process.env.BLOCKCHAIN_EXPLORER_URL || 'https://etherscan.io',
+  PAIR_PRICING_API_URL: process.env.PAIR_PRICING_API_URL,
   // Contract addresses
-  COW_PROTOCOL_CONTRACT: process.env.COW_PROTOCOL_CONTRACT || '0x9008D19f58AAbD9eD0d60971565AA8510560ab41'
+  COW_PROTOCOL_CONTRACT: process.env.COW_PROTOCOL_CONTRACT
 };
 
 // Initialize database service
 let databaseService: any = null;
 let isDatabaseConnected = false;
 
+// Singleton EthereumService instance - only ONE instance for the entire application
+let ethereumServiceInstance: any = null;
+let currentNetworkId: string = '';
+
+function getEthereumService(): any {
+  // Create instance only once on first call
+  if (!ethereumServiceInstance) {
+    console.log(`🔧 Creating single EthereumService instance`);
+    ethereumServiceInstance = new EthereumService();
+    
+    // Set to first available network
+    try {
+      currentNetworkId = getDefaultNetworkId();
+      console.log(`🔧 Auto-selected first available network: ${currentNetworkId}`);
+    } catch (error) {
+      console.error('❌ Failed to get default network:', error);
+      throw error;
+    }
+  }
+  
+  return ethereumServiceInstance;
+}
+
 async function initializeDatabase() {
   try {
-    if (process.env.MONGODB_URI) {
-      console.log('🔌 Initializing MongoDB database...');
-      const { MongoDBDatabaseService } = await import('./services/mongodb-database');
-      databaseService = new MongoDBDatabaseService();
-      await databaseService.connect();
-      isDatabaseConnected = true;
-      console.log('✅ MongoDB database connected successfully');
-    } else {
-      console.log('⚠️ No MONGODB_URI found, using mock database');
-      const { MockDatabaseService } = await import('./services/database');
-      databaseService = new MockDatabaseService();
-      await databaseService.connect();
-      isDatabaseConnected = false;
-    }
+    console.log(`🔌 Initializing SQLite database...`);
+    databaseService = new SqliteDatabaseService();
+    await databaseService.connect();
+    isDatabaseConnected = true;
+    console.log('✅ SQLite database connected successfully');
   } catch (error) {
     console.error('❌ Failed to initialize database:', error);
     console.log('⚠️ Falling back to mock database');
@@ -166,6 +205,23 @@ const corsOptions = {
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
+// Add additional CORS headers for all responses
+app.use((req, res, next) => {
+  // Set CORS headers for all responses
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  next();
+});
+
 // Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -177,12 +233,21 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     environment: NODE_ENV,
     cors: 'enabled',
-    database: isDatabaseConnected ? 'MongoDB' : 'Mock',
+    database: isDatabaseConnected ? 'SQLite' : 'Mock',
     config: {
       port: PORT,
       apiBaseUrl: configFile.API_BASE_URL,
       frontendUrl: configFile.FRONTEND_URL
     }
+  });
+});
+
+// Simple ping endpoint for CORS testing
+app.get('/api/ping', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Backend is running',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -196,7 +261,7 @@ app.get('/api/database/health', async (req, res) => {
     return res.json({
       success: true,
       status: 'connected',
-      type: isDatabaseConnected ? 'MongoDB' : 'Mock',
+      type: isDatabaseConnected ? 'SQLite' : 'Mock',
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
@@ -220,8 +285,22 @@ app.get('/api/trades', async (req, res) => {
     }
     
     // Get query parameters
-    const limit = parseInt(req.query.limit as string) || 50;
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = parseInt(req.query.limit as string);
+    const offset = parseInt(req.query.offset as string);
+    
+    if (isNaN(limit) || limit < 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid limit parameter. Must be a positive integer.'
+      });
+    }
+    
+    if (isNaN(offset) || offset < 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid offset parameter. Must be a non-negative integer.'
+      });
+    }
     const fromAddress = req.query.fromAddress as string;
     const toAddress = req.query.toAddress as string;
     const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
@@ -244,6 +323,28 @@ app.get('/api/trades', async (req, res) => {
       });
     }
     
+    const chainId = parseInt(req.query.chainId as string);
+    console.log(`📡 [API] /api/trades request - chainId: ${chainId}, limit: ${limit}, offset: ${offset}`);
+    console.log(`📡 [API] Current global network: ${currentNetworkId}`);
+    console.log(`📡 [API] Current database: ${databaseService.getCurrentDatabaseName()}`);
+    
+    // Verify that the database is already switched to the correct network
+    // (The /api/network/switch endpoint should have already done this)
+    if (chainId && !isNaN(chainId)) {
+      if (currentNetworkId !== chainId.toString()) {
+        console.warn(`⚠️ [API] Network mismatch! Expected: ${chainId}, Current: ${currentNetworkId}`);
+        console.log(`🔄 [API] Switching database to match requested chainId: ${chainId}`);
+        await databaseService.switchNetwork(chainId.toString());
+        currentNetworkId = chainId.toString();
+        console.log(`✅ [API] Database switched to chainId: ${chainId}`);
+        console.log(`📡 [API] New database: ${databaseService.getCurrentDatabaseName()}`);
+      } else {
+        console.log(`✅ [API] Database already on correct network: ${chainId}`);
+      }
+    } else {
+      console.warn(`⚠️ [API] No valid chainId provided: ${req.query.chainId}`);
+    }
+    
     // Get transactions from database with proper pagination and filtering
     const result = await databaseService.getTransactionsWithPagination({
       limit,
@@ -253,11 +354,12 @@ app.get('/api/trades', async (req, res) => {
       startDate,
       endDate,
       sellToken,
-      buyToken
+      buyToken,
+      chainId
     });
     
-    console.log(`✅ Retrieved ${result.transactions.length} transactions from database (showing latest first)`);
-    console.log(`📊 Total transactions in database: ${result.total}`);
+    console.log(`✅ [API] Retrieved ${result.transactions.length} transactions from database (showing latest first)`);
+    console.log(`📊 [API] Total transactions in database: ${result.total}`);
     
     return res.json({
       success: true,
@@ -326,11 +428,10 @@ app.get('/api/trades/:hash', async (req, res) => {
     const transaction = await databaseService.getTransactionByHash(hash);
     
     if (!transaction) {
-      res.status(404).json({
+      return res.status(404).json({
         success: false,
         error: 'Transaction not found in database'
       });
-      return;
     }
     
     return res.json({
@@ -347,12 +448,92 @@ app.get('/api/trades/:hash', async (req, res) => {
   }
 });
 
+// API endpoint to check current network and database status
+app.get('/api/network/status', async (req, res) => {
+  try {
+    const ethereumService = getEthereumService();
+    const currentNetworkId = await ethereumService.getNetworkId();
+    const currentDatabaseName = databaseService ? databaseService.getCurrentDatabaseName() : 'unknown';
+    
+    return res.json({
+      success: true,
+      data: {
+        networkId: currentNetworkId,
+        databaseName: currentDatabaseName,
+        globalNetworkId: currentNetworkId
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Error getting network status:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get network status'
+    });
+  }
+});
+
+// API endpoint to switch network
+app.post('/api/network/switch', async (req, res) => {
+  try {
+    const { networkId } = req.body;
+    
+    if (!networkId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Network ID is required'
+      });
+    }
+    
+    console.log(`🔄 [SWITCH] Switching to network ${networkId}...`);
+    
+    // Ensure database is initialized
+    if (!databaseService) {
+      await initializeDatabase();
+    }
+    
+    // Switch the Ethereum service
+    const ethereumService = getEthereumService();
+    await ethereumService.switchNetwork(networkId);
+    console.log(`✅ [SWITCH] Ethereum service switched to network ${networkId}`);
+    
+    // Switch the database to the correct network database
+    await databaseService.switchNetwork(networkId);
+    console.log(`✅ [SWITCH] Database switched to network ${networkId}`);
+    
+    // Store current network ID globally for reference
+    currentNetworkId = networkId;
+    
+    console.log(`✅ [SWITCH] Successfully switched to network ${networkId}`);
+    
+    return res.json({
+      success: true,
+      networkId: networkId,
+      message: `Switched to network ${networkId}`
+    });
+  } catch (error: any) {
+    console.error('❌ [SWITCH] Error switching network:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to switch network'
+    });
+  }
+});
+
 // API endpoint to get real CoW Protocol events
 app.get('/api/events', async (req, res) => {
   try {
     console.log('📡 Fetching real CoW Protocol events...');
     
-    const ethereumService = new EthereumService();
+    // Get network ID from query parameter
+    const networkId = req.query.networkId as string;
+    if (!networkId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Network ID is required'
+      });
+    }
+    const ethereumService = getEthereumService();
+    ethereumService.switchNetwork(networkId);
     const events = await ethereumService.getRecentEvents(10);
     
     console.log(`✅ Fetched ${events.length} real events`);
@@ -380,7 +561,16 @@ app.post('/api/trades/sync', async (req, res) => {
       await initializeDatabase();
     }
     
-    const ethereumService = new EthereumService();
+    // Get network ID from query parameter or body
+    const networkId = (req.query.networkId as string) || (req.body.networkId as string);
+    if (!networkId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Network ID is required'
+      });
+    }
+    const ethereumService = getEthereumService();
+    ethereumService.switchNetwork(networkId);
     
     // Get real transactions from the blockchain (last 10 days)
     const transactions = await ethereumService.getLastTransactions(100);
@@ -416,85 +606,9 @@ app.post('/api/trades/sync', async (req, res) => {
   }
 });
 
-// New endpoint to fetch token decimals
-app.get('/api/token/:address/decimals', async (req, res) => {
-  try {
-    const { address } = req.params;
-    console.log(`📡 Fetching decimals for token: ${address}`);
-    
-    // Fetch token metadata from la-tribu API
-    const response = await fetch(`${configFile.TOKENS_METADATA_API_URL}/tokens/ethereum/${address}`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
+// Token metadata endpoints removed - frontend now calls contracts directly using viem
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    const decimals = data.decimals || 18; // Default to 18 if not specified
-    
-    console.log(`✅ Token ${address} has ${decimals} decimals`);
-    
-    return res.json({
-      success: true,
-      decimals: decimals
-    });
-  } catch (error: any) {
-    console.error('❌ Error fetching token decimals:', error);
-    console.error('❌ Error stack:', error.stack);
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to fetch token decimals'
-    });
-  }
-});
-
-// New endpoint to fetch token symbol
-app.get('/api/token/:address/symbol', async (req, res) => {
-  try {
-    const { address } = req.params;
-    console.log(`📡 Fetching symbol for token: ${address}`);
-    
-    // Fetch token metadata from la-tribu API
-    const response = await fetch(`${configFile.TOKENS_METADATA_API_URL}/tokens/ethereum/${address}`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    if (!data.symbol) {
-      throw new Error('Invalid token metadata response - no symbol found');
-    }
-
-    console.log(`✅ Token ${address} has symbol: ${data.symbol}`);
-    
-    return res.json({
-      success: true,
-      symbol: data.symbol
-    });
-  } catch (error: any) {
-    console.error('❌ Error fetching token symbol:', error);
-    console.error('❌ Error stack:', error.stack);
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to fetch token symbol'
-    });
-  }
-});
-
-// New endpoint to fetch block timestamp
+// Enhanced endpoint to fetch block timestamp with direct RPC access
 app.get('/api/block-timestamp/:blockNumber', async (req, res) => {
   try {
     const { blockNumber } = req.params;
@@ -506,26 +620,40 @@ app.get('/api/block-timestamp/:blockNumber', async (req, res) => {
         error: 'Invalid block number'
       });
     }
-    
-    console.log(`📡 Fetching timestamp for block: ${blockNum}`);
-    
-    const ethereumService = new EthereumService();
-    const timestamp = await ethereumService.getBlockTimestamp(blockNum);
-    
-    // Check if we got a valid timestamp
-    if (!timestamp || timestamp <= 0) {
-      return res.status(404).json({
+
+    // Get network ID from query parameter or body
+    const networkId = (req.query.networkId as string) || (req.body.networkId as string);
+    if (!networkId) {
+      return res.status(400).json({
         success: false,
-        error: `Block ${blockNum} not found or invalid`
+        error: 'Network ID is required'
       });
     }
     
-    return res.json({
-      success: true,
-      data: {
-        blockNumber: blockNum,
-        timestamp: timestamp
-      }
+    console.log(`📡 Fetching timestamp for block: ${blockNum}`);
+    console.log(`📡 Network ID: ${networkId}`);
+
+    // Ensure database is initialized
+    if (!databaseService) {
+      await initializeDatabase();
+    }
+    
+    // Get the ethereum service and switch to the correct network
+    const ethereumService = getEthereumService();
+    await ethereumService.switchNetwork(networkId);
+    
+    // Fetch block timestamp directly from blockchain
+    const timestamp = await ethereumService.getBlockTimestamp(blockNum);
+    
+    console.log(`📡 Retrieved timestamp for block ${blockNum}: ${timestamp}`);
+    
+    return res.json({ 
+      success: true, 
+      data: { 
+        blockNumber: blockNum, 
+        timestamp: timestamp,
+        networkId: networkId
+      } 
     });
   } catch (error) {
     console.error('❌ Error fetching block timestamp:', error);
@@ -544,6 +672,249 @@ app.get('/api/config', (req, res) => {
       pairApiTokenAvailable: !!configFile.PAIR_API_TOKEN
     }
   });
+});
+
+// Network configuration endpoint for frontend
+app.get('/api/networks', (req, res) => {
+  try {
+    const networks = getNetworkConfigs();
+    
+    return res.json({
+      success: true,
+      data: networks
+    });
+  } catch (error) {
+    console.error('❌ Error fetching network configuration:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch network configuration'
+    });
+  }
+});
+
+// Get supported networks list
+app.get('/api/networks/supported', (req, res) => {
+  try {
+    const supportedNetworks = getSupportedNetworks();
+    
+    return res.json({
+      success: true,
+      data: supportedNetworks
+    });
+  } catch (error) {
+    console.error('❌ Error fetching supported networks:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch supported networks'
+    });
+  }
+});
+
+// Get network configuration by chain ID
+app.get('/api/networks/:chainId', (req, res) => {
+  try {
+    const { chainId } = req.params;
+    const network = getNetworkConfig(chainId);
+    
+    if (!network) {
+      return res.status(404).json({
+        success: false,
+        error: `Network ${chainId} not supported`
+      });
+    }
+    
+    return res.json({
+      success: true,
+      data: network
+    });
+  } catch (error) {
+    console.error('❌ Error fetching network configuration:', error);
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch network configuration'
+    });
+  }
+});
+
+// Serve config.json for frontend
+app.get('/config/config.json', (req, res) => {
+  try {
+    // fs and path are already imported at the top
+    const configPath = path.join(__dirname, 'config/config.json');
+    const configContent = fs.readFileSync(configPath, 'utf-8');
+    const config = JSON.parse(configContent);
+    
+    res.json(config);
+  } catch (error) {
+    console.error('❌ Error serving config.json:', error);
+    res.status(500).json({
+      error: 'Failed to load configuration file'
+    });
+  }
+});
+
+// RPC configuration endpoint removed - frontend now uses backend APIs exclusively
+
+// Enhanced network metadata endpoint with direct blockchain access
+app.get('/api/network-metadata', async (req, res) => {
+  try {
+    const { address, networkId } = req.query;
+    
+    if (!address || !networkId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: address and networkId'
+      });
+    }
+    
+    console.log(`🔍 Fetching token metadata for ${address} on network ${networkId}`);
+    
+    // Get the ethereum service and switch to the correct network
+    const ethereumService = getEthereumService();
+    await ethereumService.switchNetwork(networkId as string);
+    
+    // Fetch token metadata directly from blockchain
+    const metadata = await ethereumService.getTokenMetadata(address as string);
+    
+    return res.json({
+      success: true,
+      data: metadata
+    });
+  } catch (error: any) {
+    console.error('❌ Error fetching token metadata:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch token metadata'
+    });
+  }
+});
+
+// Solver competition endpoint
+app.get('/api/solver-competition/:txHash', async (req, res) => {
+  try {
+    const { txHash } = req.params;
+    const { networkId } = req.query;
+    
+    if (!txHash) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameter: txHash'
+      });
+    }
+    
+    console.log(`🔍 Fetching solver competition data for ${txHash} on network ${networkId}`);
+    
+    // Get network configuration to determine the cowNetwork
+    const ethereumService = getEthereumService();
+    const networkConfigs = getNetworkConfigs();
+    const networkIdNum = parseInt(networkId as string);
+    const networkConfig = Object.values(networkConfigs).find((n: any) => n.chainId === networkIdNum);
+    
+    if (!networkConfig) {
+      return res.status(400).json({
+        success: false,
+        error: `Network configuration not found for chainId: ${networkIdNum}`
+      });
+    }
+    
+    // Fetch solver competition data from CoW API
+    const cowNetwork = networkConfig.cowNetwork || 'mainnet';
+    const cowApiUrl = `https://api.cow.fi/${cowNetwork}/api/v2/solver_competition/by_tx_hash/${txHash}`;
+    
+    console.log(`🔗 Fetching from CoW API: ${cowApiUrl}`);
+    
+    const response = await fetch(cowApiUrl);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return res.json({
+          success: true,
+          data: null // No competition data available
+        });
+      }
+      throw new Error(`CoW API error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    return res.json({
+      success: true,
+      data: data
+    });
+  } catch (error: any) {
+    console.error('❌ Error fetching solver competition data:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch solver competition data'
+    });
+  }
+});
+
+// Batch token metadata endpoint for fetching multiple tokens at once
+app.post('/api/token-metadata/batch', async (req, res) => {
+  try {
+    const { addresses, networkId } = req.body;
+    
+    if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing or invalid addresses array'
+      });
+    }
+    
+    if (!networkId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing networkId parameter'
+      });
+    }
+    
+    // Ensure database is initialized
+    if (!databaseService) {
+      await initializeDatabase();
+    }
+    
+    console.log(`🔍 Batch fetching metadata for ${addresses.length} tokens on network ${networkId}`);
+    
+    // Get the ethereum service and switch to the correct network
+    const ethereumService = getEthereumService();
+    await ethereumService.switchNetwork(networkId as string);
+    
+    // Fetch metadata for all tokens in parallel
+    const metadataPromises = addresses.map(async (address: string) => {
+      try {
+        const metadata = await ethereumService.getTokenMetadata(address);
+        return { address, metadata, success: true };
+      } catch (error) {
+        console.warn(`⚠️ Failed to fetch metadata for ${address}:`, error);
+        return { 
+          address, 
+          metadata: { name: `Token ${address.slice(0, 8)}...`, symbol: 'UNKNOWN', decimals: 18, address },
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    });
+    
+    const results = await Promise.all(metadataPromises);
+    
+    return res.json({
+      success: true,
+      data: {
+        networkId,
+        results,
+        totalRequested: addresses.length,
+        successful: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Error in batch token metadata fetch:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch batch token metadata'
+    });
+  }
 });
 
 // Simple in-memory rate limiting for the proxy endpoint
@@ -710,7 +1081,7 @@ app.get('/api/binance-price', async (req, res) => {
       });
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error'
     });
@@ -731,7 +1102,7 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   // Initialize database
   try {
     await initializeDatabase();
-    console.log(`💾 Database: ${isDatabaseConnected ? 'MongoDB connected' : 'Mock database active'}`);
+    console.log(`💾 Database: ${isDatabaseConnected ? 'SQLite connected' : 'Mock database active'}`);
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
   }
@@ -811,8 +1182,8 @@ async function fetchAndDisplayData() {
   try {
     console.log("📊 CoW Protocol data fetcher initialized");
 
-    // Initialize Ethereum service
-    const ethereumService = new EthereumService();
+    // Initialize Ethereum service with default network ID of 1
+    const ethereumService = getEthereumService();
 
     // Get contract information
     console.log("\n📋 Contract Information:");
@@ -845,7 +1216,7 @@ async function fetchAndDisplayData() {
     const events = await ethereumService.getRecentEvents(5);
 
     if (events.length > 0) {
-      events.forEach((event, index) => {
+      events.forEach((event: any, index: number) => {
         console.log(`\n${index + 1}. Event Type: ${event.type}`);
         console.log(`   Block Number: ${event.blockNumber}`);
         console.log(`   Transaction Hash: ${event.transactionHash}`);

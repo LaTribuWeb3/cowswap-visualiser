@@ -6,6 +6,7 @@
     <title>CoW Protocol Trade Visualizer</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
     <div class="container">
@@ -16,6 +17,14 @@
                     <h1>CoW Protocol Trade Visualizer</h1>
                 </div>
                 <p class="subtitle">Real-time trade settlement visualization</p>
+                <div class="network-selector">
+                    <label for="networkSelect">
+                        <i class="fas fa-network-wired"></i> Network:
+                    </label>
+                    <select id="networkSelect" class="network-dropdown">
+                        <option value="">Loading networks...</option>
+                    </select>
+                </div>
             </div>
         </header>
 
