@@ -61,7 +61,9 @@ export class SqliteDatabaseService implements DatabaseService {
 
   getCurrentDatabaseName(): string {
     if (!this.currentDatabasePath) return 'unknown';
-    return path.basename(this.currentDatabasePath, '.db');
+    const dbName = path.basename(this.currentDatabasePath, '.db');
+    console.log(`🔍 [DB] getCurrentDatabaseName() called - path: ${this.currentDatabasePath}, name: ${dbName}`);
+    return dbName;
   }
 
   async getCurrentNetworkId(): Promise<number> {
@@ -73,9 +75,13 @@ export class SqliteDatabaseService implements DatabaseService {
       const currentNetworkId = await this.ethereumService.getNetworkId();
       console.log(`🔄 [DB] Switching database from network ${currentNetworkId} to ${networkId}...`);
       
-      // Save current database
+      // Save and close current database
       if (this.db && this.currentDatabasePath) {
         this.saveDatabase();
+        this.db.close();
+        this.db = null;
+        this.currentDatabasePath = null;
+        console.log(`🔌 [DB] Closed current database connection and reset path`);
       }
       
       await this.ethereumService.switchNetwork(networkId);
@@ -84,6 +90,16 @@ export class SqliteDatabaseService implements DatabaseService {
       const dbName = getDatabaseName(networkId);
       const dbPath = path.join(this.dataDirectory, `${dbName}.db`);
       console.log(`📂 [DB] Switching to database: ${dbName}`);
+      console.log(`📂 [DB] Database path: ${dbPath}`);
+      console.log(`📂 [DB] Database exists: ${fs.existsSync(dbPath)}`);
+      console.log(`📂 [DB] Data directory: ${this.dataDirectory}`);
+      
+      // Verify the database name is correct for the network
+      if (networkId === '1' && !dbName.includes('mainnet')) {
+        console.error(`❌ [DB] CRITICAL: Network 1 should use mainnet database, but got: ${dbName}`);
+      } else if (networkId === '42161' && !dbName.includes('arbitrum')) {
+        console.error(`❌ [DB] CRITICAL: Network 42161 should use arbitrum database, but got: ${dbName}`);
+      }
       
       this.currentDatabasePath = dbPath;
       
@@ -102,6 +118,31 @@ export class SqliteDatabaseService implements DatabaseService {
       await this.createTables();
       await this.createIndexes();
       console.log(`✅ [DB] Successfully switched to database: ${dbName} for network ${networkId}`);
+      
+      // Debug: Check what data is in the database
+      try {
+        if (this.db) {
+          const countResult = this.db.prepare('SELECT COUNT(*) as count FROM transactions').get() as unknown as { count: number };
+          console.log(`📊 [DB] Database ${dbName} contains ${countResult.count} transactions`);
+          
+        if (countResult.count > 0) {
+          const sampleResult = this.db.prepare('SELECT hash, blockNumber FROM transactions ORDER BY blockNumber DESC LIMIT 1').get();
+          console.log(`🔍 [DB] Sample transaction from ${dbName}:`, sampleResult);
+          
+          // Verify the block number is appropriate for the network
+          if (sampleResult && (sampleResult as any).blockNumber) {
+            const blockNum = parseInt((sampleResult as any).blockNumber);
+            if (networkId === '1' && blockNum > 20000000) {
+              console.error(`❌ [DB] CRITICAL: Ethereum database contains Arbitrum-like block number: ${blockNum}`);
+            } else if (networkId === '42161' && blockNum < 100000000) {
+              console.error(`❌ [DB] CRITICAL: Arbitrum database contains Ethereum-like block number: ${blockNum}`);
+            }
+          }
+        }
+        }
+      } catch (error) {
+        console.log(`⚠️ [DB] Could not query database ${dbName}:`, error);
+      }
     } catch (error) {
       console.error('❌ [DB] Error switching network database:', error);
       throw error;

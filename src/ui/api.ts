@@ -9,7 +9,8 @@ const blockTimestampCache = new Map<number, number>();
 const failedBlocks = new Set<number>();
 
 /**
- * Get current network ID from sessionStorage
+ * Get current network ID from sessionStorage (legacy function)
+ * This is now replaced by the UI state management in main.ts
  */
 export function getCurrentNetworkId(): string {
   if (typeof window !== 'undefined') {
@@ -67,13 +68,13 @@ export async function switchNetwork(networkId: string): Promise<boolean> {
 /**
  * Fetch recent trades from the API
  */
-export async function fetchRecentTrades(limit: number = 50, offset: number = 0): Promise<Transaction[]> {
+export async function fetchRecentTrades(limit: number = 50, offset: number = 0, networkId?: string): Promise<Transaction[]> {
   try {
-    const networkId = getCurrentNetworkId();
+    const currentNetworkId = networkId || getCurrentNetworkId();
     const url = new URL(`${API_BASE_URL}/api/trades`);
     url.searchParams.append('limit', limit.toString());
     url.searchParams.append('offset', offset.toString());
-    url.searchParams.append('chainId', networkId);
+    url.searchParams.append('chainId', currentNetworkId);
     
     const response = await fetch(url.toString());
     
@@ -107,7 +108,8 @@ export async function fetchTradesWithPagination(
     endDate?: string;
     sellToken?: string;
     buyToken?: string;
-  }
+  },
+  networkId?: string
 ): Promise<{
   trades: Transaction[];
   pagination: {
@@ -120,15 +122,15 @@ export async function fetchTradesWithPagination(
   };
 }> {
   try {
-    const networkId = getCurrentNetworkId();
-    console.log(`🌐 [FRONTEND] Fetching trades with pagination - limit: ${limit}, offset: ${offset}, chainId: ${networkId}`);
+    const currentNetworkId = networkId || getCurrentNetworkId();
+    console.log(`🌐 [FRONTEND] Fetching trades with pagination - limit: ${limit}, offset: ${offset}, chainId: ${currentNetworkId}`);
     console.log(`🌐 [FRONTEND] Filters:`, filters);
     console.log(`🌐 [FRONTEND] Base URL: ${API_BASE_URL}`);
     
     const url = new URL(`${API_BASE_URL}/api/trades`);
     url.searchParams.append('limit', limit.toString());
     url.searchParams.append('offset', offset.toString());
-    url.searchParams.append('chainId', networkId);
+    url.searchParams.append('chainId', currentNetworkId);
     
     console.log(`🌐 [FRONTEND] Full API URL: ${url.toString()}`);
     
@@ -220,11 +222,11 @@ export async function fetchTradeByHash(hash: string): Promise<Transaction | null
 /**
  * Fetch recent events from CoW Protocol
  */
-export async function fetchRecentEvents(): Promise<any[]> {
+export async function fetchRecentEvents(networkId?: string): Promise<any[]> {
   try {
-    const networkId = getCurrentNetworkId();
+    const currentNetworkId = networkId || getCurrentNetworkId();
     const url = new URL(`${API_BASE_URL}/api/events`);
-    url.searchParams.append('networkId', networkId);
+    url.searchParams.append('networkId', currentNetworkId);
     
     const response = await fetch(url.toString());
     
@@ -264,7 +266,7 @@ export async function checkAPIHealth(): Promise<boolean> {
 /**
  * Fetch token metadata from the backend API with caching and multicall support
  */
-export async function fetchTokenMetadata(tokenAddress: string): Promise<{
+export async function fetchTokenMetadata(tokenAddress: string, networkId?: string): Promise<{
   name: string;
   symbol: string;
   decimals: number;
@@ -284,10 +286,10 @@ export async function fetchTokenMetadata(tokenAddress: string): Promise<{
       });
 
       // Create the fetch promise with network metadata endpoint
-      const networkId = getCurrentNetworkId();
+      const currentNetworkId = networkId || getCurrentNetworkId();
       const url = new URL(`${API_BASE_URL}/api/network-metadata`);
       url.searchParams.append('address', tokenAddress);
-      url.searchParams.append('networkId', networkId);
+      url.searchParams.append('networkId', currentNetworkId);
       
       const fetchPromise = fetch(url.toString());
       
@@ -341,7 +343,7 @@ export async function fetchTokenDecimals(tokenAddress: string): Promise<number> 
 /**
  * Get block timestamp via API with enhanced caching
  */
-export async function getBlockTimestamp(blockNumber: number): Promise<number> {
+export async function getBlockTimestamp(blockNumber: number, networkId?: string): Promise<number> {
   // Check cache first
   if (blockTimestampCache.has(blockNumber)) {
     const cachedTimestamp = blockTimestampCache.get(blockNumber)!;
@@ -362,9 +364,9 @@ export async function getBlockTimestamp(blockNumber: number): Promise<number> {
         setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
       });
 
-      const networkId = getCurrentNetworkId();
+      const currentNetworkId = networkId || getCurrentNetworkId();
       const url = new URL(`${API_BASE_URL}/api/block-timestamp/${blockNumber}`);
-      url.searchParams.append('networkId', networkId);
+      url.searchParams.append('networkId', currentNetworkId);
       
       const fetchPromise = fetch(url.toString());
       
@@ -545,10 +547,10 @@ export async function retryAllFailedBlocks(): Promise<void> {
 /**
  * Batch fetch token metadata for multiple tokens at once
  */
-export async function fetchBatchTokenMetadata(addresses: string[]): Promise<{
+export async function fetchBatchTokenMetadata(addresses: string[], networkId?: string): Promise<{
   [address: string]: { name: string; symbol: string; decimals: number; address: string }
 }> {
-  const networkId = getCurrentNetworkId();
+  const currentNetworkId = networkId || getCurrentNetworkId();
   
   const response = await fetch(`${API_BASE_URL}/api/token-metadata/batch`, {
     method: 'POST',
@@ -557,7 +559,7 @@ export async function fetchBatchTokenMetadata(addresses: string[]): Promise<{
     },
     body: JSON.stringify({
       addresses,
-      networkId
+      networkId: currentNetworkId
     })
   });
   
@@ -644,12 +646,12 @@ export async function getNetworkConfig(chainId: string | number): Promise<any> {
 /**
  * Fetch solver competition data by transaction hash
  */
-export async function fetchSolverCompetition(txHash: string): Promise<any> {
+export async function fetchSolverCompetition(txHash: string, networkId?: string): Promise<any> {
   try {
-    const networkId = getCurrentNetworkId();
+    const currentNetworkId = networkId || getCurrentNetworkId();
     
     // Use backend API to get solver competition data
-    const response = await fetch(`${API_BASE_URL}/api/solver-competition/${txHash}?networkId=${networkId}`);
+    const response = await fetch(`${API_BASE_URL}/api/solver-competition/${txHash}?networkId=${currentNetworkId}`);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

@@ -439,21 +439,35 @@ app.get('/api/trades', async (req, res) => {
     console.log(`📡 [API] Current global network: ${currentNetworkId}`);
     console.log(`📡 [API] Current database: ${databaseService.getCurrentDatabaseName()}`);
     
-    // Verify that the database is already switched to the correct network
-    // (The /api/network/switch endpoint should have already done this)
+    // Always ensure the database is switched to the requested network
+    // This eliminates any race conditions or state inconsistencies
     if (chainId && !isNaN(chainId)) {
-      if (currentNetworkId !== chainId.toString()) {
-        console.warn(`⚠️ [API] Network mismatch! Expected: ${chainId}, Current: ${currentNetworkId}`);
-        console.log(`🔄 [API] Switching database to match requested chainId: ${chainId}`);
-        await databaseService.switchNetwork(chainId.toString());
-        currentNetworkId = chainId.toString();
-        console.log(`✅ [API] Database switched to chainId: ${chainId}`);
-        console.log(`📡 [API] New database: ${databaseService.getCurrentDatabaseName()}`);
-      } else {
-        console.log(`✅ [API] Database already on correct network: ${chainId}`);
+      const requestedNetworkId = chainId.toString();
+      console.log(`🔍 [API] Network check - Requested: ${requestedNetworkId}, Current: ${currentNetworkId}`);
+      
+      // Always switch to ensure we're using the correct database
+      console.log(`🔄 [API] Switching database to requested network: ${requestedNetworkId}`);
+      await databaseService.switchNetwork(requestedNetworkId);
+      currentNetworkId = requestedNetworkId;
+      console.log(`✅ [API] Database switched to network: ${requestedNetworkId}`);
+      console.log(`📡 [API] New database: ${databaseService.getCurrentDatabaseName()}`);
+      
+      // Verify the switch was successful
+      const finalDbName = databaseService.getCurrentDatabaseName();
+      console.log(`🔍 [API] Final database verification: ${finalDbName}`);
+      
+      // Additional verification: check if we're actually using the right database
+      if (requestedNetworkId === '1' && !finalDbName.includes('mainnet')) {
+        console.error(`❌ [API] CRITICAL: Requested Ethereum (1) but database is ${finalDbName}`);
+      } else if (requestedNetworkId === '42161' && !finalDbName.includes('arbitrum')) {
+        console.error(`❌ [API] CRITICAL: Requested Arbitrum (42161) but database is ${finalDbName}`);
       }
     } else {
       console.warn(`⚠️ [API] No valid chainId provided: ${req.query.chainId}`);
+      return res.status(400).json({
+        success: false,
+        error: 'Valid chainId is required'
+      });
     }
     
     // Get transactions from database with proper pagination and filtering
@@ -471,6 +485,17 @@ app.get('/api/trades', async (req, res) => {
     
     console.log(`✅ [API] Retrieved ${result.transactions.length} transactions from database (showing latest first)`);
     console.log(`📊 [API] Total transactions in database: ${result.total}`);
+    console.log(`🔍 [API] Final network state - Global: ${currentNetworkId}, Database: ${databaseService.getCurrentDatabaseName()}, Requested: ${chainId}`);
+    
+    // Log sample transaction to verify network
+    if (result.transactions.length > 0) {
+      const sampleTx = result.transactions[0];
+      console.log(`🔍 [API] Sample transaction from database:`, {
+        hash: sampleTx.hash,
+        blockNumber: sampleTx.blockNumber,
+        // Add any network-specific fields if available
+      });
+    }
     
     return res.json({
       success: true,

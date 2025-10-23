@@ -1,5 +1,5 @@
 import { TokenInfo, FormattedAmount, ConversionRate } from './types';
-import { fetchTokenMetadata as fetchTokenMetadataFromAPI, fetchBatchTokenMetadata } from './api';
+import { fetchTokenMetadata as fetchTokenMetadataFromAPI, fetchBatchTokenMetadata, getCurrentNetworkId } from './api';
 
 // Token information cache
 const tokenDecimalsCache: Record<`0x${string}`, number> = {};
@@ -115,7 +115,7 @@ const ongoingRequests = new Map<string, Promise<{ symbol: string; name: string; 
  * Fetch token metadata with enhanced retry logic and multiple fallback sources
  * Includes request deduplication to prevent multiple simultaneous requests for the same token
  */
-async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
+async function fetchTokenMetadata(tokenAddress: `0x${string}`, networkId?: string): Promise<{ symbol: string; name: string; decimals: number }> {
   // Check if there's already an ongoing request for this token
   const existingRequest = ongoingRequests.get(tokenAddress);
   if (existingRequest) {
@@ -124,7 +124,7 @@ async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol
   }
   
   // Create new request and store it
-  const requestPromise = performFetchTokenMetadata(tokenAddress);
+  const requestPromise = performFetchTokenMetadata(tokenAddress, networkId);
   ongoingRequests.set(tokenAddress, requestPromise);
   
   try {
@@ -141,7 +141,7 @@ async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol
  * Internal function to perform the actual fetch with retry logic
  * Now uses the backend API with caching and multicall support
  */
-async function performFetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
+async function performFetchTokenMetadata(tokenAddress: `0x${string}`, networkId?: string): Promise<{ symbol: string; name: string; decimals: number }> {
   // Special handling for native ETH address (0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE)
   if (tokenAddress.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
     console.log(`✅ Recognized native ETH address: ${tokenAddress}`);
@@ -156,7 +156,7 @@ async function performFetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{
     console.log(`🔍 Fetching token metadata for: ${tokenAddress} via backend API`);
     
     // Use the backend API with caching and multicall support
-    const metadata = await fetchTokenMetadataFromAPI(tokenAddress);
+    const metadata = await fetchTokenMetadataFromAPI(tokenAddress, networkId || getCurrentNetworkId());
     
     console.log(`✅ Fetched token metadata: ${metadata.symbol} - ${metadata.name} (${metadata.decimals} decimals)`);
     
@@ -246,7 +246,7 @@ export async function prefetchTokens(tokenAddresses: `0x${string}`[]): Promise<v
   
   try {
     // Use batch fetch for efficiency
-    const batchMetadata = await fetchBatchTokenMetadata(tokensToFetch);
+    const batchMetadata = await fetchBatchTokenMetadata(tokensToFetch, getCurrentNetworkId());
     
     // Cache the results
     for (const [address, metadata] of Object.entries(batchMetadata)) {
@@ -364,7 +364,7 @@ export async function fetchBatchTokenInfoAndUpdateDOM(
     console.log(`🔍 Batch fetching metadata for ${uncachedAddresses.length} tokens`);
     
     // Fetch metadata for all uncached tokens at once
-    const batchMetadata = await fetchBatchTokenMetadata(uncachedAddresses);
+    const batchMetadata = await fetchBatchTokenMetadata(uncachedAddresses, getCurrentNetworkId());
     
     // Update cache and DOM for each token
     for (const address of uncachedAddresses) {
