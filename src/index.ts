@@ -97,9 +97,120 @@ const configFile = {
 let databaseService: any = null;
 let isDatabaseConnected = false;
 
+// Auto-refresh service for trades
+let autoRefreshService: {
+  isRunning: boolean;
+  intervalId: NodeJS.Timeout | null;
+  lastRefresh: Date | null;
+  refreshCount: number;
+  errorCount: number;
+} = {
+  isRunning: false,
+  intervalId: null,
+  lastRefresh: null,
+  refreshCount: 0,
+  errorCount: 0
+};
+
 // Singleton EthereumService instance - only ONE instance for the entire application
 let ethereumServiceInstance: any = null;
 let currentNetworkId: string = '';
+
+/**
+ * Auto-refresh trades from database every 10 seconds
+ * This function runs in the background and updates the database with new trades
+ */
+async function autoRefreshTrades(): Promise<void> {
+  try {
+    console.log('🔄 [AUTO-REFRESH] Starting automatic trade refresh...');
+    
+    // Ensure database is initialized
+    if (!databaseService) {
+      console.log('🔄 [AUTO-REFRESH] Database not initialized, skipping refresh');
+      return;
+    }
+    
+    // Get all supported networks
+    const supportedNetworks = getSupportedNetworks();
+    
+    for (const network of supportedNetworks) {
+      try {
+        console.log(`🔄 [AUTO-REFRESH] Refreshing trades for ${network.name} (Chain ID: ${network.chainId})`);
+        
+        // Switch to this network's database
+        await databaseService.switchNetwork(network.chainId.toString());
+        
+        // Get recent trades from the database (last 50 trades)
+        const recentTrades = await databaseService.getTransactionsFromLastDays(1); // Last 1 day
+        
+        console.log(`✅ [AUTO-REFRESH] Found ${recentTrades.length} recent trades for ${network.name}`);
+        
+        // Update the refresh statistics
+        autoRefreshService.refreshCount++;
+        autoRefreshService.lastRefresh = new Date();
+        
+      } catch (error) {
+        console.error(`❌ [AUTO-REFRESH] Error refreshing trades for ${network.name}:`, error);
+        autoRefreshService.errorCount++;
+        
+        // If it's a database write conflict, just skip this update
+        if (error instanceof Error && (
+          error.message.includes('database is locked') ||
+          error.message.includes('SQLITE_BUSY') ||
+          error.message.includes('write conflict')
+        )) {
+          console.log(`⏭️ [AUTO-REFRESH] Database write conflict for ${network.name}, skipping this update`);
+          continue;
+        }
+      }
+    }
+    
+    console.log(`✅ [AUTO-REFRESH] Completed refresh cycle. Total refreshes: ${autoRefreshService.refreshCount}, Errors: ${autoRefreshService.errorCount}`);
+    
+  } catch (error) {
+    console.error('❌ [AUTO-REFRESH] Error in auto-refresh cycle:', error);
+    autoRefreshService.errorCount++;
+  }
+}
+
+/**
+ * Start the auto-refresh service
+ */
+function startAutoRefreshService(): void {
+  if (autoRefreshService.isRunning) {
+    console.log('⚠️ [AUTO-REFRESH] Service is already running');
+    return;
+  }
+  
+  console.log('🚀 [AUTO-REFRESH] Starting auto-refresh service (every 10 seconds)');
+  
+  autoRefreshService.isRunning = true;
+  autoRefreshService.intervalId = setInterval(async () => {
+    await autoRefreshTrades();
+  }, 10000); // 10 seconds
+  
+  console.log('✅ [AUTO-REFRESH] Auto-refresh service started');
+}
+
+/**
+ * Stop the auto-refresh service
+ */
+function stopAutoRefreshService(): void {
+  if (!autoRefreshService.isRunning) {
+    console.log('⚠️ [AUTO-REFRESH] Service is not running');
+    return;
+  }
+  
+  console.log('⏹️ [AUTO-REFRESH] Stopping auto-refresh service');
+  
+  if (autoRefreshService.intervalId) {
+    clearInterval(autoRefreshService.intervalId);
+    autoRefreshService.intervalId = null;
+  }
+  
+  autoRefreshService.isRunning = false;
+  console.log('✅ [AUTO-REFRESH] Auto-refresh service stopped');
+}
 
 function getEthereumService(): any {
   // Create instance only once on first call
@@ -606,6 +717,67 @@ app.post('/api/trades/sync', async (req, res) => {
   }
 });
 
+// Auto-refresh service control endpoints
+app.get('/api/auto-refresh/status', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        isRunning: autoRefreshService.isRunning,
+        lastRefresh: autoRefreshService.lastRefresh,
+        refreshCount: autoRefreshService.refreshCount,
+        errorCount: autoRefreshService.errorCount,
+        uptime: autoRefreshService.lastRefresh ? 
+          Math.floor((Date.now() - autoRefreshService.lastRefresh.getTime()) / 1000) : null
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Error getting auto-refresh status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get auto-refresh status'
+    });
+  }
+});
+
+app.post('/api/auto-refresh/start', (req, res) => {
+  try {
+    startAutoRefreshService();
+    res.json({
+      success: true,
+      message: 'Auto-refresh service started',
+      data: {
+        isRunning: autoRefreshService.isRunning
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Error starting auto-refresh service:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to start auto-refresh service'
+    });
+  }
+});
+
+app.post('/api/auto-refresh/stop', (req, res) => {
+  try {
+    stopAutoRefreshService();
+    res.json({
+      success: true,
+      message: 'Auto-refresh service stopped',
+      data: {
+        isRunning: autoRefreshService.isRunning
+      }
+    });
+  } catch (error: any) {
+    console.error('❌ Error stopping auto-refresh service:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to stop auto-refresh service'
+    });
+  }
+});
+
 // Token metadata endpoints removed - frontend now calls contracts directly using viem
 
 // Enhanced endpoint to fetch block timestamp with direct RPC access
@@ -1103,6 +1275,9 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   try {
     await initializeDatabase();
     console.log(`💾 Database: ${isDatabaseConnected ? 'SQLite connected' : 'Mock database active'}`);
+    
+    // Start auto-refresh service after database is initialized
+    startAutoRefreshService();
   } catch (error) {
     console.error('❌ Database initialization failed:', error);
   }
@@ -1131,6 +1306,9 @@ server.on('error', (error: any) => {
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n🛑 Received SIGINT, shutting down gracefully...');
+  
+  // Stop auto-refresh service
+  stopAutoRefreshService();
   
   if (databaseService) {
     try {
