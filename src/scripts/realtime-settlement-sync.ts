@@ -1,10 +1,21 @@
 import { EthereumService } from "../services/ethereum";
-import { MongoDBDatabaseService } from "../services/mongodb-database";
-import { MockDatabaseService } from "../services/database";
+import { SqliteDatabaseService } from "../services/sqlite-database";
+import { MockDatabaseService, DatabaseService } from "../services/database";
+import { getSupportedNetworks, NetworkConfig } from "../config/networks";
 import dotenv from "dotenv";
 
 // Load environment variables
 dotenv.config();
+
+interface NetworkSyncState {
+  networkId: string;
+  networkName: string;
+  latestBlock: number;
+  lastProcessedBlock: number;
+  processedEvents: number;
+  savedOrders: number;
+  errors: number;
+}
 
 interface SyncProgress {
   totalEvents: number;
@@ -15,6 +26,7 @@ interface SyncProgress {
   lastProcessedBlock: number;
   isWaitingForTimeout: boolean;
   timeoutStartTime?: Date;
+  networkStates: Map<string, NetworkSyncState>;
 }
 
 interface CowOrderData {
@@ -33,9 +45,11 @@ interface CowOrderData {
 
 class RealtimeSettlementSync {
   private ethereumService: EthereumService;
-  private databaseService!: MongoDBDatabaseService | MockDatabaseService;
+  private databaseServices: Map<string, DatabaseService>;
   private isDatabaseConnected: boolean = false;
   private progress: SyncProgress;
+  private supportedNetworks: NetworkConfig[];
+  private currentNetworkId: string = "";
   private isRunning: boolean = false;
   private pollingInterval: number = 5000; // 5 seconds
   
@@ -51,6 +65,10 @@ class RealtimeSettlementSync {
   private readonly BATCH_DELAY_MS: number;
 
   constructor() {
+    this.ethereumService = new EthereumService();
+    this.databaseServices = new Map();
+    this.supportedNetworks = getSupportedNetworks();
+    
     // Initialize backoff configuration from environment variables
     this.MAX_RETRIES = parseInt(process.env.RPC_BACKOFF_MAX_RETRIES || "5");
     this.BASE_DELAY = parseInt(process.env.RPC_BACKOFF_BASE_DELAY || "2000");
@@ -66,7 +84,6 @@ class RealtimeSettlementSync {
     // Poll every 1 second to stay current with new blocks
     this.pollingInterval = parseInt(process.env.REALTIME_POLLING_INTERVAL || "1000");
 
-    this.ethereumService = new EthereumService();
     this.progress = {
       totalEvents: 0,
       processedEvents: 0,
@@ -75,6 +92,7 @@ class RealtimeSettlementSync {
       startTime: new Date(),
       lastProcessedBlock: 0,
       isWaitingForTimeout: false,
+      networkStates: new Map(),
     };
 
     console.log(`🔄 RealtimeSync config: maxRetries=${this.MAX_RETRIES}, baseDelay=${this.BASE_DELAY}ms, maxDelay=${this.MAX_DELAY}ms, multiplier=${this.BACKOFF_MULTIPLIER}, timeoutDelay=${this.RPC_TIMEOUT_DELAY}ms`);
@@ -164,34 +182,54 @@ class RealtimeSettlementSync {
   }
 
   async initialize(): Promise<void> {
-    console.log("🚀 Initializing Realtime Settlement Sync...");
+    console.log("🚀 Initializing Realtime Settlement Sync for all networks...");
+    console.log(`📡 Found ${this.supportedNetworks.length} supported networks`);
 
     try {
-      // Try to connect to MongoDB first
-      try {
-        this.databaseService = new MongoDBDatabaseService();
-        await this.databaseService.connect();
-        this.isDatabaseConnected = true;
-        console.log("✅ Connected to MongoDB");
-      } catch (error) {
-        console.log(
-          "⚠️ MongoDB connection failed, falling back to mock database"
+      // Initialize services and state for each network
+      for (const network of this.supportedNetworks) {
+        console.log(`\n🌐 Initializing network: ${network.name} (Chain ID: ${network.chainId})`);
+        
+        // Switch to this network
+        await this.ethereumService.switchNetwork(network.chainId.toString());
+        
+        // Try to connect to database for this network
+        try {
+          const databaseService = new SqliteDatabaseService();
+          await databaseService.connect();
+          this.databaseServices.set(network.chainId.toString(), databaseService);
+          this.isDatabaseConnected = true;
+          console.log(`✅ Connected to SQLite database for ${network.name}`);
+        } catch (error) {
+          console.log(`⚠️ Database connection failed for ${network.name}, falling back to mock database`);
+          this.databaseServices.set(network.chainId.toString(), new MockDatabaseService());
+          this.isDatabaseConnected = false;
+        }
+
+        // Get the latest block number for this network
+        const latestBlock = await this.executeWithBackoff(
+          () => this.ethereumService.getLatestBlockNumber(),
+          `getLatestBlockNumber(initialize) for ${network.name}`
         );
-        this.databaseService = new MockDatabaseService();
-        this.isDatabaseConnected = false;
+        const latestBlockNum = Number(latestBlock);
+
+        // Initialize network state
+        const networkState: NetworkSyncState = {
+          networkId: network.chainId.toString(),
+          networkName: network.name,
+          latestBlock: latestBlockNum,
+          lastProcessedBlock: latestBlockNum,
+          processedEvents: 0,
+          savedOrders: 0,
+          errors: 0,
+        };
+
+        this.progress.networkStates.set(network.chainId.toString(), networkState);
+        
+        console.log(`📦 ${network.name} - Starting from block: ${latestBlockNum}`);
       }
 
-      // Get the latest block number to start from
-      const latestBlock = await this.executeWithBackoff(
-        () => this.ethereumService.getLatestBlockNumber(),
-        'getLatestBlockNumber(initialize)'
-      );
-      this.progress.lastProcessedBlock = Number(latestBlock);
-      console.log(
-        `📦 Starting from block: ${this.progress.lastProcessedBlock}`
-      );
-
-      console.log("✅ Realtime Settlement Sync initialized successfully");
+      console.log("\n✅ Realtime Settlement Sync initialized successfully for all networks");
     } catch (error) {
       console.error("❌ Failed to initialize Realtime Settlement Sync:", error);
       throw error;
@@ -199,7 +237,8 @@ class RealtimeSettlementSync {
   }
 
   async startStreaming(): Promise<void> {
-    console.log("🔄 Starting real-time settlement event streaming...");
+    console.log("🔄 Starting real-time settlement event streaming across all networks...");
+    console.log("🔄 Will prioritize the network closest to the present at each iteration\n");
     this.isRunning = true;
 
     while (this.isRunning) {
@@ -223,26 +262,52 @@ class RealtimeSettlementSync {
 
   private async processNewBlocks(): Promise<void> {
     try {
-      // Get current latest block
-      console.log(`🔍 Checking for new blocks...`);
-      const latestBlock = await this.executeWithBackoff(
-        () => this.ethereumService.getLatestBlockNumber(),
-        'getLatestBlockNumber(processNewBlocks)'
-      );
-      const currentBlock = Number(latestBlock);
-
+      // Update latest blocks for all networks
+      console.log(`🔍 Checking for new blocks across all networks...`);
+      
+      for (const [networkId, networkState] of this.progress.networkStates) {
+        try {
+          // Switch to this network
+          await this.ethereumService.switchNetwork(networkId);
+          
+          const latestBlock = await this.executeWithBackoff(
+            () => this.ethereumService.getLatestBlockNumber(),
+            `getLatestBlockNumber(${networkState.networkName})`
+          );
+          networkState.latestBlock = Number(latestBlock);
+        } catch (error) {
+          console.error(`❌ Error getting latest block for ${networkState.networkName}:`, error);
+        }
+      }
+      
+      // Process blocks on the network with the most new blocks (closest to present)
+      const networkId = this.selectNetworkForRealtimeSync();
+      if (!networkId) {
+        console.log(`✅ No new blocks to process on any network`);
+        return;
+      }
+      
+      const networkState = this.progress.networkStates.get(networkId);
+      if (!networkState) return;
+      
+      this.currentNetworkId = networkId;
+      
+      const currentBlock = networkState.latestBlock;
+      const lastProcessed = networkState.lastProcessedBlock;
+      
+      console.log(`\n🌐 Processing network: ${networkState.networkName}`);
       console.log(`📦 Current latest block: ${currentBlock}`);
-      console.log(`📦 Last processed block: ${this.progress.lastProcessedBlock}`);
+      console.log(`📦 Last processed block: ${lastProcessed}`);
 
-      if (currentBlock <= this.progress.lastProcessedBlock) {
-        console.log(`✅ No new blocks to process`);
+      if (currentBlock <= lastProcessed) {
+        console.log(`✅ No new blocks to process for ${networkState.networkName}`);
         return;
       }
 
-      const newBlocksCount = currentBlock - this.progress.lastProcessedBlock;
+      const newBlocksCount = currentBlock - lastProcessed;
       console.log(
         `🆕 Found ${newBlocksCount} new blocks to process: ${
-          this.progress.lastProcessedBlock + 1
+          lastProcessed + 1
         } to ${currentBlock}`
       );
 
@@ -250,16 +315,18 @@ class RealtimeSettlementSync {
       if (newBlocksCount > 1) {
         console.log(`🚀 Using batch processing for ${newBlocksCount} blocks`);
         await this.processBlocksInBatch(
-          BigInt(this.progress.lastProcessedBlock + 1),
-          BigInt(currentBlock)
+          BigInt(lastProcessed + 1),
+          BigInt(currentBlock),
+          networkId
         );
       } else {
         // Single block - use individual processing
-        console.log(`🔍 Processing single block ${this.progress.lastProcessedBlock + 1}`);
-        await this.processBlock(BigInt(this.progress.lastProcessedBlock + 1));
+        console.log(`🔍 Processing single block ${lastProcessed + 1}`);
+        await this.processBlock(BigInt(lastProcessed + 1), networkId);
       }
 
-      console.log(`✅ Completed processing ${newBlocksCount} new blocks`);
+      console.log(`✅ Completed processing ${newBlocksCount} new blocks for ${networkState.networkName}`);
+      networkState.lastProcessedBlock = currentBlock;
       this.progress.lastProcessedBlock = currentBlock;
     } catch (error) {
       console.error("❌ Error processing new blocks:", error);
@@ -267,8 +334,43 @@ class RealtimeSettlementSync {
     }
   }
 
-  private async processBlocksInBatch(fromBlock: bigint, toBlock: bigint): Promise<void> {
+  /**
+   * Select the network with the most new blocks (closest to present)
+   * This ensures we process the most recent activity across all networks
+   */
+  private selectNetworkForRealtimeSync(): string | null {
+    let selectedNetworkId: string | null = null;
+    let maxNewBlocks = 0;
+    
+    for (const [networkId, state] of this.progress.networkStates) {
+      const newBlocks = state.latestBlock - state.lastProcessedBlock;
+      
+      // Skip networks with no new blocks
+      if (newBlocks <= 0) {
+        continue;
+      }
+      
+      // Select the network with the most new blocks (prioritize networks closest to present)
+      if (newBlocks > maxNewBlocks) {
+        maxNewBlocks = newBlocks;
+        selectedNetworkId = networkId;
+      }
+    }
+    
+    return selectedNetworkId;
+  }
+
+  private async processBlocksInBatch(fromBlock: bigint, toBlock: bigint, networkId: string): Promise<void> {
     try {
+      const networkState = this.progress.networkStates.get(networkId);
+      
+      if (!networkState) {
+        throw new Error(`Network state not found for network ${networkId}`);
+      }
+      
+      // Switch to the correct network
+      await this.ethereumService.switchNetwork(networkId);
+      
       console.log(`📡 Fetching batch events from block ${fromBlock} to ${toBlock}...`);
       
       // Use the new batch event fetching method
@@ -312,11 +414,13 @@ class RealtimeSettlementSync {
             // Add other fields as needed
           };
           
-          await this.processSettlementTransaction(mockTransaction, BigInt(blockNumber));
+          await this.processSettlementTransaction(mockTransaction, BigInt(blockNumber), networkId);
+          networkState.processedEvents++;
           this.progress.processedEvents++;
           console.log(`   ✅ Transaction ${txHash} processed successfully`);
         } catch (error) {
           console.error(`   ❌ Error processing transaction ${txHash}:`, error);
+          networkState.errors++;
           this.progress.errors++;
         }
       }
@@ -329,17 +433,30 @@ class RealtimeSettlementSync {
       console.log(`🔄 Falling back to individual block processing...`);
       for (let blockNum = fromBlock; blockNum <= toBlock; blockNum++) {
         try {
-          await this.processBlock(blockNum);
+          await this.processBlock(blockNum, networkId);
         } catch (blockError) {
           console.error(`❌ Error processing block ${blockNum}:`, blockError);
+          const networkState = this.progress.networkStates.get(networkId);
+          if (networkState) {
+            networkState.errors++;
+          }
           this.progress.errors++;
         }
       }
     }
   }
 
-  private async processBlock(blockNumber: bigint): Promise<void> {
+  private async processBlock(blockNumber: bigint, networkId: string): Promise<void> {
     try {
+      const networkState = this.progress.networkStates.get(networkId);
+      
+      if (!networkState) {
+        throw new Error(`Network state not found for network ${networkId}`);
+      }
+      
+      // Switch to the correct network
+      await this.ethereumService.switchNetwork(networkId);
+      
       console.log(`   🔄 Fetching block ${blockNumber} from RPC...`);
       
       // Get block with transactions
@@ -348,7 +465,7 @@ class RealtimeSettlementSync {
           blockNumber,
           includeTransactions: true,
         }),
-        `getBlock(${blockNumber})`
+        `getBlock(${blockNumber}) for ${networkState.networkName}`
       );
 
       if (!block || !block.transactions) {
@@ -381,7 +498,8 @@ class RealtimeSettlementSync {
         if (typeof tx === "object") {
           console.log(`   🔄 Processing transaction ${i + 1}/${settlementTransactions.length}: ${tx.hash}`);
           try {
-            await this.processSettlementTransaction(tx, blockNumber);
+            await this.processSettlementTransaction(tx, blockNumber, networkId);
+            networkState.processedEvents++;
             this.progress.processedEvents++;
             console.log(`   ✅ Transaction ${tx.hash} processed successfully`);
           } catch (error) {
@@ -389,6 +507,7 @@ class RealtimeSettlementSync {
               `   ❌ Error processing settlement transaction ${tx.hash}:`,
               error
             );
+            networkState.errors++;
             this.progress.errors++;
           }
         }
@@ -397,20 +516,32 @@ class RealtimeSettlementSync {
       console.log(`   ✅ Block ${blockNumber} completed successfully`);
     } catch (error) {
       console.error(`   ❌ Error fetching block ${blockNumber}:`, error);
+      const networkState = this.progress.networkStates.get(networkId);
+      if (networkState) {
+        networkState.errors++;
+      }
       this.progress.errors++;
     }
   }
 
   private async processSettlementTransaction(
     tx: any,
-    blockNumber: bigint
+    blockNumber: bigint,
+    networkId: string
   ): Promise<void> {
     try {
+      const databaseService = this.databaseServices.get(networkId);
+      const networkState = this.progress.networkStates.get(networkId);
+      
+      if (!databaseService || !networkState) {
+        throw new Error(`Services not found for network ${networkId}`);
+      }
+      
       console.log(`      🔄 Processing settlement transaction: ${tx.hash}`);
 
       // Fetch order details from CoW API
       console.log(`      📡 Fetching order details from CoW API for ${tx.hash}...`);
-      const orderData = await this.fetchOrderDetailsFromCowApi(tx.hash);
+      const orderData = await this.fetchOrderDetailsFromCowApi(tx.hash, networkId);
 
       if (orderData && orderData.length > 0) {
         console.log(
@@ -439,7 +570,8 @@ class RealtimeSettlementSync {
 
           console.log(`      💾 Saving order to database...`);
           // Save to database
-          await this.databaseService.saveTransaction(processedOrder);
+          await databaseService.saveTransaction(processedOrder);
+          networkState.savedOrders++;
           this.progress.savedOrders++;
           this.progress.totalEvents++;
 
@@ -460,11 +592,19 @@ class RealtimeSettlementSync {
   }
 
   private async fetchOrderDetailsFromCowApi(
-    transactionHash: string
+    transactionHash: string,
+    networkId: string
   ): Promise<any[]> {
     try {
-      // Determine the network based on the RPC URL
-      let apiBaseUrl = "https://api.cow.fi/" + ( process.env.NETWORK || "mainnet") + '/api/v1';
+      // Determine the network API endpoint based on chain ID
+      let networkName = "mainnet"; // default
+      if (networkId === "42161") {
+        networkName = "arbitrum_one";
+      } else if (networkId === "100") {
+        networkName = "xdai";
+      }
+      
+      const apiBaseUrl = `https://api.cow.fi/${networkName}/api/v1`;
       const apiUrl = `${apiBaseUrl}/transactions/${transactionHash}/orders`;
 
       console.log(`         📡 API Request: ${apiUrl}`);
@@ -507,27 +647,34 @@ class RealtimeSettlementSync {
     const totalTime = Date.now() - this.progress.startTime.getTime();
     const uptime = this.formatTime(totalTime);
 
-    console.log("\n📊 REALTIME SYNC PROGRESS");
-    console.log("========================");
+    console.log("\n📊 REALTIME SYNC PROGRESS (MULTI-NETWORK)");
+    console.log("=========================================");
     console.log(`⏱️  Uptime: ${uptime}`);
-    console.log(`📦 Last processed block: ${this.progress.lastProcessedBlock}`);
-    console.log(`🔄 Events processed: ${this.progress.processedEvents}`);
-    console.log(`💾 Orders saved: ${this.progress.savedOrders}`);
-    console.log(`❌ Errors: ${this.progress.errors}`);
-    console.log(
-      `🗄️  Database: ${this.isDatabaseConnected ? "MongoDB" : "Mock"}`
-    );
+    console.log(`🗄️  Database: ${this.isDatabaseConnected ? "SQLite" : "Mock"}`);
+    console.log("");
+    console.log("OVERALL STATS:");
+    console.log(`  🔄 Events processed: ${this.progress.processedEvents}`);
+    console.log(`  💾 Orders saved: ${this.progress.savedOrders}`);
+    console.log(`  ❌ Errors: ${this.progress.errors}`);
+    console.log("");
+    console.log("PER-NETWORK STATS:");
+    
+    for (const [networkId, state] of this.progress.networkStates) {
+      const newBlocks = state.latestBlock - state.lastProcessedBlock;
+      
+      console.log(`  ${state.networkName}:`);
+      console.log(`    📦 Latest block: ${state.latestBlock}, Last processed: ${state.lastProcessedBlock}, Pending: ${newBlocks}`);
+      console.log(`    💾 Orders: ${state.savedOrders}, Events: ${state.processedEvents}, Errors: ${state.errors}`);
+    }
     
     if (this.progress.isWaitingForTimeout && this.progress.timeoutStartTime) {
       const timeoutElapsed = Date.now() - this.progress.timeoutStartTime.getTime();
       const timeoutRemaining = Math.max(0, this.RPC_TIMEOUT_DELAY - timeoutElapsed);
       const remainingTime = this.formatTime(timeoutRemaining);
-      console.log(`⏳ RPC Timeout: ${remainingTime} remaining`);
-    } else {
-      console.log(`⏳ RPC Timeout: Not active`);
+      console.log(`\n⏳ RPC Timeout: ${remainingTime} remaining`);
     }
     
-    console.log("========================\n");
+    console.log("=========================================\n");
   }
 
   private formatTime(milliseconds: number): string {
@@ -551,10 +698,18 @@ class RealtimeSettlementSync {
   async cleanup(): Promise<void> {
     try {
       this.isRunning = false;
-      if (this.databaseService && "disconnect" in this.databaseService) {
-        await this.databaseService.disconnect();
-        console.log("🔌 Database connection closed");
+      console.log("🧹 Cleaning up connections...");
+      
+      // Close all database connections
+      for (const [networkId, databaseService] of this.databaseServices) {
+        if (databaseService && "disconnect" in databaseService) {
+          await databaseService.disconnect();
+          const networkState = this.progress.networkStates.get(networkId);
+          console.log(`🔌 Database connection closed for ${networkState?.networkName || networkId}`);
+        }
       }
+      
+      console.log("✅ Cleanup completed");
     } catch (error) {
       console.error("❌ Error during cleanup:", error);
     }

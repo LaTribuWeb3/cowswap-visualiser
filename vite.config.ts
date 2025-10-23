@@ -18,18 +18,9 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       "process.env.NODE_ENV": JSON.stringify(env.NODE_ENV || "development"),
-      "process.env.RPC_URL": JSON.stringify(env.RPC_URL || ""),
       "process.env.PAIR_API_TOKEN": JSON.stringify(env.PAIR_API_TOKEN || ""),
-      "process.env.TOKEN_METADATA_API_TOKEN": JSON.stringify(env.TOKEN_METADATA_API_TOKEN || ""),
       "process.env.API_BASE_URL": JSON.stringify(env.API_BASE_URL || ""),
-      "process.env.NETWORK": JSON.stringify(env.NETWORK || "mainnet"),
       "process.env.COW_API_KEY": JSON.stringify(env.COW_API_KEY || ""),
-      "process.env.BLOCKCHAIN_EXPLORER_URL": JSON.stringify(
-        env.BLOCKCHAIN_EXPLORER_URL || "https://etherscan.io"
-      ),
-      "process.env.TOKENS_METADATA_API_URL": JSON.stringify(
-        env.TOKENS_METADATA_API_URL || "https://tokens-metadata.la-tribu.xyz"
-      ),
       "process.env.PAIR_PRICING_API_URL": JSON.stringify(
         env.PAIR_PRICING_API_URL || "https://pair-pricing.la-tribu.xyz"
       ),

@@ -1,0 +1,3 @@
+# This directory contains SQLite database files
+# Each network has its own database file (e.g., cow-mainnet.db, cow-arbitrum.db, cow-gnosis.db)
+

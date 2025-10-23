@@ -1,10 +1,12 @@
-export { MongoDBDatabaseService } from './mongodb-database';
+import { Transaction } from '../types/db-types';
+
+export { SqliteDatabaseService } from './sqlite-database';
 
 export interface DatabaseService {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   saveTransaction(transaction: any): Promise<void>;
-  getTransactionByHash(hash: string): Promise<any | null>;
+  getTransactionByHash(hash: string): Promise<Transaction | null>;
   getTransactions(params: {
     limit?: number;
     offset?: number;
@@ -12,9 +14,15 @@ export interface DatabaseService {
     toAddress?: string;
     startDate?: Date;
     endDate?: Date;
-  }): Promise<any[]>;
-  getLatestTransactions(limit?: number): Promise<any[]>;
-  getTransactionsFromLastDays(days?: number): Promise<any[]>;
+  }): Promise<Transaction[]>;
+  getLatestTransactions(limit?: number): Promise<Transaction[]>;
+  getTransactionsCount(params: {
+    fromAddress?: string;
+    toAddress?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<number>;
+  getTransactionsFromLastDays(days?: number): Promise<Transaction[]>;
   getTransactionsWithPagination(params: {
     limit?: number;
     offset?: number;
@@ -25,13 +33,18 @@ export interface DatabaseService {
     sellToken?: string;
     buyToken?: string;
   }): Promise<{
-    transactions: any[];
+    transactions: Transaction[];
     total: number;
   }>;
+  switchNetwork(networkId: string): Promise<void>;
 }
 
 export class MockDatabaseService implements DatabaseService {
-  private transactions: Map<string, any> = new Map();
+  private transactions: Map<string, Transaction> = new Map();
+
+  async getTransactionsCount(params: { fromAddress?: string; toAddress?: string; startDate?: Date; endDate?: Date; }): Promise<number> {
+    return Promise.resolve(0);
+  }
 
   async connect(): Promise<void> {
     console.log('🔌 Mock database connected');
@@ -48,7 +61,7 @@ export class MockDatabaseService implements DatabaseService {
   }
 
 
-  async getTransactionByHash(hash: string): Promise<any | null> {
+  async getTransactionByHash(hash: string): Promise<Transaction | null> {
     return this.transactions.get(hash) || null;
   }
 
@@ -60,7 +73,7 @@ export class MockDatabaseService implements DatabaseService {
     toAddress?: string;
     startDate?: Date;
     endDate?: Date;
-  }): Promise<any[]> {
+  }): Promise<Transaction[]> {
     let transactions = Array.from(this.transactions.values());
 
     if (params.fromAddress) {
@@ -73,6 +86,7 @@ export class MockDatabaseService implements DatabaseService {
 
     if (params.startDate || params.endDate) {
       transactions = transactions.filter(tx => {
+        if (!tx.timestamp) return false;
         const txDate = new Date(tx.timestamp);
         if (params.startDate && txDate < params.startDate) return false;
         if (params.endDate && txDate > params.endDate) return false;
@@ -81,7 +95,10 @@ export class MockDatabaseService implements DatabaseService {
     }
 
     // Sort by timestamp in reverse chronological order
-    transactions.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    transactions.sort((a, b) => {
+      if (!a.timestamp || !b.timestamp) return 0;
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    });
 
     if (params.offset) {
       transactions = transactions.slice(params.offset);
@@ -94,21 +111,27 @@ export class MockDatabaseService implements DatabaseService {
     return transactions;
   }
 
-  async getLatestTransactions(limit: number = 50): Promise<any[]> {
+  async getLatestTransactions(limit: number = 50): Promise<Transaction[]> {
     const transactions = Array.from(this.transactions.values());
     return transactions
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .sort((a, b) => {
+        if (!a.timestamp || !b.timestamp) return 0;
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      })
       .slice(0, limit);
   }
 
-  async getTransactionsFromLastDays(days: number = 10): Promise<any[]> {
+  async getTransactionsFromLastDays(days: number = 10): Promise<Transaction[]> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
     
     const transactions = Array.from(this.transactions.values());
     return transactions
-      .filter(tx => new Date(tx.timestamp) >= startDate)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      .filter(tx => tx.timestamp && new Date(tx.timestamp) >= startDate)
+      .sort((a, b) => {
+        if (!a.timestamp || !b.timestamp) return 0;
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
   }
 
   async getTransactionsWithPagination(params: {
@@ -121,7 +144,7 @@ export class MockDatabaseService implements DatabaseService {
     sellToken?: string;
     buyToken?: string;
   }): Promise<{
-    transactions: any[];
+    transactions: Transaction[];
     total: number;
   }> {
     let transactions = Array.from(this.transactions.values());
@@ -137,6 +160,7 @@ export class MockDatabaseService implements DatabaseService {
 
     if (params.startDate || params.endDate) {
       transactions = transactions.filter(tx => {
+        if (!tx.timestamp) return false;
         const txDate = new Date(tx.timestamp);
         if (params.startDate && txDate < params.startDate) return false;
         if (params.endDate && txDate > params.endDate) return false;
@@ -160,7 +184,10 @@ export class MockDatabaseService implements DatabaseService {
     }
 
     // Sort by timestamp in reverse chronological order
-    transactions.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    transactions.sort((a, b) => {
+      if (!a.timestamp || !b.timestamp) return 0;
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    });
 
     // Get total count before pagination
     const total = transactions.length;
@@ -178,5 +205,9 @@ export class MockDatabaseService implements DatabaseService {
       transactions,
       total
     };
+  }
+
+  async switchNetwork(networkId: string): Promise<void> {
+    console.log(`🔄 Switching to network: ${networkId}`);
   }
 }

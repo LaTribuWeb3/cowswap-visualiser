@@ -1,12 +1,14 @@
 import { HistoricalTradesSync } from './historical-trades-sync';
+import { getNetworkConfigs, getNetworkIds } from '../utils/config';
 import dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Load environment variables
 dotenv.config();
 
 interface SyncOptions {
   monthsBack: number;
-  method: 'blockchain' | 'api' | 'auto';
   force: boolean;
 }
 
@@ -21,75 +23,58 @@ class HistoricalTradesSyncManager {
     console.log('🚀 CoW Protocol Historical Trades Sync Manager');
     console.log('=============================================');
     console.log(`📅 Target: Past ${this.options.monthsBack} months`);
-    console.log(`🔧 Method: ${this.options.method}`);
     console.log(`💪 Force: ${this.options.force}`);
     console.log('=============================================\n');
 
     try {
-      if (this.options.method === 'blockchain') {
-        await this.runBlockchainSync();
-      } else if (this.options.method === 'api') {
-        await this.runApiSync();
-      } else {
-        await this.runAutoSync();
-      }
+      await this.runSync();
     } catch (error) {
       console.error('❌ Sync failed:', error);
       process.exit(1);
     }
   }
 
-  private async runBlockchainSync(): Promise<void> {
+  private async runSync(): Promise<void> {
     console.log('🔗 Using blockchain scanning method...');
-    const sync = new HistoricalTradesSync();
     
-    try {
-      await sync.initialize();
-      await sync.syncHistoricalTrades();
-    } finally {
-      await sync.cleanup();
-    }
-  }
+    // Read config.json to get all network IDs
+    const config = getNetworkConfigs();
+    const networkIds = getNetworkIds();
 
-  private async runApiSync(): Promise<void> {
-    console.log('🌐 Using CoW Protocol API method...');
-    const sync = new HistoricalTradesSync();
-    
-    try {
-      await sync.initialize();
-      await sync.syncHistoricalTrades();
-    } finally {
-      await sync.cleanup();
-    }
-  }
+    console.log(`🌐 Found ${networkIds.length} networks in config: ${networkIds.join(', ')}`);
+    console.log(`📅 Will sync the past ${this.options.monthsBack} months for each network\n`);
 
-  private async runAutoSync(): Promise<void> {
-    console.log('🤖 Using auto-selection method...');
-    
-    // Try API first (faster and more reliable)
-    try {
-      console.log('🔄 Attempting CoW API sync first...');
-      await this.runApiSync();
-      return;
-    } catch (error) {
-      console.log('⚠️ CoW API sync failed, falling back to blockchain scanning...');
-      console.log('⚠️ Error:', error instanceof Error ? error.message : 'Unknown error');
+    // Process each network sequentially
+    for (let i = 0; i < networkIds.length; i++) {
+      const networkId = networkIds[i];
+      const networkConfig = config[networkId];
+      
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`🚀 NETWORK ${i + 1}/${networkIds.length}: ${networkConfig.name} (Chain ID: ${networkId})`);
+      console.log(`${'='.repeat(60)}\n`);
+
+      const sync = new HistoricalTradesSync(networkId);
+
+      try {
+        await sync.initialize(this.options.monthsBack);
+        await sync.syncHistoricalTrades();
+      } catch (error) {
+        console.error(`❌ Error syncing ${networkConfig.name}:`, error);
+        console.log(`⏭️  Continuing to next network...\n`);
+      } finally {
+        await sync.cleanup();
+      }
     }
 
-    // Fallback to blockchain scanning
-    try {
-      await this.runBlockchainSync();
-    } catch (error) {
-      console.error('❌ Both sync methods failed');
-      throw error;
-    }
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`✅ COMPLETED: All networks have been processed`);
+    console.log(`${'='.repeat(60)}\n`);
   }
 }
 
 function parseCommandLineArgs(): SyncOptions {
   const args = process.argv.slice(2);
   let monthsBack = 4;
-  let method: 'blockchain' | 'api' | 'auto' = 'auto';
   let force = false;
 
   for (let i = 0; i < args.length; i++) {
@@ -101,14 +86,6 @@ function parseCommandLineArgs(): SyncOptions {
         const months = parseInt(args[++i]);
         if (!isNaN(months) && months > 0) {
           monthsBack = months;
-        }
-        break;
-        
-      case '--method':
-      case '-t':
-        const methodArg = args[++i];
-        if (methodArg === 'blockchain' || methodArg === 'api' || methodArg === 'auto') {
-          method = methodArg;
         }
         break;
         
@@ -133,7 +110,7 @@ function parseCommandLineArgs(): SyncOptions {
     }
   }
 
-  return { monthsBack, method, force };
+  return { monthsBack, force };
 }
 
 function printHelp(): void {
@@ -142,36 +119,29 @@ function printHelp(): void {
 
 USAGE:
   npm run sync:historical [OPTIONS]
-  npm run sync:historical -- --months 6 --method api
+  npm run sync:historical -- --months 6
 
 OPTIONS:
   -m, --months <number>    Number of months to sync (default: 4)
-  -t, --method <method>    Sync method: blockchain, api, or auto (default: auto)
   -f, --force             Force sync even if data exists
   -h, --help              Show this help message
 
 EXAMPLES:
-  # Sync past 4 months using auto-selection
+  # Sync past 4 months for all networks
   npm run sync:historical
 
-  # Sync past 6 months using CoW API
-  npm run sync:historical -- --months 6 --method api
+  # Sync past 6 months for all networks
+  npm run sync:historical -- --months 6
 
-  # Sync past 3 months using blockchain scanning
-  npm run sync:historical -- --months 3 --method blockchain
+  # Force sync past 3 months
+  npm run sync:historical -- --months 3 --force
 
-METHODS:
-  blockchain  - Scan blockchain blocks for CoW Protocol transactions
-                Slower but more comprehensive, works offline
-  api         - Use CoW Protocol API to fetch orders and batches
-                Faster and more efficient, requires internet
-  auto        - Try API first, fallback to blockchain (default)
+NOTE:
+  This will sync all networks defined in config.json sequentially.
+  Currently configured networks: Ethereum Mainnet, Arbitrum One
 
 ENVIRONMENT VARIABLES:
-  MONGODB_URI     - MongoDB connection string
-  DB_NAME         - Database name (default: cow-visualiser)
-  COLLECTION_NAME - Collection name (default: transactions)
-  RPC_URL         - Ethereum RPC URL for blockchain scanning
+  SQLITE_DATA_DIR - SQLite data directory (optional)
 `);
 }
 

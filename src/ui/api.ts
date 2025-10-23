@@ -2,14 +2,78 @@ import { Transaction, APIResponse, BinancePriceData } from './types';
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
 
+// Block timestamp cache to avoid repeated requests
+const blockTimestampCache = new Map<number, number>();
+
+// Track failed blocks for retry purposes
+const failedBlocks = new Set<number>();
+
+/**
+ * Get current network ID from sessionStorage
+ */
+export function getCurrentNetworkId(): string {
+  if (typeof window !== 'undefined') {
+    let networkId = sessionStorage.getItem('NETWORK_ID');
+    if (!networkId) {
+      // Auto-select first available network
+      console.log('🔧 No network ID found, auto-selecting first available network...');
+      // This will be handled by the main.ts initialization
+      throw new Error('No network ID found in sessionStorage. Please wait for network initialization or select a network manually.');
+    }
+    return networkId;
+  }
+  throw new Error('getCurrentNetworkId() can only be called in browser environment');
+}
+
+/**
+ * Switch to a different network
+ */
+export async function switchNetwork(networkId: string): Promise<boolean> {
+  try {
+    console.log(`🔄 [FRONTEND] Calling backend to switch to network ${networkId}...`);
+    console.log(`🔄 [FRONTEND] API URL: ${API_BASE_URL}/api/network/switch`);
+    
+    const response = await fetch(`${API_BASE_URL}/api/network/switch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ networkId })
+    });
+    
+    console.log(`🔄 [FRONTEND] Response status: ${response.status} ${response.statusText}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ [FRONTEND] HTTP error response:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`🔄 [FRONTEND] Response data:`, data);
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to switch network');
+    }
+    
+    console.log(`✅ [FRONTEND] Backend switched to network ${networkId}`);
+    return true;
+  } catch (error) {
+    console.error('❌ [FRONTEND] Error switching network:', error);
+    return false;
+  }
+}
+
 /**
  * Fetch recent trades from the API
  */
 export async function fetchRecentTrades(limit: number = 50, offset: number = 0): Promise<Transaction[]> {
   try {
+    const networkId = getCurrentNetworkId();
     const url = new URL(`${API_BASE_URL}/api/trades`);
     url.searchParams.append('limit', limit.toString());
     url.searchParams.append('offset', offset.toString());
+    url.searchParams.append('chainId', networkId);
     
     const response = await fetch(url.toString());
     
@@ -56,9 +120,17 @@ export async function fetchTradesWithPagination(
   };
 }> {
   try {
+    const networkId = getCurrentNetworkId();
+    console.log(`🌐 [FRONTEND] Fetching trades with pagination - limit: ${limit}, offset: ${offset}, chainId: ${networkId}`);
+    console.log(`🌐 [FRONTEND] Filters:`, filters);
+    console.log(`🌐 [FRONTEND] Base URL: ${API_BASE_URL}`);
+    
     const url = new URL(`${API_BASE_URL}/api/trades`);
     url.searchParams.append('limit', limit.toString());
     url.searchParams.append('offset', offset.toString());
+    url.searchParams.append('chainId', networkId);
+    
+    console.log(`🌐 [FRONTEND] Full API URL: ${url.toString()}`);
     
     // Add filter parameters if provided
     if (filters) {
@@ -82,17 +154,26 @@ export async function fetchTradesWithPagination(
       }
     }
     
+    console.log(`🌐 API: Full URL: ${url.toString()}`);
+    
     const response = await fetch(url.toString());
+    console.log(`🌐 API: Response status: ${response.status} ${response.statusText}`);
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`🌐 API: Error response body:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json() as any;
+    console.log(`🌐 API: Response data:`, data);
     
     if (!data.success || !data.data) {
+      console.error(`🌐 API: Invalid response structure:`, data);
       throw new Error(data.error || 'Failed to fetch trades');
     }
+    
+    console.log(`🌐 API: Successfully fetched ${data.data.length} trades`);
     
     return {
       trades: data.data,
@@ -104,7 +185,7 @@ export async function fetchTradesWithPagination(
       }
     };
   } catch (error) {
-    console.error('Error fetching trades with pagination:', error);
+    console.error('❌ API: Error fetching trades with pagination:', error);
     throw error;
   }
 }
@@ -141,7 +222,11 @@ export async function fetchTradeByHash(hash: string): Promise<Transaction | null
  */
 export async function fetchRecentEvents(): Promise<any[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/events`);
+    const networkId = getCurrentNetworkId();
+    const url = new URL(`${API_BASE_URL}/api/events`);
+    url.searchParams.append('networkId', networkId);
+    
+    const response = await fetch(url.toString());
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -160,33 +245,51 @@ export async function fetchRecentEvents(): Promise<any[]> {
  */
 export async function checkAPIHealth(): Promise<boolean> {
   try {
+    console.log(`🏥 API: Checking health at ${API_BASE_URL}/health`);
     const response = await fetch(`${API_BASE_URL}/health`);
+    console.log(`🏥 API: Health check response status: ${response.status} ${response.statusText}`);
+    
+    if (response.ok) {
+      const healthData = await response.json();
+      console.log(`🏥 API: Health check data:`, healthData);
+    }
+    
     return response.ok;
   } catch (error) {
-    console.error('API health check failed:', error);
+    console.error('❌ API: Health check failed:', error);
     return false;
   }
 }
 
 /**
- * Fetch token decimals from the backend API
+ * Fetch token metadata from the backend API with caching and multicall support
  */
-export async function fetchTokenDecimals(tokenAddress: string): Promise<number> {
+export async function fetchTokenMetadata(tokenAddress: string): Promise<{
+  name: string;
+  symbol: string;
+  decimals: number;
+  address: string;
+}> {
   const maxRetries = 3;
   const timeoutMs = 10000; // 10 seconds timeout
   let lastError: any;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🔄 Attempt ${attempt}/${maxRetries} to fetch decimals for ${tokenAddress}`);
+      console.log(`🔄 Attempt ${attempt}/${maxRetries} to fetch metadata for ${tokenAddress}`);
       
       // Create a timeout promise
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
       });
 
-      // Create the fetch promise
-      const fetchPromise = fetch(`${API_BASE_URL}/api/token/${tokenAddress}/decimals`);
+      // Create the fetch promise with network metadata endpoint
+      const networkId = getCurrentNetworkId();
+      const url = new URL(`${API_BASE_URL}/api/network-metadata`);
+      url.searchParams.append('address', tokenAddress);
+      url.searchParams.append('networkId', networkId);
+      
+      const fetchPromise = fetch(url.toString());
       
       // Race between timeout and fetch
       const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
@@ -198,11 +301,11 @@ export async function fetchTokenDecimals(tokenAddress: string): Promise<number> 
       const data = await response.json() as any;
       
       if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch token decimals');
+        throw new Error(data.error || 'Failed to fetch token metadata');
       }
       
-      console.log(`✅ Found decimals: ${data.decimals} for ${tokenAddress} on attempt ${attempt}`);
-      return data.decimals;
+      console.log(`✅ Found metadata for ${tokenAddress} on attempt ${attempt}:`, data.data);
+      return data.data;
 
     } catch (error) {
       lastError = error;
@@ -217,43 +320,325 @@ export async function fetchTokenDecimals(tokenAddress: string): Promise<number> 
     }
   }
 
-  // All retries failed - default to 18 decimals (standard for most ERC20 tokens)
-  console.error(`❌ All ${maxRetries} attempts failed to fetch decimals for ${tokenAddress}. Last error:`, lastError);
-  console.log(`🔄 Using default decimals: 18 for ${tokenAddress}`);
-  
-  return 18;
+  // All retries failed - throw error instead of returning fallback
+  console.error(`❌ All ${maxRetries} attempts failed to fetch metadata for ${tokenAddress}. Last error:`, lastError);
+  throw new Error(`Failed to fetch token metadata for ${tokenAddress} after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
 }
 
 /**
- * Get block timestamp via API
+ * Fetch token decimals from the backend API (legacy method for compatibility)
+ */
+export async function fetchTokenDecimals(tokenAddress: string): Promise<number> {
+  try {
+    const metadata = await fetchTokenMetadata(tokenAddress);
+    return metadata.decimals;
+  } catch (error) {
+    console.error(`❌ Error fetching decimals for ${tokenAddress}:`, error);
+    throw new Error(`Failed to fetch token decimals for ${tokenAddress}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Get block timestamp via API with enhanced caching
  */
 export async function getBlockTimestamp(blockNumber: number): Promise<number> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/block-timestamp/${blockNumber}`);
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        console.warn(`Block ${blockNumber} not found, using fallback timestamp`);
-        // Use a reasonable fallback based on current time and block number
-        const currentBlock = 19000000; // Approximate current block
-        const blocksDiff = currentBlock - blockNumber;
-        const secondsDiff = blocksDiff * 12; // 12 seconds per block
-        return Math.floor(Date.now() / 1000) - secondsDiff;
-      }
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    if (!data.success || !data.data || !data.data.timestamp) {
-      throw new Error('Invalid response format from block timestamp API');
-    }
-    
-    return data.data.timestamp;
-  } catch (error) {
-    console.error('Error getting block timestamp:', error);
-    // Fallback to current time if API call fails
-    return Math.floor(Date.now() / 1000);
+  // Check cache first
+  if (blockTimestampCache.has(blockNumber)) {
+    const cachedTimestamp = blockTimestampCache.get(blockNumber)!;
+    console.log(`📦 Using cached timestamp for block ${blockNumber}: ${cachedTimestamp}`);
+    return cachedTimestamp;
   }
+
+  const maxRetries = 20; // Much higher retry count for block timestamps
+  const timeoutMs = 5000; // 5 seconds timeout per attempt
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Attempt ${attempt}/${maxRetries} to fetch timestamp for block ${blockNumber}`);
+      
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
+      });
+
+      const networkId = getCurrentNetworkId();
+      const url = new URL(`${API_BASE_URL}/api/block-timestamp/${blockNumber}`);
+      url.searchParams.append('networkId', networkId);
+      
+      const fetchPromise = fetch(url.toString());
+      
+      // Race between timeout and fetch
+      const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success || !data.data || !data.data.timestamp) {
+        throw new Error('Invalid response format from block timestamp API');
+      }
+      
+      console.log(`✅ Retrieved timestamp for block ${blockNumber} on attempt ${attempt}: ${data.data.timestamp}`);
+      
+      // Cache the timestamp
+      blockTimestampCache.set(blockNumber, data.data.timestamp);
+      
+      // Remove from failed blocks list if it was there
+      failedBlocks.delete(blockNumber);
+      
+      return data.data.timestamp;
+
+    } catch (error) {
+      lastError = error;
+      
+      // Log specific error types for better debugging
+      if (error instanceof Error) {
+        if (error.message.includes('CORS') || error.message.includes('503')) {
+          console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for block ${blockNumber} (${error.message}):`, error);
+        } else {
+          console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for block ${blockNumber}:`, error);
+        }
+      } else {
+        console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for block ${blockNumber}:`, error);
+      }
+      
+      if (attempt < maxRetries) {
+        // Linear backoff: wait 1s, 2s, 3s, 4s, 5s, 6s, 7s, 8s, 9s, 10s...
+        const baseDelay = 1000 * attempt; // 1 second per attempt
+        const jitter = Math.random() * 300; // Add up to 0.3 seconds of jitter
+        const delayMs = baseDelay + jitter;
+        console.log(`⏳ Waiting ${Math.round(delayMs)}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  // All retries failed
+  console.error(`❌ All ${maxRetries} attempts failed to fetch timestamp for block ${blockNumber}. Last error:`, lastError);
+  
+  // Track this block as failed for retry purposes
+  failedBlocks.add(blockNumber);
+  
+  throw new Error(`Failed to fetch block timestamp for block ${blockNumber} after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
+}
+
+/**
+ * Batch fetch block timestamps for multiple blocks
+ * More efficient than individual requests
+ */
+export async function batchFetchBlockTimestamps(blockNumbers: number[]): Promise<Map<number, number>> {
+  const results = new Map<number, number>();
+  const blocksToFetch: number[] = [];
+  
+  // Check cache first
+  for (const blockNumber of blockNumbers) {
+    if (blockTimestampCache.has(blockNumber)) {
+      results.set(blockNumber, blockTimestampCache.get(blockNumber)!);
+    } else {
+      blocksToFetch.push(blockNumber);
+    }
+  }
+  
+  if (blocksToFetch.length === 0) {
+    console.log(`📦 All ${blockNumbers.length} block timestamps were cached`);
+    return results;
+  }
+  
+  console.log(`🔄 Batch fetching timestamps for ${blocksToFetch.length} blocks:`, blocksToFetch);
+  
+  // Fetch timestamps for uncached blocks
+  const fetchPromises = blocksToFetch.map(async (blockNumber) => {
+    try {
+      const timestamp = await getBlockTimestamp(blockNumber);
+      results.set(blockNumber, timestamp);
+      return { blockNumber, timestamp, success: true };
+    } catch (error) {
+      console.error(`❌ Failed to fetch timestamp for block ${blockNumber}:`, error);
+      return { blockNumber, timestamp: null, success: false, error };
+    }
+  });
+  
+  const fetchResults = await Promise.all(fetchPromises);
+  
+  // Log results
+  const successful = fetchResults.filter(r => r.success).length;
+  const failed = fetchResults.filter(r => !r.success).length;
+  
+  console.log(`✅ Batch fetch completed: ${successful} successful, ${failed} failed`);
+  
+  if (failed > 0) {
+    console.warn(`⚠️ Failed to fetch timestamps for blocks:`, fetchResults.filter(r => !r.success).map(r => r.blockNumber));
+  }
+  
+  return results;
+}
+
+/**
+ * Retry fetching timestamps for blocks that failed previously
+ * This can be called to retry blocks that showed as "Block X" instead of proper timestamps
+ */
+export async function retryFailedBlockTimestamps(blockNumbers: number[]): Promise<void> {
+  console.log(`🔄 Retrying timestamp fetch for ${blockNumbers.length} failed blocks:`, blockNumbers);
+  
+  const retryPromises = blockNumbers.map(async (blockNumber) => {
+    try {
+      // Clear from cache if it exists (to force fresh fetch)
+      blockTimestampCache.delete(blockNumber);
+      
+      // Retry the fetch
+      const timestamp = await getBlockTimestamp(blockNumber);
+      console.log(`✅ Successfully retried timestamp for block ${blockNumber}: ${timestamp}`);
+      return { blockNumber, success: true, timestamp };
+    } catch (error) {
+      console.error(`❌ Retry failed for block ${blockNumber}:`, error);
+      return { blockNumber, success: false, error };
+    }
+  });
+  
+  const results = await Promise.all(retryPromises);
+  
+  const successful = results.filter(r => r.success).length;
+  const failed = results.filter(r => !r.success).length;
+  
+  console.log(`🔄 Retry completed: ${successful} successful, ${failed} failed`);
+  
+  if (failed > 0) {
+    console.warn(`⚠️ Still failed to fetch timestamps for blocks:`, results.filter(r => !r.success).map(r => r.blockNumber));
+  }
+}
+
+/**
+ * Get list of blocks that failed to fetch timestamps
+ */
+export function getFailedBlocks(): number[] {
+  return Array.from(failedBlocks);
+}
+
+/**
+ * Clear failed blocks list (after successful retry)
+ */
+export function clearFailedBlocks(): void {
+  failedBlocks.clear();
+  console.log('🧹 Cleared failed blocks list');
+}
+
+/**
+ * Retry all failed blocks
+ */
+export async function retryAllFailedBlocks(): Promise<void> {
+  const failedBlocksList = getFailedBlocks();
+  if (failedBlocksList.length === 0) {
+    console.log('✅ No failed blocks to retry');
+    return;
+  }
+  
+  console.log(`🔄 Retrying ${failedBlocksList.length} failed blocks:`, failedBlocksList);
+  await retryFailedBlockTimestamps(failedBlocksList);
+  
+  // Clear the failed blocks list after retry attempt
+  clearFailedBlocks();
+}
+
+/**
+ * Batch fetch token metadata for multiple tokens at once
+ */
+export async function fetchBatchTokenMetadata(addresses: string[]): Promise<{
+  [address: string]: { name: string; symbol: string; decimals: number; address: string }
+}> {
+  const networkId = getCurrentNetworkId();
+  
+  const response = await fetch(`${API_BASE_URL}/api/token-metadata/batch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      addresses,
+      networkId
+    })
+  });
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch batch token metadata');
+  }
+  
+  // Convert array of results to object keyed by address
+  const result: { [address: string]: { name: string; symbol: string; decimals: number; address: string } } = {};
+  
+  for (const item of data.data.results) {
+    result[item.address.toLowerCase()] = item.metadata;
+  }
+  
+  return result;
+}
+
+/**
+ * Get network configurations from backend API
+ */
+export async function getNetworkConfigs(): Promise<Record<string, any>> {
+  const response = await fetch(`${API_BASE_URL}/api/networks`);
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch network configurations');
+  }
+  
+  return data.data;
+}
+
+/**
+ * Get supported networks from backend API
+ */
+export async function getSupportedNetworks(): Promise<any[]> {
+  const response = await fetch(`${API_BASE_URL}/api/networks/supported`);
+  
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch supported networks');
+  }
+  
+  return data.data;
+}
+
+/**
+ * Get network configuration by chain ID from backend API
+ */
+export async function getNetworkConfig(chainId: string | number): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/api/networks/${chainId}`);
+  
+  if (!response.ok) {
+    if (response.status === 404) {
+      return undefined;
+    }
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  
+  const data = await response.json();
+  
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch network configuration');
+  }
+  
+  return data.data;
 }
 
 /**
@@ -261,14 +646,22 @@ export async function getBlockTimestamp(blockNumber: number): Promise<number> {
  */
 export async function fetchSolverCompetition(txHash: string): Promise<any> {
   try {
-    const response = await fetch(`https://api.cow.fi/${process.env.NETWORK || "mainnet"}/api/v2/solver_competition/by_tx_hash/${txHash}`);
+    const networkId = getCurrentNetworkId();
+    
+    // Use backend API to get solver competition data
+    const response = await fetch(`${API_BASE_URL}/api/solver-competition/${txHash}?networkId=${networkId}`);
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     const data = await response.json();
-    return data;
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch solver competition data');
+    }
+    
+    return data.data;
   } catch (error) {
     console.error('Error fetching solver competition data:', error);
     throw error;

@@ -1,4 +1,5 @@
 import { TokenInfo, FormattedAmount, ConversionRate } from './types';
+import { fetchTokenMetadata as fetchTokenMetadataFromAPI, fetchBatchTokenMetadata } from './api';
 
 // Token information cache
 const tokenDecimalsCache: Record<`0x${string}`, number> = {};
@@ -92,9 +93,7 @@ export async function getTokenDecimals(tokenAddress: `0x${string}`): Promise<num
   }
 
   // Default to 18 decimals
-  const defaultDecimals = 18;
-  tokenDecimalsCache[tokenAddress] = defaultDecimals;
-  return defaultDecimals;
+  throw new Error(`Token decimals not found in cache for ${tokenAddress}. Please call getTokenDecimalsAsync() first to fetch token metadata.`);
 }
 
 /**
@@ -109,85 +108,69 @@ export function getTokenInfo(tokenAddress: `0x${string}`): TokenInfo {
   };
 }
 
+// Track ongoing requests to prevent duplicates
+const ongoingRequests = new Map<string, Promise<{ symbol: string; name: string; decimals: number }>>();
+
 /**
  * Fetch token metadata with enhanced retry logic and multiple fallback sources
+ * Includes request deduplication to prevent multiple simultaneous requests for the same token
  */
 async function fetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
-  const maxRetries = 5;
-  const timeoutMs = 15000; // 15 seconds timeout
-  const retryDelayMs = 2000; // 2 seconds between retries
+  // Check if there's already an ongoing request for this token
+  const existingRequest = ongoingRequests.get(tokenAddress);
+  if (existingRequest) {
+    console.log(`🔄 Reusing existing request for token: ${tokenAddress}`);
+    return existingRequest;
+  }
+  
+  // Create new request and store it
+  const requestPromise = performFetchTokenMetadata(tokenAddress);
+  ongoingRequests.set(tokenAddress, requestPromise);
+  
+  try {
+    const result = await requestPromise;
+    return result;
+  } finally {
+    // Clean up the ongoing request
+    ongoingRequests.delete(tokenAddress);
+  }
+}
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`🔍 Attempt ${attempt}/${maxRetries} to fetch token metadata for: ${tokenAddress}`);
-      
-      // Create a timeout promise
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), timeoutMs);
-      });
 
-      // Create the fetch promise with enhanced error handling
-      const fetchPromise = fetch(`${process.env.TOKENS_METADATA_API_URL || 'https://tokens-metadata.la-tribu.xyz'}/tokens/ethereum/${tokenAddress}`, {
-      headers: {
-        'Authorization': `Bearer ${process.env.TOKEN_METADATA_API_TOKEN}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'COW-Swap-Visualizer/1.0'
-        },
-        // Add timeout to the fetch itself
-        signal: AbortSignal.timeout(timeoutMs)
-      });
-      
-      // Race between timeout and fetch
-      const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    
-    if (!data.symbol || !data.name) {
-        throw new Error('Invalid token metadata response - missing symbol or name');
-    }
-
-      console.log(`✅ Fetched token metadata on attempt ${attempt}: ${data.symbol} - ${data.name} (${data.decimals || 18} decimals)`);
-    
-    // Debug: Check if decimals are missing or suspicious
-    if (!data.decimals || data.decimals === 0) {
-      console.warn(`⚠️ Token ${tokenAddress} (${data.symbol}) has missing or zero decimals, using default 18`);
-    }
-    
+/**
+ * Internal function to perform the actual fetch with retry logic
+ * Now uses the backend API with caching and multicall support
+ */
+async function performFetchTokenMetadata(tokenAddress: `0x${string}`): Promise<{ symbol: string; name: string; decimals: number }> {
+  // Special handling for native ETH address (0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE)
+  if (tokenAddress.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
+    console.log(`✅ Recognized native ETH address: ${tokenAddress}`);
     return {
-      symbol: data.symbol,
-      name: data.name,
-      decimals: data.decimals || 18
+      symbol: 'ETH',
+      name: 'Ether',
+      decimals: 18
     };
-
-  } catch (error) {
-      console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed for ${tokenAddress}:`, error);
-      
-      if (attempt < maxRetries) {
-        // Exponential backoff with jitter
-        const baseDelay = retryDelayMs * Math.pow(1.5, attempt - 1);
-        const jitter = Math.random() * 1000; // Add up to 1 second of jitter
-        const delayMs = Math.min(baseDelay + jitter, 10000); // Cap at 10 seconds
-        
-        console.log(`⏳ Waiting ${Math.round(delayMs)}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      } else {
-        // All retries failed, default to 18 decimals
-        console.log(`🔄 All ${maxRetries} attempts failed, defaulting to 18 decimals...`);
-        return {
-          symbol: generateFallbackSymbol(tokenAddress),
-          name: `Token ${formatAddress(tokenAddress)}`,
-          decimals: 18
-        };
-      }
-    }
   }
 
-  // This should never be reached due to the default above, but just in case
-  throw new Error(`Failed to fetch token metadata for ${tokenAddress} after ${maxRetries} attempts`);
+  try {
+    console.log(`🔍 Fetching token metadata for: ${tokenAddress} via backend API`);
+    
+    // Use the backend API with caching and multicall support
+    const metadata = await fetchTokenMetadataFromAPI(tokenAddress);
+    
+    console.log(`✅ Fetched token metadata: ${metadata.symbol} - ${metadata.name} (${metadata.decimals} decimals)`);
+    
+    return {
+      symbol: metadata.symbol,
+      name: metadata.name,
+      decimals: metadata.decimals
+    };
+  } catch (error) {
+    console.error(`❌ Error fetching token metadata for ${tokenAddress}:`, error);
+    
+    // Throw error instead of returning fallback metadata
+    throw new Error(`Failed to fetch token metadata for ${tokenAddress}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
 }
 
 /**
@@ -217,33 +200,97 @@ export function hasRealTokenData(tokenAddress: `0x${string}`): boolean {
 
 /**
  * Get token information synchronously (only from cache)
- * Returns address if not cached - use for instant display
+ * Throws error if not cached - ensures proper token prefetching
  */
 export function getTokenInfoSync(tokenAddress: `0x${string}`): TokenInfo {
+  // Normalize the address
+  const normalizedAddress = normalizeTokenAddress(tokenAddress);
+  
   // Check cache first
-  if (tokenInfoCache[tokenAddress]) {
-    return tokenInfoCache[tokenAddress];
+  if (tokenInfoCache[normalizedAddress]) {
+    return tokenInfoCache[normalizedAddress];
   }
 
-  // Return fallback symbol as placeholder - will be updated async
-  const placeholderInfo: TokenInfo = {
-    symbol: generateFallbackSymbol(tokenAddress),
-    name: `Token ${formatAddress(tokenAddress)}`,
-    decimals: 18, // Default to 18, but we'll show raw amounts when decimals are unknown
-    address: tokenAddress,
-    isLoading: true // Mark as loading to apply skeleton animation
-  };
+  // Throw error if token is not found in cache
+  throw new Error(`Token information not found in cache for ${normalizedAddress}. Please call getTokenInfoAsync() first to fetch token metadata.`);
+}
+
+/**
+ * Normalize token address format
+ */
+function normalizeTokenAddress(address: string): `0x${string}` {
+  // Ensure address starts with 0x and is lowercase
+  let normalized = address.toLowerCase();
+  if (!normalized.startsWith('0x')) {
+    normalized = '0x' + normalized;
+  }
+  return normalized as `0x${string}`;
+}
+
+/**
+ * Prefetch token information for multiple tokens to ensure they're in cache
+ * Throws error if any token fails to fetch
+ */
+export async function prefetchTokens(tokenAddresses: `0x${string}`[]): Promise<void> {
+  // Normalize all addresses
+  const normalizedAddresses = tokenAddresses.map(addr => normalizeTokenAddress(addr));
+  const tokensToFetch = normalizedAddresses.filter(addr => !tokenInfoCache[addr]);
   
-  return placeholderInfo;
+  if (tokensToFetch.length === 0) {
+    console.log(`✅ All tokens already cached:`, normalizedAddresses);
+    return; // All tokens already cached
+  }
+  
+  console.log(`🔄 Prefetching ${tokensToFetch.length} tokens:`, tokensToFetch);
+  console.log(`📋 Already cached tokens:`, normalizedAddresses.filter(addr => tokenInfoCache[addr]));
+  
+  try {
+    // Use batch fetch for efficiency
+    const batchMetadata = await fetchBatchTokenMetadata(tokensToFetch);
+    
+    // Cache the results
+    for (const [address, metadata] of Object.entries(batchMetadata)) {
+      tokenInfoCache[address.toLowerCase() as `0x${string}`] = {
+        ...metadata,
+        address: address.toLowerCase() as `0x${string}`
+      };
+    }
+    
+    console.log(`✅ Prefetched ${tokensToFetch.length} tokens successfully`);
+    console.log(`📦 Cached tokens:`, Object.keys(tokenInfoCache));
+  } catch (error) {
+    console.error(`❌ Failed to prefetch tokens in batch, trying individual fetches:`, error);
+    
+    // Fallback to individual fetches - fail if any token fails
+    const failedTokens: string[] = [];
+    
+    for (const tokenAddress of tokensToFetch) {
+      try {
+        await getTokenInfoAsync(tokenAddress);
+        console.log(`✅ Successfully fetched individual token: ${tokenAddress}`);
+      } catch (err) {
+        console.error(`❌ Failed to fetch individual token ${tokenAddress}:`, err);
+        failedTokens.push(tokenAddress);
+      }
+    }
+    
+    // If any tokens failed to fetch, throw an error
+    if (failedTokens.length > 0) {
+      throw new Error(`Failed to fetch token metadata for: ${failedTokens.join(', ')}`);
+    }
+  }
 }
 
 /**
  * Get token information (asynchronous - fetches from backend if needed)
  */
 export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<TokenInfo> {
+  // Normalize the address
+  const normalizedAddress = normalizeTokenAddress(tokenAddress);
+  
   // Check cache first
-  if (tokenInfoCache[tokenAddress]) {
-    return tokenInfoCache[tokenAddress];
+  if (tokenInfoCache[normalizedAddress]) {
+    return tokenInfoCache[normalizedAddress];
   }
 
   try {
@@ -254,14 +301,14 @@ export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<To
       symbol: metadata.symbol,
       name: metadata.name,
       decimals: metadata.decimals,
-      address: tokenAddress
+      address: normalizedAddress
     };
     
     // Only cache if we have real token data
     if (isRealTokenData(tokenInfo)) {
-      tokenInfoCache[tokenAddress] = tokenInfo;
-      tokenSymbolsCache[tokenAddress] = metadata.symbol;
-      tokenDecimalsCache[tokenAddress] = metadata.decimals;
+      tokenInfoCache[normalizedAddress] = tokenInfo;
+      tokenSymbolsCache[normalizedAddress] = metadata.symbol;
+      tokenDecimalsCache[normalizedAddress] = metadata.decimals;
     }
     
     return tokenInfo;
@@ -286,6 +333,71 @@ export async function getTokenInfoAsync(tokenAddress: `0x${string}`): Promise<To
  */
 const failedTokenLookups = new Set<string>();
 const retryQueue: string[] = [];
+
+/**
+ * Batch fetch token metadata for multiple tokens and update DOM elements
+ * This is more efficient than fetching tokens one by one
+ */
+export async function fetchBatchTokenInfoAndUpdateDOM(
+  tokenAddresses: `0x${string}`[]
+): Promise<void> {
+  if (tokenAddresses.length === 0) return;
+  
+  // Filter out addresses that are already cached with real data
+  const uncachedAddresses = tokenAddresses.filter(address => {
+    const cached = tokenInfoCache[address];
+    return !cached || !isRealTokenData(cached);
+  });
+  
+  if (uncachedAddresses.length === 0) {
+    // All tokens are already cached, update DOM immediately
+    tokenAddresses.forEach(address => {
+      const cached = tokenInfoCache[address];
+      if (cached) {
+        updateAllTokenElements(address, cached);
+      }
+    });
+    return;
+  }
+  
+  try {
+    console.log(`🔍 Batch fetching metadata for ${uncachedAddresses.length} tokens`);
+    
+    // Fetch metadata for all uncached tokens at once
+    const batchMetadata = await fetchBatchTokenMetadata(uncachedAddresses);
+    
+    // Update cache and DOM for each token
+    for (const address of uncachedAddresses) {
+      const metadata = batchMetadata[address.toLowerCase()];
+      if (metadata) {
+        const tokenInfo: TokenInfo = {
+          symbol: metadata.symbol,
+          name: metadata.name,
+          decimals: metadata.decimals,
+          address: address as `0x${string}`
+        };
+        
+        // Only cache if we have real token data
+        if (isRealTokenData(tokenInfo)) {
+          tokenInfoCache[address] = tokenInfo;
+          tokenSymbolsCache[address] = metadata.symbol;
+          tokenDecimalsCache[address] = metadata.decimals;
+          
+          // Update all DOM elements with this token address
+          updateAllTokenElements(address, tokenInfo);
+          
+          console.log(`✅ Updated token ${address} with: ${tokenInfo.symbol} - ${tokenInfo.name}`);
+        }
+      }
+    }
+    
+    // Save to persistent cache
+    saveTokenCacheToStorage();
+    
+  } catch (error) {
+    console.warn(`Failed to batch fetch token info:`, error);
+  }
+}
 
 /**
  * Fetch token info async and update all DOM elements tagged with this address
@@ -618,28 +730,31 @@ export function formatAmount(amount: string | undefined | null, decimals: number
 /**
  * Convert scientific notation to BigInt string
  */
-export function convertScientificToBigInt(amount: string | undefined | null): string {
+export function convertScientificToBigInt(amount: string | number | undefined | null): string {
   if (!amount) return '0';
   
+  // Convert to string if it's a number
+  const amountStr = typeof amount === 'number' ? amount.toString() : amount;
+  
   // If it's already a regular number string, return as is
-  if (!amount.includes('e+') && !amount.includes('e-') && !amount.includes('E+') && !amount.includes('E-')) {
-    return amount;
+  if (!amountStr.includes('e+') && !amountStr.includes('e-') && !amountStr.includes('E+') && !amountStr.includes('E-')) {
+    return amountStr;
   }
   
   try {
     // Convert scientific notation to number, then to BigInt
-    const num = parseFloat(amount);
+    const num = parseFloat(amountStr);
     if (isNaN(num)) {
-      console.warn(`⚠️ Invalid scientific notation: ${amount}`);
+      console.warn(`⚠️ Invalid scientific notation: ${amountStr}`);
       return '0';
     }
     
     // Convert to BigInt by using the integer part
     const bigIntStr = BigInt(Math.floor(num)).toString();
-    console.log(`🔢 Converted scientific notation: ${amount} → ${bigIntStr}`);
+    console.log(`🔢 Converted scientific notation: ${amountStr} → ${bigIntStr}`);
     return bigIntStr;
   } catch (error) {
-    console.error(`❌ Failed to convert scientific notation ${amount}:`, error);
+    console.error(`❌ Failed to convert scientific notation ${amountStr}:`, error);
     return '0';
   }
 }
@@ -647,7 +762,7 @@ export function convertScientificToBigInt(amount: string | undefined | null): st
 /**
  * Format raw token amount without decimal conversion (for unknown tokens)
  */
-export function formatRawAmount(amount: string | undefined | null): string {
+export function formatRawAmount(amount: string | number | undefined | null): string {
   if (!amount) return '0';
   
   // Convert scientific notation to BigInt if needed
@@ -658,7 +773,7 @@ export function formatRawAmount(amount: string | undefined | null): string {
 /**
  * Format token amount with proper decimals, maintaining float precision
  */
-export function formatAmountWithDecimals(amount: string | undefined | null, decimals: number): string {
+export function formatAmountWithDecimals(amount: string | number | undefined | null, decimals: number): string {
   if (!amount) return '0';
   
   // Convert scientific notation to BigInt if needed
@@ -691,17 +806,22 @@ export function formatAmountWithDecimals(amount: string | undefined | null, deci
 /**
  * Format token amount synchronously using cached decimals or default 18
  * For instant display - will be updated once metadata is fetched
+ * This function should only be called after ensuring tokens are prefetched
  */
-export function formatTokenAmountSync(amount: string | undefined | null, tokenAddress: `0x${string}`): string {
+export function formatTokenAmountSync(amount: string | number | undefined | null, tokenAddress: `0x${string}`): string {
   if (!amount) return '0';
   
   try {
+    // Normalize the address
+    const normalizedAddress = normalizeTokenAddress(tokenAddress);
+    
     // Check if we have cached token info
-    const tokenInfo = getTokenInfoSync(tokenAddress);
+    const tokenInfo = getTokenInfoSync(normalizedAddress);
     return formatAmountWithDecimals(amount, tokenInfo.decimals);
   } catch (error) {
-    console.warn(`Failed to format amount for ${tokenAddress}, showing raw amount:`, error);
-    return formatRawAmount(amount);
+    console.error(`❌ Token not found in cache for formatting ${tokenAddress}:`, error);
+    // Return raw amount with warning - this indicates prefetching failed
+    return `${amount} (token data missing)`;
   }
 }
 
