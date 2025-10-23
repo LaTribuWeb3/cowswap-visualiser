@@ -196,7 +196,7 @@ class RealtimeSettlementSync {
         // Try to connect to database for this network
         try {
           const databaseService = new SqliteDatabaseService();
-          await databaseService.connect();
+          await databaseService.connect(network.chainId.toString());
           this.databaseServices.set(network.chainId.toString(), databaseService);
           this.isDatabaseConnected = true;
           console.log(`✅ Connected to SQLite database for ${network.name}`);

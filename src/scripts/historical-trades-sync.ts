@@ -96,9 +96,8 @@ class HistoricalTradesSync {
       // Switch to the network (RPC URL will be read from config.json)
       await this.ethereumService.switchNetwork(this.networkId);
       
-      // Connect to database
-      await this.databaseService.connect();
-      await this.databaseService.switchNetwork(this.networkId);
+      // Connect to database with the correct network ID
+      await this.databaseService.connect(this.networkId);
       console.log(`✅ Connected to SQLite database for ${networkConfig.name}`);
 
       // Get the latest block number

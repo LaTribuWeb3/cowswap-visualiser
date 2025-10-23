@@ -3,7 +3,7 @@ import { Transaction } from '../types/db-types';
 export { SqliteDatabaseService } from './sqlite-database';
 
 export interface DatabaseService {
-  connect(): Promise<void>;
+  connect(networkId?: string): Promise<void>;
   disconnect(): Promise<void>;
   saveTransaction(transaction: any): Promise<void>;
   getTransactionByHash(hash: string): Promise<Transaction | null>;
@@ -46,7 +46,7 @@ export class MockDatabaseService implements DatabaseService {
     return Promise.resolve(0);
   }
 
-  async connect(): Promise<void> {
+  async connect(networkId?: string): Promise<void> {
     console.log('🔌 Mock database connected');
   }
 
