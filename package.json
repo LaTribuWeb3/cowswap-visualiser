@@ -14,7 +14,8 @@
     "dev:backend": "ts-node src/index.ts",
     "sync:historical": "ts-node src/scripts/sync-historical-trades.ts",
     "sync:realtime": "ts-node src/scripts/realtime-settlement-sync.ts",
-    "db:list": "ts-node src/scripts/list-database-contents.ts"
+    "db:list": "ts-node src/scripts/list-database-contents.ts",
+    "cleanup:database": "ts-node src/scripts/cleanup-database.ts --live"
   },
   "keywords": [
     "cow-protocol",

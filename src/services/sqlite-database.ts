@@ -26,13 +26,14 @@ export class SqliteDatabaseService implements DatabaseService {
     }
   }
 
-  async connect(): Promise<void> {
+  async connect(networkId?: string): Promise<void> {
     try {
       // Initialize sql.js
       this.SQL = await initSqlJs();
       
-      const networkId = await this.ethereumService.getNetworkId();
-      const dbName = getDatabaseName(String(networkId));
+      // Use provided networkId or get from ethereum service
+      const targetNetworkId = networkId || await this.ethereumService.getNetworkId();
+      const dbName = getDatabaseName(String(targetNetworkId));
       const dbPath = path.join(this.dataDirectory, `${dbName}.db`);
       
       this.currentDatabasePath = dbPath;
