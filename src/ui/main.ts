@@ -103,6 +103,8 @@ const state: UIState = {
   trades: [],
   isLoading: false,
   error: null,
+  currentNetworkId: '',
+  currentNetworkName: '',
   pagination: {
     currentPage: 1,
     pageSize: 50,
@@ -118,6 +120,50 @@ let lastTradeHash: string | null = null;
 
 // Track if there are new trades available on page 1
 let hasNewTradesOnPage1: boolean = false;
+
+// Network state management
+let networkConfigs: Record<string, any> = {};
+
+/**
+ * Initialize network state from sessionStorage or set default
+ */
+function initializeNetworkState(): void {
+  const storedNetworkId = sessionStorage.getItem('NETWORK_ID');
+  if (storedNetworkId) {
+    state.currentNetworkId = storedNetworkId;
+    // We'll get the network name when we load network configs
+    console.log(`🔧 Initialized network state with stored ID: ${storedNetworkId}`);
+  } else {
+    console.warn('⚠️ No network ID found in sessionStorage');
+  }
+}
+
+/**
+ * Set the current network in UI state
+ */
+function setCurrentNetwork(networkId: string, networkName: string): void {
+  state.currentNetworkId = networkId;
+  state.currentNetworkName = networkName;
+  sessionStorage.setItem('NETWORK_ID', networkId);
+  console.log(`🌐 [UI] Network state updated: ${networkName} (${networkId})`);
+}
+
+/**
+ * Get the current network ID from UI state (not sessionStorage)
+ */
+function getCurrentNetworkIdFromState(): string {
+  if (!state.currentNetworkId) {
+    throw new Error('No network ID set in UI state. Please initialize the network first.');
+  }
+  return state.currentNetworkId;
+}
+
+/**
+ * Get the current network name from UI state
+ */
+function getCurrentNetworkName(): string {
+  return state.currentNetworkName || `Network ${state.currentNetworkId}`;
+}
 
 // EthereumService functionality is now accessed via API calls
 
@@ -199,7 +245,7 @@ async function fetchAndDisplayBinancePrices(
     );
 
     // Try to fetch Binance price data
-    const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+    const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
     console.log('🕐 Block timestamp for trade:', blockTimestamp);
     
     // Create a polling progress updater
@@ -564,7 +610,7 @@ async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
   try {
     console.log(`🔍 Fetching solver competition data for ${txHash}`);
     
-    const competitionData = await fetchSolverCompetition(txHash);
+    const competitionData = await fetchSolverCompetition(txHash, getCurrentNetworkIdFromState());
     
     if (!competitionData || !competitionData.solutions || competitionData.solutions.length === 0) {
       competitionContent.innerHTML = `
@@ -961,11 +1007,11 @@ async function loadTrades(page: number = 1): Promise<void> {
     state.pagination.currentPage = page;
     const offset = (page - 1) * state.pagination.pageSize;
     
-    const currentNetworkId = getCurrentNetworkId();
+    const currentNetworkId = getCurrentNetworkIdFromState();
     console.log(`📡 Fetching trades (page ${page}, offset ${offset}) for network ${currentNetworkId}...`);
     console.log(`🔍 Current filters:`, state.filters);
     
-    const result = await fetchTradesWithPagination(state.pagination.pageSize, offset, state.filters);
+    const result = await fetchTradesWithPagination(state.pagination.pageSize, offset, state.filters, currentNetworkId);
 
     console.log(`🔍 Fetched ${result.trades.length} trades from API`);
 
@@ -1674,7 +1720,7 @@ async function updateTradeDateAsync(trade: Transaction, index: number): Promise<
     }
     
     // Fallback to block timestamp API
-    const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+    const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
     const fullTimestamp = timestampToDateTime(blockTimestamp);
     updateTradeDateElement(index, fullTimestamp);
     console.log(`✅ Updated date for trade ${index} from block API: ${fullTimestamp}`);
@@ -1686,7 +1732,7 @@ async function updateTradeDateAsync(trade: Transaction, index: number): Promise<
     setTimeout(async () => {
       try {
         console.log(`🔄 Retrying timestamp fetch for trade ${index} (block ${trade.blockNumber})`);
-        const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+        const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
         const fullTimestamp = timestampToDateTime(blockTimestamp);
         updateTradeDateElement(index, fullTimestamp);
         console.log(`✅ Retry successful - updated date for trade ${index}: ${fullTimestamp}`);
@@ -1697,7 +1743,7 @@ async function updateTradeDateAsync(trade: Transaction, index: number): Promise<
         setTimeout(async () => {
           try {
             console.log(`🔄 Final retry for trade ${index} (block ${trade.blockNumber})`);
-            const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+            const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
             const fullTimestamp = timestampToDateTime(blockTimestamp);
             updateTradeDateElement(index, fullTimestamp);
             console.log(`✅ Final retry successful - updated date for trade ${index}: ${fullTimestamp}`);
@@ -1733,7 +1779,7 @@ export async function retryAllBlockTimestamps(): Promise<void> {
       
       if (blockNumber && !isNaN(parseInt(blockNumber))) {
         try {
-          const blockTimestamp = await getBlockTimestamp(parseInt(blockNumber));
+          const blockTimestamp = await getBlockTimestamp(parseInt(blockNumber), getCurrentNetworkIdFromState());
           const fullTimestamp = timestampToDateTime(blockTimestamp);
           updateTradeDateElement(index, fullTimestamp);
           console.log(`✅ Updated timestamp for trade ${index}: ${fullTimestamp}`);
@@ -1922,7 +1968,7 @@ async function createTradeTableRow(
         
         // Try to get block timestamp, but don't fail if it doesn't work
         try {
-          const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+          const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
           localeString = timestampToDateTime(blockTimestamp);
         } catch (timestampError) {
           console.warn(`⚠️ Block timestamp failed for ${trade.blockNumber}, using fallback`);
@@ -2009,7 +2055,7 @@ async function createTradeTableRow(
     }</td>
       <td class="trade-amount">- → -</td>
       <td class="trade-date">${timestampToDateTime(
-        await getBlockTimestamp(parseInt(trade.blockNumber))
+        await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState())
       )}</td>
       <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
     `;
@@ -2042,7 +2088,7 @@ async function createTradeTableRow(
       }</td>
         <td class="trade-amount">Incomplete Data</td>
         <td class="trade-date">${timestampToDateTime(
-          await getBlockTimestamp(parseInt(trade.blockNumber))
+          await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState())
         )}</td>
         <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
       `;
@@ -2076,7 +2122,7 @@ async function createTradeTableRow(
     }</span>
       </td>
       <td class="trade-date">${timestampToDateTime(
-        await getBlockTimestamp(parseInt(trade.blockNumber))
+        await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState())
       )}</td>
       <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
     `;
@@ -2140,7 +2186,7 @@ async function toggleSolverCompetition(txHash: string, button: HTMLButtonElement
   button.disabled = true;
 
   try {
-    const competitionData = await fetchSolverCompetition(txHash);
+    const competitionData = await fetchSolverCompetition(txHash, getCurrentNetworkIdFromState());
     
     // Create details row
     const detailsRow = document.createElement('tr');
@@ -2315,7 +2361,7 @@ async function createTradeInfoFrameOverlay(
   console.log("🔍 createTradeInfoFrameOverlay called with trade:", trade);
   
   // Get explorer URL for the current network
-  const explorerUrl = await getExplorerUrl(getCurrentNetworkId());
+  const explorerUrl = await getExplorerUrl(getCurrentNetworkIdFromState());
   
   try {
     const overlay = document.createElement("div");
@@ -2426,14 +2472,14 @@ async function createTradeInfoFrameOverlay(
       } else {
         // Fallback to block timestamp if date is invalid
         console.log("🔍 CreationDate invalid, falling back to block timestamp");
-        const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+        const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
         console.log("🔍 Block timestamp:", blockTimestamp);
         formattedTimestamp = timestampToDateTime(blockTimestamp);
       }
     } else {
       // No creationDate, use block timestamp
       console.log("🔍 No creationDate, using block timestamp");
-      const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+      const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
       console.log("🔍 Block timestamp:", blockTimestamp);
       formattedTimestamp = timestampToDateTime(blockTimestamp);
     }
@@ -3092,7 +3138,7 @@ async function createTradeInfoFrameOverlay(
     let binanceRateAToB = "Loading...";
     let binanceRateBToA = "Loading...";
     let priceDifference = "Loading...";
-    const timestamp = await getBlockTimestamp(parseInt(trade.blockNumber));
+    const timestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
     console.log('🕐 Block timestamp for overlay:', timestamp);
 
     try {
@@ -3677,13 +3723,21 @@ async function initializeNetworkSelector() {
     const networks = await fetchNetworks();
     console.log(`📡 Fetched ${networks.length} networks:`, networks);
     
-    // Get current network ID from sessionStorage
-    const storedNetworkId = sessionStorage.getItem('NETWORK_ID');
-    if (!storedNetworkId) {
-      console.error('❌ No network ID found in sessionStorage. Please select a network first.');
+    // Store network configs for later use
+    networkConfigs = {};
+    networks.forEach(network => {
+      networkConfigs[network.chainId.toString()] = network;
+    });
+    
+    // Initialize network state
+    initializeNetworkState();
+    
+    // Get current network ID from UI state
+    const currentNetworkId = state.currentNetworkId;
+    if (!currentNetworkId) {
+      console.error('❌ No network ID found in UI state. Please select a network first.');
       return;
     }
-    const currentNetworkId = storedNetworkId;
     const currentNetworkIdNum = parseInt(currentNetworkId);
     
     console.log(`🔗 Current network ID: ${currentNetworkId} (parsed: ${currentNetworkIdNum})`);
@@ -3704,6 +3758,8 @@ async function initializeNetworkSelector() {
       if (network.chainId === currentNetworkIdNum) {
         option.selected = true;
         console.log(`✅ Selected current network: ${network.name}`);
+        // Update the network name in state
+        setCurrentNetwork(network.chainId.toString(), network.name);
       }
       
       networkSelect.appendChild(option);
@@ -3748,13 +3804,13 @@ async function handleNetworkChange(event: Event) {
       // Show loading message
       showToast(`Switching to ${networkName}...`, 'info');
       
-      // Call backend to switch network
+      // Update UI state first
+      setCurrentNetwork(newNetworkId, networkName);
+      
+      // Call backend to switch network (for database switching)
       const success = await switchNetworkAPI(newNetworkId);
       
       if (success) {
-        // Store in sessionStorage for this session
-        sessionStorage.setItem('NETWORK_ID', newNetworkId);
-        
         console.log(`✅ Network switched successfully to ${newNetworkId}`);
         
         // Clear all caches to ensure fresh data from new network
@@ -3807,21 +3863,11 @@ async function handleNetworkChange(event: Event) {
       showToast('Failed to switch network. Please try again.', 'error');
       
       // Reset to current network
-      const currentNetworkId = sessionStorage.getItem('NETWORK_ID');
-      if (!currentNetworkId) {
-        console.error('❌ No network ID found in sessionStorage. Please select a network first.');
-        return;
-      }
-      select.value = currentNetworkId;
+      select.value = state.currentNetworkId;
     }
   } else {
     // Reset to current network
-    const currentNetworkId = sessionStorage.getItem('NETWORK_ID');
-    if (!currentNetworkId) {
-      console.error('❌ No network ID found in sessionStorage. Please select a network first.');
-      return;
-    }
-    select.value = currentNetworkId;
+    select.value = state.currentNetworkId;
   }
 }
 

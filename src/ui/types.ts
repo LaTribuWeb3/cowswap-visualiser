@@ -74,6 +74,8 @@ export interface UIState {
   trades: Transaction[];
   isLoading: boolean;
   error: string | null;
+  currentNetworkId: string;
+  currentNetworkName: string;
   pagination: {
     currentPage: number;
     pageSize: number;
