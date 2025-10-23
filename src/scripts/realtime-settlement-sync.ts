@@ -280,54 +280,66 @@ class RealtimeSettlementSync {
         }
       }
       
-      // Process blocks on the network with the most new blocks (closest to present)
-      const networkId = this.selectNetworkForRealtimeSync();
-      if (!networkId) {
+      // Process ALL networks that have new blocks, not just the one with the most blocks
+      const networksWithNewBlocks = this.getNetworksWithNewBlocks();
+      
+      if (networksWithNewBlocks.length === 0) {
         console.log(`✅ No new blocks to process on any network`);
         return;
       }
       
-      const networkState = this.progress.networkStates.get(networkId);
-      if (!networkState) return;
+      console.log(`🔄 Processing ${networksWithNewBlocks.length} networks with new blocks...`);
       
-      this.currentNetworkId = networkId;
-      
-      const currentBlock = networkState.latestBlock;
-      const lastProcessed = networkState.lastProcessedBlock;
-      
-      console.log(`\n🌐 Processing network: ${networkState.networkName}`);
-      console.log(`📦 Current latest block: ${currentBlock}`);
-      console.log(`📦 Last processed block: ${lastProcessed}`);
+      // Process each network that has new blocks
+      for (const networkId of networksWithNewBlocks) {
+        const networkState = this.progress.networkStates.get(networkId);
+        if (!networkState) continue;
+        
+        this.currentNetworkId = networkId;
+        
+        const currentBlock = networkState.latestBlock;
+        const lastProcessed = networkState.lastProcessedBlock;
+        
+        console.log(`\n🌐 Processing network: ${networkState.networkName}`);
+        console.log(`📦 Current latest block: ${currentBlock}`);
+        console.log(`📦 Last processed block: ${lastProcessed}`);
 
-      if (currentBlock <= lastProcessed) {
-        console.log(`✅ No new blocks to process for ${networkState.networkName}`);
-        return;
-      }
+        if (currentBlock <= lastProcessed) {
+          console.log(`✅ No new blocks to process for ${networkState.networkName}`);
+          continue;
+        }
 
-      const newBlocksCount = currentBlock - lastProcessed;
-      console.log(
-        `🆕 Found ${newBlocksCount} new blocks to process: ${
-          lastProcessed + 1
-        } to ${currentBlock}`
-      );
-
-      // Use batch processing for efficiency
-      if (newBlocksCount > 1) {
-        console.log(`🚀 Using batch processing for ${newBlocksCount} blocks`);
-        await this.processBlocksInBatch(
-          BigInt(lastProcessed + 1),
-          BigInt(currentBlock),
-          networkId
+        const newBlocksCount = currentBlock - lastProcessed;
+        console.log(
+          `🆕 Found ${newBlocksCount} new blocks to process: ${
+            lastProcessed + 1
+          } to ${currentBlock}`
         );
-      } else {
-        // Single block - use individual processing
-        console.log(`🔍 Processing single block ${lastProcessed + 1}`);
-        await this.processBlock(BigInt(lastProcessed + 1), networkId);
-      }
 
-      console.log(`✅ Completed processing ${newBlocksCount} new blocks for ${networkState.networkName}`);
-      networkState.lastProcessedBlock = currentBlock;
-      this.progress.lastProcessedBlock = currentBlock;
+        try {
+          // Use batch processing for efficiency
+          if (newBlocksCount > 1) {
+            console.log(`🚀 Using batch processing for ${newBlocksCount} blocks`);
+            await this.processBlocksInBatch(
+              BigInt(lastProcessed + 1),
+              BigInt(currentBlock),
+              networkId
+            );
+          } else {
+            // Single block - use individual processing
+            console.log(`🔍 Processing single block ${lastProcessed + 1}`);
+            await this.processBlock(BigInt(lastProcessed + 1), networkId);
+          }
+
+          console.log(`✅ Completed processing ${newBlocksCount} new blocks for ${networkState.networkName}`);
+          networkState.lastProcessedBlock = currentBlock;
+          this.progress.lastProcessedBlock = Math.max(this.progress.lastProcessedBlock, currentBlock);
+        } catch (error) {
+          console.error(`❌ Error processing blocks for ${networkState.networkName}:`, error);
+          networkState.errors++;
+          this.progress.errors++;
+        }
+      }
     } catch (error) {
       console.error("❌ Error processing new blocks:", error);
       throw error;
@@ -335,29 +347,22 @@ class RealtimeSettlementSync {
   }
 
   /**
-   * Select the network with the most new blocks (closest to present)
-   * This ensures we process the most recent activity across all networks
+   * Get all networks that have new blocks to process
+   * Returns an array of network IDs that have pending blocks
    */
-  private selectNetworkForRealtimeSync(): string | null {
-    let selectedNetworkId: string | null = null;
-    let maxNewBlocks = 0;
+  private getNetworksWithNewBlocks(): string[] {
+    const networksWithNewBlocks: string[] = [];
     
     for (const [networkId, state] of this.progress.networkStates) {
       const newBlocks = state.latestBlock - state.lastProcessedBlock;
       
-      // Skip networks with no new blocks
-      if (newBlocks <= 0) {
-        continue;
-      }
-      
-      // Select the network with the most new blocks (prioritize networks closest to present)
-      if (newBlocks > maxNewBlocks) {
-        maxNewBlocks = newBlocks;
-        selectedNetworkId = networkId;
+      // Include networks with new blocks
+      if (newBlocks > 0) {
+        networksWithNewBlocks.push(networkId);
       }
     }
     
-    return selectedNetworkId;
+    return networksWithNewBlocks;
   }
 
   private async processBlocksInBatch(fromBlock: bigint, toBlock: bigint, networkId: string): Promise<void> {
