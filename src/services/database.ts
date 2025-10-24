@@ -129,8 +129,9 @@ export class MockDatabaseService implements DatabaseService {
     return transactions
       .filter(tx => tx.timestamp && new Date(tx.timestamp) >= startDate)
       .sort((a, b) => {
-        if (!a.timestamp || !b.timestamp) return 0;
-        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+        const blockA = parseInt(String(a.blockNumber || '0'));
+        const blockB = parseInt(String(b.blockNumber || '0'));
+        return blockB - blockA;
       });
   }
 
@@ -185,8 +186,9 @@ export class MockDatabaseService implements DatabaseService {
 
     // Sort by timestamp in reverse chronological order
     transactions.sort((a, b) => {
-      if (!a.timestamp || !b.timestamp) return 0;
-      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      const blockA = parseInt(String(a.blockNumber || '0'));
+      const blockB = parseInt(String(b.blockNumber || '0'));
+      return blockB - blockA;
     });
 
     // Get total count before pagination
