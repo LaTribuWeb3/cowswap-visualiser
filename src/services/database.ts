@@ -129,8 +129,8 @@ export class MockDatabaseService implements DatabaseService {
     return transactions
       .filter(tx => tx.timestamp && new Date(tx.timestamp) >= startDate)
       .sort((a, b) => {
-        const blockA = parseInt(a.blockNumber || '0');
-        const blockB = parseInt(b.blockNumber || '0');
+        const blockA = parseInt(String(a.blockNumber || '0'));
+        const blockB = parseInt(String(b.blockNumber || '0'));
         return blockB - blockA;
       });
   }
@@ -186,8 +186,8 @@ export class MockDatabaseService implements DatabaseService {
 
     // Sort by block number in descending order (newest blocks first)
     transactions.sort((a, b) => {
-      const blockA = parseInt(a.blockNumber || '0');
-      const blockB = parseInt(b.blockNumber || '0');
+      const blockA = parseInt(String(a.blockNumber || '0'));
+      const blockB = parseInt(String(b.blockNumber || '0'));
       return blockB - blockA;
     });
 
