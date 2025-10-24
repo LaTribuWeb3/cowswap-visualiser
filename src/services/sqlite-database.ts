@@ -420,7 +420,7 @@ export class SqliteDatabaseService implements DatabaseService {
         queryParams.push(params.endDate.toISOString());
       }
 
-      query += ' ORDER BY CAST(blockNumber AS INTEGER) DESC';
+      query += ' ORDER BY timestamp DESC';
 
       if (params.limit) {
         query += ' LIMIT ?';
@@ -457,7 +457,7 @@ export class SqliteDatabaseService implements DatabaseService {
     try {
       const stmt = this.db.prepare(`
         SELECT * FROM transactions
-        ORDER BY CAST(blockNumber AS INTEGER) DESC
+        ORDER BY blockNumber DESC
         LIMIT ?
       `);
       
@@ -612,8 +612,8 @@ export class SqliteDatabaseService implements DatabaseService {
       }
       countStmt.free();
 
-      // Get paginated results - order by block number for consistent blockchain ordering
-      query += ' ORDER BY CAST(blockNumber AS INTEGER) DESC';
+      // Get paginated results
+      query += ' ORDER BY timestamp DESC';
 
       if (params.limit) {
         query += ' LIMIT ?';

@@ -184,7 +184,7 @@ export class MockDatabaseService implements DatabaseService {
       );
     }
 
-    // Sort by block number in descending order (newest blocks first)
+    // Sort by timestamp in reverse chronological order
     transactions.sort((a, b) => {
       const blockA = parseInt(String(a.blockNumber || '0'));
       const blockB = parseInt(String(b.blockNumber || '0'));
