@@ -456,7 +456,7 @@ body {
 
 .trades-table thead {
   background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
+  color: #1a202c;
 }
 
 .trades-table th {
@@ -503,7 +503,7 @@ body {
 .trade-hash {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 0.8rem;
-  color: #495057;
+  color: #1a202c;
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -523,8 +523,8 @@ body {
 }
 
 .trade-status.success {
-  background: rgba(34, 197, 94, 0.1);
-  color: rgba(34, 197, 94, 0.8);
+  background: rgba(34, 197, 94, 0.15);
+  color: #059669;
 }
 
 .trade-status.failed {
@@ -574,7 +574,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #6c757d;
+  color: #2d3748;
   font-style: italic;
 }
 
@@ -627,7 +627,7 @@ body {
 
 .trade-status.unknown {
   background: #e9ecef;
-  color: #6c757d;
+  color: #2d3748;
 }
 
 .trade-flow {
@@ -638,18 +638,18 @@ body {
 }
 
 .trade-flow .token-symbol {
-  color: #495057;
+  color: #1a202c;
   font-size: 0.9rem;
 }
 
 .trade-flow i {
-  color: #6c757d;
+  color: #2d3748;
   font-size: 0.8rem;
 }
 
 .trade-amount {
   font-size: 0.85rem;
-  color: #495057;
+  color: #1a202c;
   font-weight: 500;
   max-width: 300px;
   overflow: hidden;
@@ -660,26 +660,26 @@ body {
 .trade-amount .token-address {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 0.7rem;
-  color: #6c757d;
-  opacity: 0.8;
+  color: #2d3748;
+  opacity: 0.9;
 }
 
 .trade-date {
   font-size: 0.8rem;
-  color: #6c757d;
+  color: #2d3748;
   white-space: nowrap;
 }
 
 .trade-block {
   font-size: 0.8rem;
-  color: #6c757d;
+  color: #2d3748;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   white-space: nowrap;
 }
 
 .trade-arrow {
   text-align: center;
-  color: #6c757d;
+  color: #2d3748;
   transition: all 0.2s ease;
 }
 
@@ -806,8 +806,8 @@ body {
     padding: 4px 12px;
     border-radius: 12px;
     font-size: 0.8rem;
-    font-weight: 400;
-    opacity: 0.7;
+    font-weight: 500;
+    color: #1a202c;
 }
 
 /* Trades Container */
@@ -958,7 +958,7 @@ body {
 
 .trades-header {
     background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
+    color: #1a202c;
     padding: 16px 20px;
     display: flex;
     justify-content: space-between;
@@ -981,12 +981,12 @@ body {
 /* Filter Toggle Button */
 .filter-toggle-button {
     background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
+    color: #1a202c;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
     padding: 6px 10px;
     font-size: 13px;
-    font-weight: 400;
+    font-weight: 500;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -997,14 +997,14 @@ body {
 
 .filter-toggle-button:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.9);
+    color: #1a202c;
     transform: none;
     box-shadow: none;
 }
 
 .filter-toggle-button.active {
     background: rgba(96, 165, 250, 0.1);
-    color: rgba(96, 165, 250, 0.8);
+    color: #1e40af;
     border-color: rgba(96, 165, 250, 0.2);
 }
 
@@ -1018,15 +1018,16 @@ body {
 
 .trades-header h2 {
     font-size: 1rem;
-    font-weight: 400;
+    font-weight: 600;
     display: flex;
     align-items: center;
     gap: 8px;
-    opacity: 0.8;
+    color: #1a202c;
 }
 
 .trades-header i {
     font-size: 1.1rem;
+    color: #1a202c;
 }
 
 .header-controls {
@@ -3148,13 +3149,13 @@ body {
 
 /* Refresh Button */
 .refresh-button {
-  background: rgba(34, 197, 94, 0.1);
-  color: rgba(34, 197, 94, 0.8);
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  background: rgba(34, 197, 94, 0.15);
+  color: #047857;
+  border: 1px solid rgba(34, 197, 94, 0.3);
   border-radius: 6px;
   padding: 6px 12px;
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -3165,8 +3166,8 @@ body {
 }
 
 .refresh-button:hover:not(:disabled) {
-  background: rgba(34, 197, 94, 0.15);
-  color: rgba(34, 197, 94, 0.9);
+  background: rgba(34, 197, 94, 0.25);
+  color: #065f46;
   transform: none;
   box-shadow: none;
 }
@@ -4019,12 +4020,12 @@ body {
 .pivot-symbol {
   font-size: 13px;
   font-weight: 600;
-  color: #2d3748;
+  color: #1a202c;
 }
 
 .pivot-price {
   font-size: 12px;
-  color: #4a5568;
+  color: #2d3748;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
@@ -4091,7 +4092,7 @@ body.dark-theme .filters-card .card-header {
 
 body.dark-theme .trades-header {
     background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
+    color: #e0e0e0;
 }
 
 body.dark-theme .filter-form {
@@ -4134,7 +4135,7 @@ body.dark-theme .trades-table {
 
 body.dark-theme .trades-table thead {
     background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
+    color: #e0e0e0;
 }
 
 body.dark-theme .trades-table td {
@@ -4153,7 +4154,7 @@ body.dark-theme .trade-table-container {
 
 body.dark-theme .trade-table-header {
     background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
+    color: #e0e0e0;
 }
 
 body.dark-theme .trade-table-row {
@@ -4270,6 +4271,30 @@ body.dark-theme .trade-hash {
     color: #60a5fa;
 }
 
+body.dark-theme .trades-header h2 {
+    color: #e0e0e0;
+}
+
+body.dark-theme .trades-header i {
+    color: #e0e0e0;
+}
+
+body.dark-theme .filter-toggle-button {
+    color: #e0e0e0;
+}
+
+body.dark-theme .filter-toggle-button:hover {
+    color: #e0e0e0;
+}
+
+body.dark-theme .filter-toggle-button.active {
+    color: #60a5fa;
+}
+
+body.dark-theme .trades-count {
+    color: #e0e0e0;
+}
+
 body.dark-theme .trade-status.success {
     background: rgba(34, 197, 94, 0.2);
     color: #4ade80;
@@ -4288,6 +4313,46 @@ body.dark-theme .trade-status.pending {
 body.dark-theme .trade-status.unknown {
     background: rgba(107, 114, 128, 0.2);
     color: #9ca3af;
+}
+
+body.dark-theme .trade-amount {
+    color: #e0e0e0;
+}
+
+body.dark-theme .trade-amount .token-address {
+    color: #9ca3af;
+}
+
+body.dark-theme .trade-date {
+    color: #9ca3af;
+}
+
+body.dark-theme .trade-block {
+    color: #9ca3af;
+}
+
+body.dark-theme .trade-arrow {
+    color: #9ca3af;
+}
+
+body.dark-theme .trade-flow .token-symbol {
+    color: #e0e0e0;
+}
+
+body.dark-theme .trade-flow i {
+    color: #9ca3af;
+}
+
+body.dark-theme .loading-spinner {
+    color: #9ca3af;
+}
+
+body.dark-theme .refresh-button {
+    color: #4ade80;
+}
+
+body.dark-theme .refresh-button:hover:not(:disabled) {
+    color: #22c55e;
 }
 
 body.dark-theme .back-button {
@@ -4389,6 +4454,14 @@ body.dark-theme .pagination-go-button:hover {
     color: rgba(96, 165, 250, 0.9);
 }
 
+body.dark-theme .pivot-symbol {
+    color: #e0e0e0;
+}
+
+body.dark-theme .pivot-price {
+    color: #9ca3af;
+}
+
 /* Dark theme for filter toggle button */
 body.dark-theme .filter-toggle-button {
     background: rgba(255, 255, 255, 0.05);
@@ -4403,7 +4476,7 @@ body.dark-theme .filter-toggle-button:hover {
 
 body.dark-theme .filter-toggle-button.active {
     background: rgba(96, 165, 250, 0.1);
-    color: rgba(96, 165, 250, 0.8);
+    color: #1e40af;
     border-color: rgba(96, 165, 250, 0.2);
 }
 
