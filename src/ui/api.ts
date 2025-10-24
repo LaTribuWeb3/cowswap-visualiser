@@ -351,8 +351,8 @@ export async function getBlockTimestamp(blockNumber: number, networkId?: string)
     return cachedTimestamp;
   }
 
-  const maxRetries = 25; // Increased retry count for block timestamps
-  const timeoutMs = 8000; // 8 seconds timeout per attempt
+  const maxRetries = 20; // Much higher retry count for block timestamps
+  const timeoutMs = 5000; // 5 seconds timeout per attempt
   let lastError: any;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -383,47 +383,18 @@ export async function getBlockTimestamp(blockNumber: number, networkId?: string)
         throw new Error('Invalid response format from block timestamp API');
       }
       
-      // Validate timestamp before caching
-      const timestamp = data.data.timestamp;
-      const now = Math.floor(Date.now() / 1000);
-      const oneYearAgo = now - (365 * 24 * 60 * 60);
-      const oneHourFromNow = now + (60 * 60);
-      
-      if (timestamp < oneYearAgo || timestamp > oneHourFromNow) {
-        throw new Error(`Invalid timestamp ${timestamp} for block ${blockNumber}`);
-      }
-      
-      console.log(`✅ Retrieved valid timestamp for block ${blockNumber} on attempt ${attempt}: ${timestamp}`);
+      console.log(`✅ Retrieved timestamp for block ${blockNumber} on attempt ${attempt}: ${data.data.timestamp}`);
       
       // Cache the timestamp
-      blockTimestampCache.set(blockNumber, timestamp);
+      blockTimestampCache.set(blockNumber, data.data.timestamp);
       
       // Remove from failed blocks list if it was there
       failedBlocks.delete(blockNumber);
       
-      return timestamp;
+      return data.data.timestamp;
 
     } catch (error) {
       lastError = error;
-      
-      // Add exponential backoff with jitter before retrying
-      if (attempt < maxRetries) {
-        const baseDelay = 1000; // 1 second base delay
-        const maxDelay = 30000; // 30 seconds max delay
-        const backoffMultiplier = 2;
-        
-        const delay = Math.min(
-          baseDelay * Math.pow(backoffMultiplier, attempt - 1),
-          maxDelay
-        );
-        
-        // Add jitter to prevent thundering herd
-        const jitter = 0.5 + Math.random();
-        const jitteredDelay = Math.floor(delay * jitter);
-        
-        console.log(`⏳ Waiting ${jitteredDelay}ms before retry ${attempt + 1}/${maxRetries}`);
-        await new Promise(resolve => setTimeout(resolve, jitteredDelay));
-      }
       
       // Log specific error types for better debugging
       if (error instanceof Error) {
@@ -453,27 +424,7 @@ export async function getBlockTimestamp(blockNumber: number, networkId?: string)
   // Track this block as failed for retry purposes
   failedBlocks.add(blockNumber);
   
-  // Return a fallback timestamp instead of throwing an error
-  const fallbackTimestamp = estimateTimestampFromBlockNumber(blockNumber);
-  console.warn(`⚠️ Using estimated fallback timestamp ${fallbackTimestamp} for block ${blockNumber}`);
-  return fallbackTimestamp;
-}
-
-/**
- * Estimate timestamp based on block number (fallback mechanism)
- */
-function estimateTimestampFromBlockNumber(blockNumber: number): number {
-  // Rough estimation: assume 12 seconds per block (Ethereum average)
-  const currentBlock = 19000000; // Approximate current block number (adjust as needed)
-  const currentTime = Math.floor(Date.now() / 1000);
-  const secondsPerBlock = 12;
-  
-  const blockDifference = currentBlock - blockNumber;
-  const estimatedTimestamp = currentTime - (blockDifference * secondsPerBlock);
-  
-  // Ensure the estimated timestamp is reasonable
-  const oneYearAgo = currentTime - (365 * 24 * 60 * 60);
-  return Math.max(estimatedTimestamp, oneYearAgo);
+  throw new Error(`Failed to fetch block timestamp for block ${blockNumber} after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
 }
 
 /**
