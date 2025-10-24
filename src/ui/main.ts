@@ -752,10 +752,8 @@ async function init(): Promise<void> {
       tradeDetailsSection: document.getElementById(
         "tradeDetailsSection"
       ) as HTMLElement,
-      filterContainer: document.getElementById("filtersSection") as HTMLElement,
+      filterContainer: document.getElementById("filterContent") as HTMLElement,
       filterForm: document.getElementById("filterForm") as HTMLElement,
-      filterToggleButton: document.getElementById("filterToggleButton") as HTMLElement,
-      filtersSection: document.getElementById("filtersSection") as HTMLElement,
       startDateInput: document.getElementById("startDate") as HTMLInputElement,
       endDateInput: document.getElementById("endDate") as HTMLInputElement,
       sellTokenInput: document.getElementById("sellToken") as HTMLInputElement,
@@ -863,7 +861,7 @@ function initializeFilters(): void {
   console.log("🔧 Initializing filters...");
   
   // Toggle filters visibility
-  const toggleButton = document.getElementById("filterToggleButton");
+  const toggleButton = document.getElementById("toggleFiltersButton");
   if (toggleButton) {
     toggleButton.addEventListener("click", toggleFilters);
   }
@@ -885,8 +883,8 @@ function initializeFilters(): void {
  * Toggle filters visibility
  */
 function toggleFilters(): void {
-  const filterContent = document.getElementById("filtersSection");
-  const toggleButton = document.getElementById("filterToggleButton");
+  const filterContent = elements.filterContainer;
+  const toggleButton = document.getElementById("toggleFiltersButton");
   
   if (!filterContent || !toggleButton) return;
   
@@ -894,10 +892,10 @@ function toggleFilters(): void {
   
   if (isVisible) {
     filterContent.style.display = "none";
-    toggleButton.classList.remove("active");
+    toggleButton.classList.remove("expanded");
   } else {
     filterContent.style.display = "block";
-    toggleButton.classList.add("active");
+    toggleButton.classList.add("expanded");
   }
 }
 
@@ -1724,17 +1722,8 @@ async function updateTradeDateAsync(trade: Transaction, index: number): Promise<
     // Fallback to block timestamp API
     const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
     const fullTimestamp = timestampToDateTime(blockTimestamp);
-    
-    // Ensure we never show "Block X" - always show a proper timestamp
-    if (fullTimestamp && !fullTimestamp.includes('Block ') && !fullTimestamp.includes('Invalid Date')) {
-      updateTradeDateElement(index, fullTimestamp);
-      console.log(`✅ Updated date for trade ${index} from block API: ${fullTimestamp}`);
-    } else {
-      // If timestamp is invalid, use current time as fallback
-      const fallbackDate = new Date().toLocaleString();
-      updateTradeDateElement(index, fallbackDate);
-      console.log(`⚠️ Invalid timestamp, using fallback for trade ${index}: ${fallbackDate}`);
-    }
+    updateTradeDateElement(index, fullTimestamp);
+    console.log(`✅ Updated date for trade ${index} from block API: ${fullTimestamp}`);
     
   } catch (error) {
     console.warn(`⚠️ Failed to update date for trade ${index}:`, error);
@@ -1745,15 +1734,8 @@ async function updateTradeDateAsync(trade: Transaction, index: number): Promise<
         console.log(`🔄 Retrying timestamp fetch for trade ${index} (block ${trade.blockNumber})`);
         const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
         const fullTimestamp = timestampToDateTime(blockTimestamp);
-        
-        if (fullTimestamp && !fullTimestamp.includes('Block ') && !fullTimestamp.includes('Invalid Date')) {
-          updateTradeDateElement(index, fullTimestamp);
-          console.log(`✅ Retry successful - updated date for trade ${index}: ${fullTimestamp}`);
-        } else {
-          const fallbackDate = new Date().toLocaleString();
-          updateTradeDateElement(index, fallbackDate);
-          console.log(`⚠️ Invalid timestamp in retry, using fallback for trade ${index}: ${fallbackDate}`);
-        }
+        updateTradeDateElement(index, fullTimestamp);
+        console.log(`✅ Retry successful - updated date for trade ${index}: ${fullTimestamp}`);
       } catch (retryError) {
         console.warn(`⚠️ Retry failed for trade ${index}:`, retryError);
         
@@ -1763,15 +1745,8 @@ async function updateTradeDateAsync(trade: Transaction, index: number): Promise<
             console.log(`🔄 Final retry for trade ${index} (block ${trade.blockNumber})`);
             const blockTimestamp = await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState());
             const fullTimestamp = timestampToDateTime(blockTimestamp);
-            
-            if (fullTimestamp && !fullTimestamp.includes('Block ') && !fullTimestamp.includes('Invalid Date')) {
-              updateTradeDateElement(index, fullTimestamp);
-              console.log(`✅ Final retry successful - updated date for trade ${index}: ${fullTimestamp}`);
-            } else {
-              const fallbackDate = new Date().toLocaleString();
-              updateTradeDateElement(index, fallbackDate);
-              console.log(`⚠️ Invalid timestamp in final retry, using fallback for trade ${index}: ${fallbackDate}`);
-            }
+            updateTradeDateElement(index, fullTimestamp);
+            console.log(`✅ Final retry successful - updated date for trade ${index}: ${fullTimestamp}`);
           } catch (finalError) {
             console.error(`❌ All retries failed for trade ${index}:`, finalError);
           }
@@ -1787,14 +1762,14 @@ async function updateTradeDateAsync(trade: Transaction, index: number): Promise<
 export async function retryAllBlockTimestamps(): Promise<void> {
   console.log('🔄 Retrying timestamp updates for all trades...');
   
-  const tradeRows = document.querySelectorAll('tr[data-index]');
+  const tradeRows = document.querySelectorAll('tr[data-trade-index]');
   let retryCount = 0;
   
   for (const row of Array.from(tradeRows)) {
-    const index = parseInt(row.getAttribute('data-index') || '0');
+    const index = parseInt(row.getAttribute('data-trade-index') || '0');
     const dateCell = row.querySelector('.trade-date');
     
-    if (dateCell && (dateCell.textContent?.includes('Block ') || dateCell.textContent?.includes('Invalid Date'))) {
+    if (dateCell && dateCell.textContent?.includes('Block ')) {
       console.log(`🔄 Retrying timestamp for trade row ${index}`);
       retryCount++;
       
@@ -1804,25 +1779,12 @@ export async function retryAllBlockTimestamps(): Promise<void> {
       
       if (blockNumber && !isNaN(parseInt(blockNumber))) {
         try {
-          // Show loading state
-          dateCell.textContent = 'Loading...';
-          dateCell.classList.add('timestamp-loading');
-          
           const blockTimestamp = await getBlockTimestamp(parseInt(blockNumber), getCurrentNetworkIdFromState());
           const fullTimestamp = timestampToDateTime(blockTimestamp);
-          
-          if (fullTimestamp && !fullTimestamp.includes('Block ') && !fullTimestamp.includes('Invalid Date')) {
-            updateTradeDateElement(index, fullTimestamp);
-            console.log(`✅ Updated timestamp for trade ${index}: ${fullTimestamp}`);
-          } else {
-            const fallbackDate = new Date().toLocaleString();
-            updateTradeDateElement(index, fallbackDate);
-            console.log(`⚠️ Invalid timestamp, using fallback for trade ${index}: ${fallbackDate}`);
-          }
+          updateTradeDateElement(index, fullTimestamp);
+          console.log(`✅ Updated timestamp for trade ${index}: ${fullTimestamp}`);
         } catch (error) {
           console.warn(`⚠️ Failed to retry timestamp for trade ${index}:`, error);
-          dateCell.textContent = 'Failed to load';
-          dateCell.classList.remove('timestamp-loading');
         }
       }
     }
@@ -1837,64 +1799,14 @@ if (typeof window !== 'undefined') {
   console.log('🔧 Manual retry function available as window.retryAllBlockTimestamps()');
 }
 
-/**
- * Force refresh all timestamps in the current view
- */
-export async function forceRefreshAllTimestamps(): Promise<void> {
-  console.log('🔄 Force refreshing all timestamps...');
-  
-  const tradeRows = document.querySelectorAll('tr[data-index]');
-  let refreshCount = 0;
-  
-  for (const row of Array.from(tradeRows)) {
-    const index = parseInt(row.getAttribute('data-index') || '0');
-    const dateCell = row.querySelector('.trade-date');
-    const blockNumber = row.querySelector('.trade-block')?.textContent;
-    
-    if (dateCell && blockNumber && !isNaN(parseInt(blockNumber))) {
-      try {
-        // Show loading state
-        dateCell.textContent = 'Refreshing...';
-        dateCell.classList.add('timestamp-loading');
-        
-        const blockTimestamp = await getBlockTimestamp(parseInt(blockNumber), getCurrentNetworkIdFromState());
-        const fullTimestamp = timestampToDateTime(blockTimestamp);
-        
-        if (fullTimestamp && !fullTimestamp.includes('Block ') && !fullTimestamp.includes('Invalid Date')) {
-          updateTradeDateElement(index, fullTimestamp);
-          refreshCount++;
-          console.log(`✅ Refreshed timestamp for trade ${index}: ${fullTimestamp}`);
-        } else {
-          const fallbackDate = new Date().toLocaleString();
-          updateTradeDateElement(index, fallbackDate);
-          refreshCount++;
-          console.log(`⚠️ Invalid timestamp, using fallback for trade ${index}: ${fallbackDate}`);
-        }
-      } catch (error) {
-        console.warn(`⚠️ Failed to refresh timestamp for trade ${index}:`, error);
-        dateCell.textContent = 'Refresh failed';
-        dateCell.classList.remove('timestamp-loading');
-      }
-    }
-  }
-  
-  console.log(`✅ Force refresh completed for ${refreshCount} trades`);
-}
-
-// Make the force refresh function available globally
-if (typeof window !== 'undefined') {
-  (window as any).forceRefreshAllTimestamps = forceRefreshAllTimestamps;
-  console.log('🔧 Force refresh function available as window.forceRefreshAllTimestamps()');
-}
-
 // Auto-retry failed timestamps every 30 seconds
 setInterval(async () => {
-  const tradeRows = document.querySelectorAll('tr[data-index]');
+  const tradeRows = document.querySelectorAll('tr[data-trade-index]');
   let blockTimestampCount = 0;
   
   for (const row of Array.from(tradeRows)) {
     const dateCell = row.querySelector('.trade-date');
-    if (dateCell && (dateCell.textContent?.includes('Block ') || dateCell.textContent?.includes('Invalid Date'))) {
+    if (dateCell && dateCell.textContent?.includes('Block ')) {
       blockTimestampCount++;
     }
   }
@@ -1909,30 +1821,10 @@ setInterval(async () => {
  * Update the date element in the DOM
  */
 function updateTradeDateElement(index: number, fullTimestamp: string): void {
-  // Try the specific selector first
-  let dateElement = document.querySelector(`[data-trade-index="${index}"][data-date-type="timestamp"]`);
-  
-  if (!dateElement) {
-    // Fallback: look for trade row with the index
-    const tradeRow = document.querySelector(`tr[data-index="${index}"]`);
-    if (tradeRow) {
-      dateElement = tradeRow.querySelector('.trade-date');
-    }
-  }
-  
+  const dateElement = document.querySelector(`[data-trade-index="${index}"][data-date-type="timestamp"]`);
   if (dateElement) {
-    // Ensure we always show a timestamp, never "Block X"
-    if (fullTimestamp && !fullTimestamp.includes('Block ') && !fullTimestamp.includes('Invalid Date')) {
-      dateElement.textContent = fullTimestamp;
-      console.log(`🔍 Updated date element for trade ${index}: ${fullTimestamp}`);
-    } else {
-      // If we get an invalid timestamp, show a fallback date
-      const fallbackDate = new Date().toLocaleString();
-      dateElement.textContent = fallbackDate;
-      console.log(`⚠️ Using fallback date for trade ${index}: ${fallbackDate}`);
-    }
-  } else {
-    console.warn(`⚠️ Could not find date element for trade ${index}`);
+    dateElement.textContent = fullTimestamp;
+    console.log(`🔍 Updated date element for trade ${index}: ${fullTimestamp}`);
   }
 }
 
@@ -2229,12 +2121,11 @@ async function createTradeTableRow(
       buyToken.symbol
     }</span>
       </td>
-      <td class="trade-date" data-trade-index="${index}" data-date-type="timestamp">Loading timestamp...</td>
+      <td class="trade-date">${timestampToDateTime(
+        await getBlockTimestamp(parseInt(trade.blockNumber), getCurrentNetworkIdFromState())
+      )}</td>
       <td class="trade-block">${trade.blockNumber || "Unknown"}</td>
     `;
-
-    // Immediately fetch and update the timestamp
-    updateTradeDateAsync(trade, index);
 
     // Token metadata will be fetched in batch after all trades are loaded
 
@@ -3999,67 +3890,9 @@ if (typeof window !== 'undefined' && !sessionStorage.getItem('NETWORK_ID')) {
   console.log(`🔗 Using stored network ID: ${storedNetworkId}`);
 }
 
-/**
- * Initialize theme functionality
- */
-function initializeTheme() {
-  console.log("🎨 Initializing theme functionality...");
-  
-  // Get the theme toggle button
-  const themeToggleButton = document.getElementById('themeToggleButton') as HTMLButtonElement;
-  const themeIcon = themeToggleButton?.querySelector('i');
-  
-  if (!themeToggleButton || !themeIcon) {
-    console.warn("⚠️ Theme toggle button not found");
-    return;
-  }
-  
-  // Get saved theme preference or default to light theme
-  const savedTheme = localStorage.getItem('theme') || 'light';
-  console.log(`🎨 Saved theme preference: ${savedTheme}`);
-  
-  // Apply the saved theme
-  applyTheme(savedTheme, themeIcon);
-  
-  // Add click event listener to toggle button
-  themeToggleButton.addEventListener('click', () => {
-    const currentTheme = document.body.classList.contains('dark-theme') ? 'dark' : 'light';
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    
-    console.log(`🎨 Switching theme from ${currentTheme} to ${newTheme}`);
-    
-    // Apply new theme
-    applyTheme(newTheme, themeIcon);
-    
-    // Save preference
-    localStorage.setItem('theme', newTheme);
-    console.log(`🎨 Theme preference saved: ${newTheme}`);
-  });
-  
-  console.log("✅ Theme functionality initialized");
-}
-
-/**
- * Apply theme to the page
- */
-function applyTheme(theme: string, themeIcon: HTMLElement) {
-  if (theme === 'dark') {
-    document.body.classList.add('dark-theme');
-    themeIcon.className = 'fas fa-sun';
-    themeIcon.parentElement?.setAttribute('title', 'Switch to Light Theme');
-  } else {
-    document.body.classList.remove('dark-theme');
-    themeIcon.className = 'fas fa-moon';
-    themeIcon.parentElement?.setAttribute('title', 'Switch to Dark Theme');
-  }
-}
-
 // Initialize the application when DOM is loaded
 document.addEventListener("DOMContentLoaded", () => {
   console.log("📄 DOM Content Loaded - Starting initialization...");
-  
-  // Initialize theme functionality
-  initializeTheme();
   
   // Initialize network ID in sessionStorage if not present
   if (typeof window !== 'undefined' && !sessionStorage.getItem('NETWORK_ID')) {

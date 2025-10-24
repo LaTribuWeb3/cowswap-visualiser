@@ -161,8 +161,6 @@ export interface DOMElements {
   paginationControls?: HTMLElement;
   filterContainer?: HTMLElement;
   filterForm?: HTMLElement;
-  filterToggleButton?: HTMLElement;
-  filtersSection?: HTMLElement;
   startDateInput?: HTMLInputElement;
   endDateInput?: HTMLInputElement;
   sellTokenInput?: HTMLInputElement;

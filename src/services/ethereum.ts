@@ -77,16 +77,9 @@ export class EthereumService {
   private readonly MAX_BATCH_SIZE: number;
   private readonly BATCH_DELAY_MS: number;
 
-  // Circuit breaker for timestamp failures
-  private timestampFailureCount: number = 0;
-  private readonly MAX_TIMESTAMP_FAILURES: number = 10;
-  private circuitBreakerOpen: boolean = false;
-  private circuitBreakerResetTime: number = 0;
-
   constructor() {
     // Initialize backoff configuration from environment variables
-    // Increased retries for timestamp fetching to handle Ethereum network issues
-    this.MAX_RETRIES = parseInt(process.env.RPC_BACKOFF_MAX_RETRIES || "10");
+    this.MAX_RETRIES = parseInt(process.env.RPC_BACKOFF_MAX_RETRIES || "5");
     this.BASE_DELAY = parseInt(process.env.RPC_BACKOFF_BASE_DELAY || "1000");
     this.MAX_DELAY = parseInt(process.env.RPC_BACKOFF_MAX_DELAY || "30000");
     this.BACKOFF_MULTIPLIER = parseFloat(
@@ -176,15 +169,11 @@ export class EthereumService {
   }
 
   /**
-   * Calculate delay for exponential backoff with jitter
+   * Calculate delay for exponential backoff
    */
   private calculateBackoffDelay(attempt: number): number {
     const delay = this.BASE_DELAY * Math.pow(this.BACKOFF_MULTIPLIER, attempt);
-    const cappedDelay = Math.min(delay, this.MAX_DELAY);
-    
-    // Add jitter to prevent thundering herd (random factor between 0.5 and 1.5)
-    const jitter = 0.5 + Math.random();
-    return Math.floor(cappedDelay * jitter);
+    return Math.min(delay, this.MAX_DELAY);
   }
 
   /**
@@ -266,27 +255,10 @@ export class EthereumService {
       "ENOTFOUND",
       "ETIMEDOUT",
       "ECONNREFUSED",
-      "invalid timestamp",
-      "block not found",
-      "block unavailable",
-      "rpc error",
-      "json-rpc error",
     ];
 
     const lowerErrorMessage = errorMessage.toLowerCase();
     return retryableErrors.some((error) => lowerErrorMessage.includes(error));
-  }
-
-  /**
-   * Validate if a timestamp is reasonable (not in the future, not too old)
-   */
-  private isValidTimestamp(timestamp: number): boolean {
-    const now = Math.floor(Date.now() / 1000);
-    const oneYearAgo = now - (365 * 24 * 60 * 60);
-    const oneHourFromNow = now + (60 * 60);
-    
-    // Timestamp should be between 1 year ago and 1 hour from now
-    return timestamp >= oneYearAgo && timestamp <= oneHourFromNow;
   }
 
   /**
@@ -310,7 +282,7 @@ export class EthereumService {
   }
 
   /**
-   * Fetch block timestamp using viem (RPC call) with enhanced retry logic
+   * Fetch block timestamp using viem (RPC call)
    */
   private async fetchBlockTimestampFromRPC(
     blockNumber: number
@@ -323,106 +295,17 @@ export class EthereumService {
         });
         if (block) {
           const timestamp = Number(block.timestamp);
-          
-          // Validate timestamp before caching
-          if (!this.isValidTimestamp(timestamp)) {
-            console.warn(`⚠️ Invalid timestamp ${timestamp} for block ${blockNumber}, retrying...`);
-            throw new Error(`Invalid timestamp ${timestamp} for block ${blockNumber}`);
-          }
-          
           this.addToCache(blockNumber, timestamp);
-          console.log(`✅ Valid timestamp ${timestamp} retrieved for block ${blockNumber}`);
           return timestamp;
         }
-        throw new Error(`Block ${blockNumber} not found`);
-      }, `fetchBlockTimestampFromRPC(${blockNumber})`, this.MAX_RETRIES);
+        return 0;
+      }, `fetchBlockTimestampFromRPC(${blockNumber})`);
     });
   }
 
   async getBlockTimestamp(blockNumber: number): Promise<number> {
     await this.ensureInitialized();
-    
-    // Check circuit breaker
-    if (this.isCircuitBreakerOpen()) {
-      console.warn(`⚠️ Circuit breaker open, using estimated timestamp for block ${blockNumber}`);
-      const estimatedTimestamp = this.estimateTimestampFromBlockNumber(blockNumber);
-      return estimatedTimestamp;
-    }
-    
-    try {
-      const timestamp = await this.fetchBlockTimestampFromRPC(blockNumber);
-      this.recordTimestampSuccess();
-      return timestamp;
-    } catch (error) {
-      console.error(`❌ All retries failed for block ${blockNumber} timestamp:`, error);
-      this.recordTimestampFailure();
-      
-      // Fallback: estimate timestamp based on current time and block number
-      // This is a rough estimation and should be used as last resort
-      const estimatedTimestamp = this.estimateTimestampFromBlockNumber(blockNumber);
-      console.warn(`⚠️ Using estimated timestamp ${estimatedTimestamp} for block ${blockNumber} as fallback`);
-      
-      return estimatedTimestamp;
-    }
-  }
-
-  /**
-   * Estimate timestamp based on block number (fallback mechanism)
-   */
-  private estimateTimestampFromBlockNumber(blockNumber: number): number {
-    // Rough estimation: assume 12 seconds per block (Ethereum average)
-    const currentBlock = 19000000; // Approximate current block number (adjust as needed)
-    const currentTime = Math.floor(Date.now() / 1000);
-    const secondsPerBlock = 12;
-    
-    const blockDifference = currentBlock - blockNumber;
-    const estimatedTimestamp = currentTime - (blockDifference * secondsPerBlock);
-    
-    // Ensure the estimated timestamp is reasonable
-    const oneYearAgo = currentTime - (365 * 24 * 60 * 60);
-    return Math.max(estimatedTimestamp, oneYearAgo);
-  }
-
-  /**
-   * Check if circuit breaker is open for timestamp operations
-   */
-  private isCircuitBreakerOpen(): boolean {
-    if (!this.circuitBreakerOpen) {
-      return false;
-    }
-    
-    // Reset circuit breaker after 5 minutes
-    const resetTime = 5 * 60 * 1000; // 5 minutes
-    if (Date.now() > this.circuitBreakerResetTime) {
-      console.log('🔄 Circuit breaker reset - attempting timestamp operations again');
-      this.circuitBreakerOpen = false;
-      this.timestampFailureCount = 0;
-      return false;
-    }
-    
-    return true;
-  }
-
-  /**
-   * Record timestamp failure for circuit breaker
-   */
-  private recordTimestampFailure(): void {
-    this.timestampFailureCount++;
-    
-    if (this.timestampFailureCount >= this.MAX_TIMESTAMP_FAILURES) {
-      this.circuitBreakerOpen = true;
-      this.circuitBreakerResetTime = Date.now() + (5 * 60 * 1000); // 5 minutes from now
-      console.warn(`⚠️ Circuit breaker opened due to ${this.timestampFailureCount} timestamp failures`);
-    }
-  }
-
-  /**
-   * Record timestamp success for circuit breaker
-   */
-  private recordTimestampSuccess(): void {
-    if (this.timestampFailureCount > 0) {
-      this.timestampFailureCount = Math.max(0, this.timestampFailureCount - 1);
-    }
+    return await this.fetchBlockTimestampFromRPC(blockNumber);
   }
 
   async getBlockNumberFromDate(date: Date): Promise<number> {
