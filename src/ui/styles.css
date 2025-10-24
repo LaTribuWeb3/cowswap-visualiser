@@ -69,6 +69,7 @@ body {
     justify-content: center;
     gap: 12px;
     flex-wrap: wrap;
+    width: 100%;
 }
 
 .network-selector label {
@@ -90,23 +91,61 @@ body {
     border-radius: 8px;
     font-size: 0.95rem;
     font-weight: 500;
-    background: rgba(255, 255, 255, 0.95);
-    color: #333;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
     cursor: pointer;
     transition: all 0.3s ease;
     min-width: 250px;
     max-width: 400px;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+    padding-right: 40px;
 }
 
 .network-dropdown:hover {
     border-color: rgba(255, 255, 255, 0.5);
-    background: white;
+    background-color: rgba(255, 255, 255, 0.15);
 }
 
 .network-dropdown:focus {
     outline: none;
     border-color: #4ade80;
     box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
+}
+
+.network-dropdown option {
+    background: #1f2937;
+    color: white;
+    padding: 8px;
+}
+
+/* Enhanced dropdown styling for better browser compatibility */
+.network-dropdown:focus {
+    outline: none;
+    border-color: #4ade80;
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
+}
+
+/* Style the dropdown list when opened */
+.network-dropdown:focus option {
+    background: #1f2937;
+    color: white;
+    padding: 12px 16px;
+    border: none;
+}
+
+.network-dropdown option:hover {
+    background: #374151;
+    color: white;
+}
+
+.network-dropdown option:checked {
+    background: #4ade80;
+    color: #1f2937;
+    font-weight: 600;
 }
 
 /* Main content */
@@ -468,30 +507,30 @@ body {
 }
 
 .trade-status {
-  padding: 6px 12px;
-  border-radius: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.025em;
   text-align: center;
-  min-width: 80px;
+  min-width: 70px;
   display: inline-block;
 }
 
 .trade-status.success {
-  background: #d4edda;
-  color: #155724;
+  background: #dcfce7;
+  color: #166534;
 }
 
 .trade-status.failed {
-  background: #f8d7da;
-  color: #721c24;
+  background: #fef2f2;
+  color: #991b1b;
 }
 
 .trade-status.error {
-  background: #f8d7da;
-  color: #721c24;
+  background: #fef2f2;
+  color: #991b1b;
 }
 
 .trade-amount[title] {
@@ -766,23 +805,110 @@ body {
     font-weight: 500;
 }
 
-/* Cards */
-.card {
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 20px;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    overflow: hidden;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+/* Minimalistic Page Header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 0;
+    margin-bottom: 32px;
+    border-bottom: 1px solid #e5e7eb;
 }
 
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+.page-title {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
-/* Filter Card Styles */
-.filters-card {
+.page-title h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+    color: #111827;
+    letter-spacing: -0.025em;
+}
+
+.trades-count {
+    background: #f3f4f6;
+    color: #6b7280;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.page-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.action-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    color: #374151;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.action-button:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.action-button:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.filter-button.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+.filter-button.active:hover {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+
+.refresh-button {
+    padding: 10px 16px;
+    min-width: 40px;
+    justify-content: center;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    color: #374151;
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.refresh-button:hover {
+    background: #10b981;
+    border-color: #10b981;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.refresh-button:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+/* Filters Section */
+.filters-section {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 20px;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
@@ -791,47 +917,56 @@ body {
     margin-bottom: 20px;
 }
 
-.filters-card .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 30px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+/* Trades Container */
+.trades-container {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
 }
 
-.filters-card .card-header h2 {
-    font-size: 1.5rem;
+/* Trades Table */
+.trades-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+.trades-table thead {
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.trades-table th {
+    padding: 16px 20px;
+    text-align: left;
     font-weight: 600;
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    border-bottom: 1px solid #e5e7eb;
 }
 
-.toggle-filters-button {
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: white;
-    padding: 8px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 0.9rem;
+.trades-table td {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+    font-size: 0.875rem;
+    color: #374151;
 }
 
-.toggle-filters-button:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: translateY(-1px);
+.trades-table tbody tr {
+    transition: background-color 0.15s ease;
 }
 
-.toggle-filters-button i {
-    transition: transform 0.3s ease;
+.trades-table tbody tr:hover {
+    background: #f9fafb;
 }
 
-.toggle-filters-button.expanded i {
-    transform: rotate(180deg);
+.trades-table tbody tr:last-child td {
+    border-bottom: none;
 }
 
 .filter-form {
@@ -3988,4 +4123,622 @@ body {
   100% {
     background-position: -200% 0;
   }
+}
+
+/* Dark Theme Styles */
+body.dark-theme {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #e0e0e0;
+}
+
+body.dark-theme .header-content {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .logo h1 {
+    background: linear-gradient(45deg, #60a5fa, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+body.dark-theme .trades-container {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+body.dark-theme .filters-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .filters-card .card-header {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+}
+
+body.dark-theme .trades-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+body.dark-theme .filter-form {
+    background: transparent;
+}
+
+body.dark-theme .filter-group label {
+    color: #d1d5db;
+}
+
+body.dark-theme .filter-group input {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+body.dark-theme .filter-group input:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+body.dark-theme .filter-group input::placeholder {
+    color: #9ca3af;
+}
+
+body.dark-theme .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.dark-theme .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+body.dark-theme .trades-table {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .trades-table thead {
+    background: rgba(255, 255, 255, 0.05);
+    color: #e0e0e0;
+}
+
+body.dark-theme .trades-table td {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+}
+
+body.dark-theme .trades-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-theme .trade-table-container {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .trade-table-header {
+    background: rgba(255, 255, 255, 0.05);
+    color: #e0e0e0;
+}
+
+body.dark-theme .trade-table-row {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .trade-table-row:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-theme .trade-table-label {
+    background: rgba(255, 255, 255, 0.05);
+    color: #d1d5db;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .trade-table-value {
+    color: #e0e0e0;
+}
+
+body.dark-theme .trade-table-value.hash-value {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .trade-table-value.hash-value:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #60a5fa;
+}
+
+body.dark-theme .trade-flow-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .trade-flow-title {
+    color: #d1d5db;
+}
+
+body.dark-theme .trade-step {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .trade-step:hover {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+body.dark-theme .step-content h3 {
+    color: #e0e0e0;
+}
+
+body.dark-theme .token-info {
+    color: #d1d5db;
+}
+
+body.dark-theme .token-info strong {
+    color: #e0e0e0;
+}
+
+body.dark-theme .trade-metrics-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .trade-metrics-title {
+    color: #d1d5db;
+}
+
+body.dark-theme .metric {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .metric:hover {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+body.dark-theme .metric-label {
+    color: #9ca3af;
+}
+
+body.dark-theme .metric-value {
+    color: #e0e0e0;
+}
+
+body.dark-theme .conversion-rates-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .conversion-rates-title {
+    color: #d1d5db;
+}
+
+body.dark-theme .conversion-rate-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .conversion-rate-item:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+body.dark-theme .conversion-rate-label {
+    color: #9ca3af;
+}
+
+body.dark-theme .conversion-rate-value {
+    color: #e0e0e0;
+}
+
+body.dark-theme .trade-hash {
+    color: #60a5fa;
+}
+
+body.dark-theme .trades-header-left h2 {
+    color: white;
+}
+
+body.dark-theme .trades-header-left i {
+    color: white;
+}
+
+body.dark-theme .trades-count {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+body.dark-theme .filter-toggle-button {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+body.dark-theme .filter-toggle-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    color: white;
+}
+
+body.dark-theme .filter-toggle-button.active {
+    background: rgba(255, 255, 255, 0.4);
+    color: white;
+}
+
+body.dark-theme .filter-toggle-button i {
+    color: white;
+}
+
+body.dark-theme .trades-container {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .filters-section {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .trade-status.success {
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+}
+
+body.dark-theme .trade-status.failed {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+body.dark-theme .trade-status.pending {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+body.dark-theme .trade-status.unknown {
+    background: rgba(107, 114, 128, 0.2);
+    color: #9ca3af;
+}
+
+body.dark-theme .trade-amount {
+    color: #e0e0e0;
+}
+
+body.dark-theme .trade-amount .token-address {
+    color: #9ca3af;
+}
+
+body.dark-theme .trade-date {
+    color: #9ca3af;
+}
+
+body.dark-theme .trade-block {
+    color: #9ca3af;
+}
+
+body.dark-theme .trade-arrow {
+    color: #9ca3af;
+}
+
+body.dark-theme .trade-flow .token-symbol {
+    color: #e0e0e0;
+}
+
+body.dark-theme .trade-flow i {
+    color: #9ca3af;
+}
+
+body.dark-theme .loading-spinner {
+    color: #9ca3af;
+}
+
+body.dark-theme .refresh-button {
+    color: #4ade80;
+}
+
+body.dark-theme .refresh-button:hover:not(:disabled) {
+    color: #22c55e;
+}
+
+body.dark-theme .back-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    box-shadow: none;
+}
+
+body.dark-theme .back-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: none;
+}
+
+/* Dark theme scrollbar */
+body.dark-theme ::-webkit-scrollbar {
+    width: 8px;
+}
+
+body.dark-theme ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+body.dark-theme ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+body.dark-theme ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Dark theme for pagination */
+body.dark-theme .pagination-controls {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .pagination-info {
+    color: #e0e0e0;
+}
+
+body.dark-theme .pagination-text {
+    color: #d1d5db;
+}
+
+body.dark-theme .pagination-page {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+}
+
+body.dark-theme .pagination-nav-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.dark-theme .pagination-nav-button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+body.dark-theme .pagination-page-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.dark-theme .pagination-page-button:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+body.dark-theme .pagination-page-button.active {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+body.dark-theme .pagination-page-input {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.dark-theme .pagination-page-input:focus {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: #60a5fa;
+}
+
+body.dark-theme .pagination-go-button {
+    background: rgba(96, 165, 250, 0.1);
+    color: rgba(96, 165, 250, 0.8);
+    border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+body.dark-theme .pagination-go-button:hover {
+    background: rgba(96, 165, 250, 0.15);
+    color: rgba(96, 165, 250, 0.9);
+}
+
+body.dark-theme .pivot-symbol {
+    color: #e0e0e0;
+}
+
+body.dark-theme .pivot-price {
+    color: #9ca3af;
+}
+
+/* Dark theme for filter toggle button */
+body.dark-theme .filter-toggle-button {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+body.dark-theme .filter-toggle-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+body.dark-theme .filter-toggle-button.active {
+    background: rgba(96, 165, 250, 0.1);
+    color: #1e40af;
+    border-color: rgba(96, 165, 250, 0.2);
+}
+
+/* Dark theme for filters section */
+body.dark-theme .filters-section {
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Theme Toggle Button */
+.theme-toggle-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: #495057;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.theme-toggle-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.theme-toggle-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark theme for theme toggle button */
+body.dark-theme .theme-toggle-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.dark-theme .theme-toggle-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #e0e0e0;
+}
+
+/* Header Controls */
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Dark theme for minimalistic design */
+body.dark-theme .page-header {
+    border-bottom-color: #374151;
+}
+
+body.dark-theme .page-title h1 {
+    color: #f9fafb;
+}
+
+body.dark-theme .trades-count {
+    background: #374151;
+    color: #d1d5db;
+}
+
+body.dark-theme .action-button {
+    background: #1f2937;
+    border-color: #374151;
+    color: #d1d5db;
+}
+
+body.dark-theme .action-button:hover {
+    background: #374151;
+    border-color: #4b5563;
+}
+
+body.dark-theme .filter-button.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+body.dark-theme .refresh-button {
+    background: #374151;
+    border-color: #4b5563;
+    color: #d1d5db;
+}
+
+body.dark-theme .refresh-button:hover {
+    background: #10b981;
+    border-color: #10b981;
+    color: white;
+}
+
+body.dark-theme .network-dropdown option {
+    background: #1f2937;
+    color: white;
+}
+
+body.dark-theme .network-dropdown option:hover {
+    background: #374151;
+    color: white;
+}
+
+body.dark-theme .network-dropdown option:checked {
+    background: #4ade80;
+    color: #1f2937;
+}
+
+body.dark-theme .trades-container {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+body.dark-theme .trades-table {
+    background: #1f2937;
+}
+
+body.dark-theme .trades-table thead {
+    background: #111827;
+}
+
+body.dark-theme .trades-table th {
+    color: #9ca3af;
+    border-bottom-color: #374151;
+}
+
+body.dark-theme .trades-table td {
+    color: #d1d5db;
+    border-bottom-color: #374151;
+}
+
+body.dark-theme .trades-table tbody tr:hover {
+    background: #374151;
+}
+
+body.dark-theme .filters-section {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+/* Dark theme for network selector */
+body.dark-theme .network-dropdown {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+body.dark-theme .network-dropdown:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+body.dark-theme .network-dropdown:focus {
+    border-color: #4ade80;
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
+}
+
+body.dark-theme .network-dropdown option {
+    background: #1f2937;
+    color: white;
+}
+
+/* Timestamp update visual feedback - removed green animation */
+.timestamp-updated {
+    opacity: 1;
+}
+
+/* Timestamp loading state - removed orange animation */
+.timestamp-loading {
+    opacity: 1;
 }

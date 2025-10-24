@@ -350,6 +350,34 @@ function setupEventListeners(): void {
     backButton.addEventListener('click', showTradesList);
   }
   
+  // Filter toggle button
+  const filterToggleButton = document.getElementById('filterToggleButton');
+  if (filterToggleButton) {
+    filterToggleButton.addEventListener('click', function() {
+      const filtersSection = document.getElementById('filtersSection');
+      if (filtersSection) {
+        const isVisible = filtersSection.style.display !== 'none';
+        
+        if (isVisible) {
+          filtersSection.style.display = 'none';
+          filterToggleButton.classList.remove('active');
+        } else {
+          filtersSection.style.display = 'block';
+          filterToggleButton.classList.add('active');
+        }
+      }
+    });
+  }
+  
+  // Refresh button
+  const refreshButton = document.getElementById('refreshButton');
+  if (refreshButton) {
+    refreshButton.addEventListener('click', function() {
+      // Add refresh functionality here
+      console.log('Refresh clicked');
+    });
+  }
+  
   // Tokens collapse toggle
   const tokensCollapseToggle = document.getElementById('tokensCollapseToggle');
   if (tokensCollapseToggle) {
@@ -827,3 +855,55 @@ function populateInteractions(): void {
     interactionCountElement.textContent = `${interactions.length} groups (${totalInteractions} total)`;
   }
 }
+
+// Theme Toggle Functionality
+function initializeThemeToggle() {
+  const themeToggleButton = document.getElementById('themeToggleButton') as HTMLButtonElement;
+  const body = document.body;
+  
+  // Check for saved theme preference or default to light mode
+  const savedTheme = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  
+  if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+    body.classList.add('dark-theme');
+    updateThemeIcon(true);
+  }
+  
+  if (themeToggleButton) {
+    themeToggleButton.addEventListener('click', () => {
+      const isDark = body.classList.contains('dark-theme');
+      
+      if (isDark) {
+        body.classList.remove('dark-theme');
+        localStorage.setItem('theme', 'light');
+        updateThemeIcon(false);
+      } else {
+        body.classList.add('dark-theme');
+        localStorage.setItem('theme', 'dark');
+        updateThemeIcon(true);
+      }
+    });
+  }
+}
+
+function updateThemeIcon(isDark: boolean) {
+  const themeToggleButton = document.getElementById('themeToggleButton') as HTMLButtonElement;
+  if (themeToggleButton) {
+    const icon = themeToggleButton.querySelector('i');
+    if (icon) {
+      if (isDark) {
+        icon.className = 'fas fa-sun';
+        themeToggleButton.title = 'Switch to Light Theme';
+      } else {
+        icon.className = 'fas fa-moon';
+        themeToggleButton.title = 'Switch to Dark Theme';
+      }
+    }
+  }
+}
+
+// Initialize theme toggle when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  initializeThemeToggle();
+});
