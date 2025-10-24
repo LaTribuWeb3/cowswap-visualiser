@@ -839,17 +839,8 @@ app.get('/api/block-timestamp/:blockNumber', async (req, res) => {
     const ethereumService = getEthereumService();
     await ethereumService.switchNetwork(networkId);
     
-    // Fetch block timestamp directly from blockchain with enhanced retry logic
+    // Fetch block timestamp directly from blockchain
     const timestamp = await ethereumService.getBlockTimestamp(blockNum);
-    
-    // Validate the timestamp before returning
-    const now = Math.floor(Date.now() / 1000);
-    const oneYearAgo = now - (365 * 24 * 60 * 60);
-    const oneHourFromNow = now + (60 * 60);
-    
-    if (timestamp < oneYearAgo || timestamp > oneHourFromNow) {
-      console.warn(`⚠️ Invalid timestamp ${timestamp} for block ${blockNum}, but returning anyway as fallback`);
-    }
     
     console.log(`📡 Retrieved timestamp for block ${blockNum}: ${timestamp}`);
     

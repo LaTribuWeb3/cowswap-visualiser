@@ -17,23 +17,73 @@
                     <h1>CoW Protocol Trade Visualizer</h1>
                 </div>
                 <p class="subtitle">Real-time trade settlement visualization</p>
-                <div class="header-controls">
-                    <div class="network-selector">
-                        <label for="networkSelect">
-                            <i class="fas fa-network-wired"></i> Network:
-                        </label>
-                        <select id="networkSelect" class="network-dropdown">
-                            <option value="">Loading networks...</option>
-                        </select>
-                    </div>
-                    <button class="theme-toggle-button" id="themeToggleButton" title="Toggle Dark Theme">
-                        <i class="fas fa-moon"></i>
-                    </button>
+                <div class="network-selector">
+                    <label for="networkSelect">
+                        <i class="fas fa-network-wired"></i> Network:
+                    </label>
+                    <select id="networkSelect" class="network-dropdown">
+                        <option value="">Loading networks...</option>
+                    </select>
                 </div>
             </div>
         </header>
 
         <main class="main-content">
+            <!-- Filters Card -->
+            <div class="card filters-card">
+                <div class="card-header">
+                    <h2><i class="fas fa-filter"></i> Filters</h2>
+                    <button class="toggle-filters-button" id="toggleFiltersButton">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                <div class="card-content" id="filterContent" style="display: none;">
+                    <form class="filter-form" id="filterForm">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label for="startDate">Start Date</label>
+                                <input type="date" id="startDate" name="startDate" />
+                            </div>
+                            <div class="filter-group">
+                                <label for="endDate">End Date</label>
+                                <input type="date" id="endDate" name="endDate" />
+                            </div>
+                        </div>
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label for="sellToken">Origin Token (Sell Token)</label>
+                                <input type="text" id="sellToken" name="sellToken" placeholder="sellToken address" />
+                            </div>
+                            <div class="filter-group">
+                                <label for="buyToken">Destination Token (Buy Token)</label>
+                                <input type="text" id="buyToken" name="buyToken" placeholder="buyToken address" />
+                            </div>
+                        </div>
+                        <div class="filter-actions">
+                            <button type="button" class="btn btn-secondary" id="clearFiltersButton">
+                                <i class="fas fa-times"></i> Clear Filters
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="applyFiltersButton">
+                                <i class="fas fa-search"></i> Apply Filters
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Trades List Card -->
+            <div class="card trades-list">
+                <div class="card-header">
+                    <h2><i class="fas fa-list"></i> Recent Trades</h2>
+                    <span class="trades-count" id="tradesCount">0 trades</span>
+                </div>
+                <div class="card-content">
+                    <div class="trades-grid" id="tradesGrid">
+                        <!-- Trades will be populated here -->
+                    </div>
+                </div>
+            </div>
+
             <!-- Trade Details Section (Hidden by default) -->
             <div class="trade-details-section" id="tradeDetailsSection" style="display: none;">
                 <!-- Back Button -->
@@ -165,62 +215,6 @@
                             <!-- Interactions will be populated here -->
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Single Frame for Trades -->
-            <div class="trades-container">
-                <div class="trades-header">
-                    <div class="header-left">
-                        <h2><i class="fas fa-list"></i> Recent Trades</h2>
-                        <span class="trades-count" id="tradesCount">0 trades</span>
-                    </div>
-                    <div class="header-right">
-                        <button class="filter-toggle-button" id="filterToggleButton" title="Toggle Filters">
-                            <i class="fas fa-filter"></i>
-                        </button>
-                        <button class="refresh-button" id="refreshButton" title="Refresh Trades">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Filters Section (Hidden by default) -->
-                <div class="filters-section" id="filtersSection" style="display: none;">
-                    <form class="filter-form" id="filterForm">
-                        <div class="filter-row">
-                            <div class="filter-group">
-                                <label for="startDate">Start Date</label>
-                                <input type="date" id="startDate" name="startDate" />
-                            </div>
-                            <div class="filter-group">
-                                <label for="endDate">End Date</label>
-                                <input type="date" id="endDate" name="endDate" />
-                            </div>
-                        </div>
-                        <div class="filter-row">
-                            <div class="filter-group">
-                                <label for="sellToken">Origin Token (Sell Token)</label>
-                                <input type="text" id="sellToken" name="sellToken" placeholder="sellToken address" />
-                            </div>
-                            <div class="filter-group">
-                                <label for="buyToken">Destination Token (Buy Token)</label>
-                                <input type="text" id="buyToken" name="buyToken" placeholder="buyToken address" />
-                            </div>
-                        </div>
-                        <div class="filter-actions">
-                            <button type="button" class="btn btn-secondary" id="clearFiltersButton">
-                                <i class="fas fa-times"></i> Clear Filters
-                            </button>
-                            <button type="submit" class="btn btn-primary" id="applyFiltersButton">
-                                <i class="fas fa-search"></i> Apply Filters
-                            </button>
-                        </div>
-                    </form>
-                </div>
-                
-                <div class="trades-grid" id="tradesGrid">
-                    <!-- Trades will be populated here -->
                 </div>
             </div>
         </main>
