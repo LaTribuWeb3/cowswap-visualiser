@@ -1034,6 +1034,21 @@ app.get('/api/solver-competition/:txHash', async (req, res) => {
     
     const data = await response.json();
     
+    // Mark the winner solution (the one matching the transaction hash)
+    if (data && data.solutions && Array.isArray(data.solutions)) {
+      // Mark which solution is the winner by matching transaction hash
+      data.solutions = data.solutions.map((solution: any) => {
+        const isWinner = solution.txHash && solution.txHash.toLowerCase() === txHash.toLowerCase();
+        return {
+          ...solution,
+          isWinner
+        };
+      });
+      
+      const winnerCount = data.solutions.filter((s: any) => s.isWinner).length;
+      console.log(`✅ Processed solver competition data - ${data.solutions.length} total solutions, ${winnerCount} winner(s)`);
+    }
+    
     return res.json({
       success: true,
       data: data
@@ -1043,6 +1058,84 @@ app.get('/api/solver-competition/:txHash', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch solver competition data'
+    });
+  }
+});
+
+// Order competition endpoint - fetches all competing solvers for an order
+app.get('/api/order-competition/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { networkId } = req.query;
+    
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameter: orderId'
+      });
+    }
+    
+    console.log(`🔍 Fetching solver competition data for order ${orderId} on network ${networkId}`);
+    
+    // Get network configuration to determine the cowNetwork
+    const ethereumService = getEthereumService();
+    const networkConfigs = getNetworkConfigs();
+    const networkIdNum = parseInt(networkId as string);
+    const networkConfig = Object.values(networkConfigs).find((n: any) => n.chainId === networkIdNum);
+    
+    if (!networkConfig) {
+      return res.status(400).json({
+        success: false,
+        error: `Network configuration not found for chainId: ${networkIdNum}`
+      });
+    }
+    
+    // Fetch solver competition data from CoW API using the order UID endpoint
+    // This endpoint returns ALL competing solvers with their bids
+    const cowNetwork = networkConfig.cowNetwork || 'mainnet';
+    const cowApiUrl = `https://api.cow.fi/${cowNetwork}/api/v1/solver_competition/by_order_uid/${orderId}`;
+    
+    console.log(`🔗 Fetching solver competition from CoW API: ${cowApiUrl}`);
+    
+    const response = await fetch(cowApiUrl);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log(`⚠️ No solver competition data found for order ${orderId}`);
+        return res.json({
+          success: true,
+          data: null // No competition data available
+        });
+      }
+      throw new Error(`CoW API error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Mark the winner solution
+    if (data && data.solutions && Array.isArray(data.solutions)) {
+      data.solutions = data.solutions.map((solution: any) => {
+        // The winner is the one that was executed (has txHash)
+        const isWinner = solution.txHash && solution.txHash !== null;
+        return {
+          ...solution,
+          isWinner
+        };
+      });
+      
+      const winnerCount = data.solutions.filter((s: any) => s.isWinner).length;
+      console.log(`✅ Retrieved ${data.solutions.length} solver solutions, ${winnerCount} winner(s)`);
+    }
+    
+    return res.json({
+      success: true,
+      data: data
+    });
+  } catch (error: any) {
+    console.error('❌ Error fetching order competition data:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch order competition data'
     });
   }
 });

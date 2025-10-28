@@ -39,6 +39,7 @@ import {
   fetchBinancePrice,
   getBlockTimestamp,
   fetchSolverCompetition,
+  fetchOrderCompetition,
   getCurrentNetworkId,
   switchNetwork as switchNetworkAPI,
   getNetworkConfigs,
@@ -610,7 +611,43 @@ async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
   try {
     console.log(`🔍 Fetching solver competition data for ${txHash}`);
     
-    const competitionData = await fetchSolverCompetition(txHash, getCurrentNetworkIdFromState());
+    // First, fetch by txHash to get the order ID
+    const txCompetitionData = await fetchSolverCompetition(txHash, getCurrentNetworkIdFromState());
+    
+    if (!txCompetitionData || !txCompetitionData.solutions || txCompetitionData.solutions.length === 0) {
+      competitionContent.innerHTML = `
+        <div class="no-competition-data">
+          <i class="fas fa-info-circle"></i>
+          <span>No solver competition data available for this transaction</span>
+        </div>
+      `;
+      return;
+    }
+
+    // Extract order ID from the first solution
+    let orderId: string | null = null;
+    if (txCompetitionData.solutions[0]?.orders?.[0]?.id) {
+      orderId = txCompetitionData.solutions[0].orders[0].id;
+      console.log(`📋 Found order ID: ${orderId}`);
+    }
+
+    // Now fetch by order ID to get ALL competing solvers
+    let competitionData = txCompetitionData;
+    if (orderId) {
+      try {
+        console.log(`🔍 Fetching all competing solvers for order ${orderId}`);
+        const orderCompetitionData = await fetchOrderCompetition(orderId, getCurrentNetworkIdFromState());
+        
+        if (orderCompetitionData && orderCompetitionData.solutions && orderCompetitionData.solutions.length > 0) {
+          competitionData = orderCompetitionData;
+          console.log(`✅ Retrieved ${competitionData.solutions.length} competing solvers`);
+        } else {
+          console.warn(`⚠️ No competition data found for order ${orderId}, using txHash data`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Failed to fetch order competition data, using txHash data:`, error);
+      }
+    }
     
     if (!competitionData || !competitionData.solutions || competitionData.solutions.length === 0) {
       competitionContent.innerHTML = `
@@ -622,14 +659,26 @@ async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
       return;
     }
 
-    // Sort solutions by ranking (1 = best, higher numbers = worse)
+    // Sort solutions: winner first, then by ranking
     const sortedSolutions = [...competitionData.solutions].sort((a, b) => {
+      // Winner always comes first
+      if (a.isWinner && !b.isWinner) return -1;
+      if (!a.isWinner && b.isWinner) return 1;
+      
+      // For non-winners, sort by ranking (1 = best, higher numbers = worse)
       const rankA = a.ranking || Number.MAX_SAFE_INTEGER;
       const rankB = b.ranking || Number.MAX_SAFE_INTEGER;
       return rankA - rankB;
     });
 
+    // Separate winner from other solutions
+    const winnerSolution = sortedSolutions.find(s => s.isWinner);
+    const otherSolutions = sortedSolutions.filter(s => !s.isWinner);
+
     // Create the competition display
+    const displayOrderId = orderId || competitionData.solutions[0]?.orders?.[0]?.id || 'N/A';
+    const networkPath = getCurrentNetworkIdFromState() === '1' ? 'mainnet' : 'arb1';
+    
     competitionContent.innerHTML = `
       <div class="competition-summary">
         <div class="competition-header">
@@ -640,9 +689,11 @@ async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
           
            <div class="competition-info order-id-info">
              <span class="competition-label">Order ID:</span>
-             <a href="https://explorer.cow.fi/arb1/orders/${competitionData.solutions[0].orders[0].id}" target="_blank" class="order-id-link">
-               ${formatAddress(competitionData.solutions[0].orders[0].id)}
+             ${displayOrderId !== 'N/A' ? `
+             <a href="https://explorer.cow.fi/${networkPath}/orders/${displayOrderId}" target="_blank" class="order-id-link">
+               ${formatAddress(displayOrderId)}
              </a>
+             ` : '<span class="competition-value">N/A</span>'}
            </div>
           
           <div class="competition-info">
@@ -651,71 +702,23 @@ async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
           </div>
         </div>
         
-        <div class="solutions-summary">
-          ${(await Promise.all(sortedSolutions.map(async (solution: any, index: number) => {
-            // Calculate total buy amount across all orders
-            let totalBuyAmount = '0';
-            let buyTokenAddress = '';
-            let formattedBuyAmount = 'N/A';
-            
-            if (solution.orders && solution.orders.length > 0) {
-              // Sum up all buy amounts from orders
-              totalBuyAmount = solution.orders.reduce((sum: bigint, order: any) => {
-                return sum + BigInt(order.buyAmount || '0');
-              }, BigInt(0)).toString();
-              // Use the buy token from the first order (assuming all orders use the same buy token)
-              buyTokenAddress = solution.orders[0].buyToken;
-              
-              if (totalBuyAmount !== '0' && buyTokenAddress) {
-                try {
-                  // Get token info to get the correct decimals
-                  const tokenInfo = await getTokenInfoAsync(buyTokenAddress as `0x${string}`);
-                  formattedBuyAmount = formatAmount(totalBuyAmount, tokenInfo.decimals);
-                } catch (error) {
-                  console.warn(`Failed to get token info for ${buyTokenAddress}:`, error);
-                  // Fallback to using 6 decimals (common for USDC-like tokens)
-                  formattedBuyAmount = formatAmount(totalBuyAmount, 6);
-                }
-              }
-            }
-            
-            return `
-            <div class="solution-summary-card ${solution.isWinner ? 'winner' : ''}">
-              <div class="solution-header">
-                <div class="solution-rank">
-                  <span class="rank-number">#${index + 1}</span>
-                  ${solution.isWinner ? '<span class="winner-badge">🏆 Winner</span>' : ''}
-                </div>
-                <div class="solution-address">
-                  <a href="https://etherscan.io/address/${solution.solverAddress}" target="_blank" class="address-link">
-                    ${formatAddress(solution.solverAddress)}
-                  </a>
-                </div>
-              </div>
-              <div class="solution-metrics">
-                <div class="metric">
-                  <span class="metric-label">Score:</span>
-                  <span class="metric-value">${solution.score || 'N/A'}</span>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">Ranking:</span>
-                  <span class="metric-value">${solution.ranking || 'N/A'}</span>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">Buy Amount:</span>
-                  <span class="metric-value">${formattedBuyAmount}</span>
-                </div>
-                <div class="metric">
-                  <span class="metric-label">Status:</span>
-                  <span class="metric-value ${solution.filteredOut ? 'filtered' : 'active'}">
-                    ${solution.filteredOut ? 'Filtered' : 'Active'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            `;
-          }))).join("")}
+        ${winnerSolution ? `
+        <div class="winner-section">
+          <div class="section-title">🏆 Winning Solution</div>
+          ${await renderSolutionCard(winnerSolution, 0, true)}
         </div>
+        ` : ''}
+        
+        ${otherSolutions.length > 0 ? `
+        <div class="other-solutions-section">
+          <div class="section-title">📊 Other Competing Solutions (${otherSolutions.length})</div>
+          <div class="solutions-summary">
+            ${(await Promise.all(otherSolutions.map(async (solution: any, index: number) => {
+              return await renderSolutionCard(solution, index + 1, false);
+            }))).join("")}
+          </div>
+        </div>
+        ` : ''}
       </div>
     `;
 
@@ -732,6 +735,80 @@ async function fetchAndDisplaySolverCompetition(txHash: string): Promise<void> {
       </div>
     `;
   }
+}
+
+/**
+ * Render a solution card with all details
+ */
+async function renderSolutionCard(solution: any, index: number, isWinner: boolean): Promise<string> {
+  // Calculate total buy amount across all orders
+  let totalBuyAmount = '0';
+  let buyTokenAddress = '';
+  let formattedBuyAmount = 'N/A';
+  let buyTokenSymbol = 'N/A';
+  
+  if (solution.orders && solution.orders.length > 0) {
+    // Sum up all buy amounts from orders
+    totalBuyAmount = solution.orders.reduce((sum: bigint, order: any) => {
+      return sum + BigInt(order.buyAmount || '0');
+    }, BigInt(0)).toString();
+    // Use the buy token from the first order (assuming all orders use the same buy token)
+    buyTokenAddress = solution.orders[0].buyToken;
+    
+    if (totalBuyAmount !== '0' && buyTokenAddress) {
+      try {
+        // Get token info to get the correct decimals
+        const tokenInfo = await getTokenInfoAsync(buyTokenAddress as `0x${string}`);
+        formattedBuyAmount = formatAmount(totalBuyAmount, tokenInfo.decimals);
+        buyTokenSymbol = tokenInfo.symbol;
+      } catch (error) {
+        console.warn(`Failed to get token info for ${buyTokenAddress}:`, error);
+        // Fallback to using 6 decimals (common for USDC-like tokens)
+        formattedBuyAmount = formatAmount(totalBuyAmount, 6);
+      }
+    }
+  }
+  
+  // Get explorer URL based on network
+  const explorerBaseUrl = getCurrentNetworkIdFromState() === '1' 
+    ? 'https://etherscan.io' 
+    : 'https://arbiscan.io';
+  
+  return `
+    <div class="solution-summary-card ${isWinner ? 'winner' : ''}">
+      <div class="solution-header">
+        <div class="solution-rank">
+          <span class="rank-number">#${solution.ranking || index + 1}</span>
+          ${isWinner ? '<span class="winner-badge">🏆 Winner</span>' : ''}
+        </div>
+        <div class="solution-address">
+          <a href="${explorerBaseUrl}/address/${solution.solverAddress}" target="_blank" class="address-link">
+            ${formatAddress(solution.solverAddress)}
+          </a>
+        </div>
+      </div>
+      <div class="solution-metrics">
+        <div class="metric">
+          <span class="metric-label">Score:</span>
+          <span class="metric-value">${solution.score || 'N/A'}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Ranking:</span>
+          <span class="metric-value">${solution.ranking || 'N/A'}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Offered Amount:</span>
+          <span class="metric-value">${formattedBuyAmount} ${buyTokenSymbol}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Status:</span>
+          <span class="metric-value ${solution.filteredOut ? 'filtered' : 'active'}">
+            ${solution.filteredOut ? 'Filtered Out' : 'Active'}
+          </span>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // DOM elements cache

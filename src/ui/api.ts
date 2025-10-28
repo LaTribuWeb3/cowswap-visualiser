@@ -670,6 +670,33 @@ export async function fetchSolverCompetition(txHash: string, networkId?: string)
   }
 }
 
+/**
+ * Fetch order competition data by order ID
+ */
+export async function fetchOrderCompetition(orderId: string, networkId?: string): Promise<any> {
+  try {
+    const currentNetworkId = networkId || getCurrentNetworkId();
+    
+    // Use backend API to get order competition data
+    const response = await fetch(`${API_BASE_URL}/api/order-competition/${orderId}?networkId=${currentNetworkId}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to fetch order competition data');
+    }
+    
+    return data.data;
+  } catch (error) {
+    console.error('Error fetching order competition data:', error);
+    throw error;
+  }
+}
+
 // Simple in-memory cache for Binance prices
 const binancePriceCache = new Map<string, { data: BinancePriceData; timestamp: number }>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache duration
