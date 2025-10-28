@@ -44,6 +44,7 @@ import {
   switchNetwork as switchNetworkAPI,
   getNetworkConfigs,
 } from "./api";
+import { formatSolverDisplay } from "../config/solvers";
 // Cache for network configurations to avoid repeated API calls
 let networkConfigCache: Record<string, any> | null = null;
 
@@ -774,6 +775,9 @@ async function renderSolutionCard(solution: any, index: number, isWinner: boolea
     ? 'https://etherscan.io' 
     : 'https://arbiscan.io';
   
+  // Get solver name or formatted address
+  const solverDisplay = formatSolverDisplay(solution.solverAddress, formatAddress);
+  
   return `
     <div class="solution-summary-card ${isWinner ? 'winner' : ''}">
       <div class="solution-header">
@@ -782,8 +786,8 @@ async function renderSolutionCard(solution: any, index: number, isWinner: boolea
           ${isWinner ? '<span class="winner-badge">🏆 Winner</span>' : ''}
         </div>
         <div class="solution-address">
-          <a href="${explorerBaseUrl}/address/${solution.solverAddress}" target="_blank" class="address-link">
-            ${formatAddress(solution.solverAddress)}
+          <a href="${explorerBaseUrl}/address/${solution.solverAddress}" target="_blank" class="address-link" title="${solution.solverAddress}">
+            ${solverDisplay}
           </a>
         </div>
       </div>
