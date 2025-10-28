@@ -4163,494 +4163,456 @@ body {
   }
 }
 
-/* Dark Theme Styles */
-body.dark-theme {
+/* Dark Theme Styles - Now Default */
+body {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     color: #e0e0e0;
 }
 
-body.dark-theme .header-content {
+.header-content {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .logo h1 {
+.logo h1 {
     background: linear-gradient(45deg, #60a5fa, #34d399);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
-body.dark-theme .trades-container {
+.trades-container {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
 
-body.dark-theme .filters-card {
+.filters-card {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .filters-card .card-header {
+body .filters-card .card-header {
     background: rgba(255, 255, 255, 0.05);
     color: rgba(255, 255, 255, 0.7);
 }
 
-body.dark-theme .trades-header {
+body .trades-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
 }
 
-body.dark-theme .filter-form {
+body .filter-form {
     background: transparent;
 }
 
-body.dark-theme .filter-group label {
+body .filter-group label {
     color: #d1d5db;
 }
 
-body.dark-theme .filter-group input {
+body .filter-group input {
     background: rgba(255, 255, 255, 0.1);
     border: 2px solid rgba(255, 255, 255, 0.2);
     color: #e0e0e0;
 }
 
-body.dark-theme .filter-group input:focus {
+body .filter-group input:focus {
     border-color: #60a5fa;
     box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
 }
 
-body.dark-theme .filter-group input::placeholder {
+body .filter-group input::placeholder {
     color: #9ca3af;
 }
 
-body.dark-theme .btn-secondary {
+body .btn-secondary {
     background: rgba(255, 255, 255, 0.1);
     color: #e0e0e0;
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-body.dark-theme .btn-secondary:hover {
+body .btn-secondary:hover {
     background: rgba(255, 255, 255, 0.2);
 }
 
-body.dark-theme .trades-table {
+body .trades-table {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .trades-table thead {
+body .trades-table thead {
     background: rgba(255, 255, 255, 0.05);
     color: #e0e0e0;
 }
 
-body.dark-theme .trades-table td {
+body .trades-table td {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     color: #e0e0e0;
 }
 
-body.dark-theme .trades-table tbody tr:hover {
+body .trades-table tbody tr:hover {
     background: rgba(255, 255, 255, 0.05);
 }
 
-body.dark-theme .trade-table-container {
+body .trade-table-container {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .trade-table-header {
+body .trade-table-header {
     background: rgba(255, 255, 255, 0.05);
     color: #e0e0e0;
 }
 
-body.dark-theme .trade-table-row {
+body .trade-table-row {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .trade-table-row:hover {
+body .trade-table-row:hover {
     background-color: rgba(255, 255, 255, 0.05);
 }
 
-body.dark-theme .trade-table-label {
+body .trade-table-label {
     background: rgba(255, 255, 255, 0.05);
     color: #d1d5db;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .trade-table-value {
+body .trade-table-value {
     color: #e0e0e0;
 }
 
-body.dark-theme .trade-table-value.hash-value {
+body .trade-table-value.hash-value {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .trade-table-value.hash-value:hover {
+body .trade-table-value.hash-value:hover {
     background: rgba(255, 255, 255, 0.1);
     border-color: #60a5fa;
 }
 
-body.dark-theme .trade-flow-section {
+body .trade-flow-section {
     background: rgba(255, 255, 255, 0.05);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .trade-flow-title {
+body .trade-flow-title {
     color: #d1d5db;
 }
 
-body.dark-theme .trade-step {
+body .trade-step {
     background: rgba(255, 255, 255, 0.05);
     border: 2px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .trade-step:hover {
+body .trade-step:hover {
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
-body.dark-theme .step-content h3 {
+body .step-content h3 {
     color: #e0e0e0;
 }
 
-body.dark-theme .token-info {
+body .token-info {
     color: #d1d5db;
 }
 
-body.dark-theme .token-info strong {
+body .token-info strong {
     color: #e0e0e0;
 }
 
-body.dark-theme .trade-metrics-section {
+body .trade-metrics-section {
     background: rgba(255, 255, 255, 0.05);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .trade-metrics-title {
+body .trade-metrics-title {
     color: #d1d5db;
 }
 
-body.dark-theme .metric {
+body .metric {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .metric:hover {
+body .metric:hover {
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
-body.dark-theme .metric-label {
+body .metric-label {
     color: #9ca3af;
 }
 
-body.dark-theme .metric-value {
+body .metric-value {
     color: #e0e0e0;
 }
 
-body.dark-theme .conversion-rates-section {
+body .conversion-rates-section {
     background: rgba(255, 255, 255, 0.05);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .conversion-rates-title {
+body .conversion-rates-title {
     color: #d1d5db;
 }
 
-body.dark-theme .conversion-rate-item {
+body .conversion-rate-item {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .conversion-rate-item:hover {
+body .conversion-rate-item:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-body.dark-theme .conversion-rate-label {
+body .conversion-rate-label {
     color: #9ca3af;
 }
 
-body.dark-theme .conversion-rate-value {
+body .conversion-rate-value {
     color: #e0e0e0;
 }
 
-body.dark-theme .trade-hash {
+body .trade-hash {
     color: #60a5fa;
 }
 
-body.dark-theme .trades-header-left h2 {
+body .trades-header-left h2 {
     color: white;
 }
 
-body.dark-theme .trades-header-left i {
+body .trades-header-left i {
     color: white;
 }
 
-body.dark-theme .trades-count {
+body .trades-count {
     background: rgba(255, 255, 255, 0.2);
     color: white;
 }
 
-body.dark-theme .filter-toggle-button {
+body .filter-toggle-button {
     background: rgba(255, 255, 255, 0.2);
     color: white;
     border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-body.dark-theme .filter-toggle-button:hover {
+body .filter-toggle-button:hover {
     background: rgba(255, 255, 255, 0.3);
     color: white;
 }
 
-body.dark-theme .filter-toggle-button.active {
+body .filter-toggle-button.active {
     background: rgba(255, 255, 255, 0.4);
     color: white;
 }
 
-body.dark-theme .filter-toggle-button i {
+body .filter-toggle-button i {
     color: white;
 }
 
-body.dark-theme .trades-container {
+body .trades-container {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .filters-section {
+body .filters-section {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .trade-status.success {
+body .trade-status.success {
     background: rgba(34, 197, 94, 0.2);
     color: #4ade80;
 }
 
-body.dark-theme .trade-status.failed {
+body .trade-status.failed {
     background: rgba(239, 68, 68, 0.2);
     color: #f87171;
 }
 
-body.dark-theme .trade-status.pending {
+body .trade-status.pending {
     background: rgba(245, 158, 11, 0.2);
     color: #fbbf24;
 }
 
-body.dark-theme .trade-status.unknown {
+body .trade-status.unknown {
     background: rgba(107, 114, 128, 0.2);
     color: #9ca3af;
 }
 
-body.dark-theme .trade-amount {
+body .trade-amount {
     color: #e0e0e0;
 }
 
-body.dark-theme .trade-amount .token-address {
+body .trade-amount .token-address {
     color: #9ca3af;
 }
 
-body.dark-theme .trade-date {
+body .trade-date {
     color: #9ca3af;
 }
 
-body.dark-theme .trade-block {
+body .trade-block {
     color: #9ca3af;
 }
 
-body.dark-theme .trade-arrow {
+body .trade-arrow {
     color: #9ca3af;
 }
 
-body.dark-theme .trade-flow .token-symbol {
+body .trade-flow .token-symbol {
     color: #e0e0e0;
 }
 
-body.dark-theme .trade-flow i {
+body .trade-flow i {
     color: #9ca3af;
 }
 
-body.dark-theme .loading-spinner {
+body .loading-spinner {
     color: #9ca3af;
 }
 
-body.dark-theme .refresh-button {
+body .refresh-button {
     color: #4ade80;
 }
 
-body.dark-theme .refresh-button:hover:not(:disabled) {
+body .refresh-button:hover:not(:disabled) {
     color: #22c55e;
 }
 
-body.dark-theme .back-button {
+body .back-button {
     background: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.8);
     box-shadow: none;
 }
 
-body.dark-theme .back-button:hover {
+body .back-button:hover {
     background: rgba(255, 255, 255, 0.15);
     box-shadow: none;
 }
 
 /* Dark theme scrollbar */
-body.dark-theme ::-webkit-scrollbar {
+body ::-webkit-scrollbar {
     width: 8px;
 }
 
-body.dark-theme ::-webkit-scrollbar-track {
+body ::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 4px;
 }
 
-body.dark-theme ::-webkit-scrollbar-thumb {
+body ::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.3);
     border-radius: 4px;
 }
 
-body.dark-theme ::-webkit-scrollbar-thumb:hover {
+body ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.5);
 }
 
 /* Dark theme for pagination */
-body.dark-theme .pagination-controls {
+body .pagination-controls {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .pagination-info {
+body .pagination-info {
     color: #e0e0e0;
 }
 
-body.dark-theme .pagination-text {
+body .pagination-text {
     color: #d1d5db;
 }
 
-body.dark-theme .pagination-page {
+body .pagination-page {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #e0e0e0;
 }
 
-body.dark-theme .pagination-nav-button {
+body .pagination-nav-button {
     background: rgba(255, 255, 255, 0.1);
     color: #e0e0e0;
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-body.dark-theme .pagination-nav-button:hover:not(:disabled) {
+body .pagination-nav-button:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-body.dark-theme .pagination-page-button {
+body .pagination-page-button {
     background: rgba(255, 255, 255, 0.1);
     color: #e0e0e0;
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-body.dark-theme .pagination-page-button:hover:not(.active) {
+body .pagination-page-button:hover:not(.active) {
     background: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-body.dark-theme .pagination-page-button.active {
+body .pagination-page-button.active {
     background: rgba(255, 255, 255, 0.15);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-body.dark-theme .pagination-page-input {
+body .pagination-page-input {
     background: rgba(255, 255, 255, 0.1);
     color: #e0e0e0;
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-body.dark-theme .pagination-page-input:focus {
+body .pagination-page-input:focus {
     background: rgba(255, 255, 255, 0.15);
     border-color: #60a5fa;
 }
 
-body.dark-theme .pagination-go-button {
+body .pagination-go-button {
     background: rgba(96, 165, 250, 0.1);
     color: rgba(96, 165, 250, 0.8);
     border: 1px solid rgba(96, 165, 250, 0.2);
 }
 
-body.dark-theme .pagination-go-button:hover {
+body .pagination-go-button:hover {
     background: rgba(96, 165, 250, 0.15);
     color: rgba(96, 165, 250, 0.9);
 }
 
-body.dark-theme .pivot-symbol {
+body .pivot-symbol {
     color: #e0e0e0;
 }
 
-body.dark-theme .pivot-price {
+body .pivot-price {
     color: #9ca3af;
 }
 
 /* Dark theme for filter toggle button */
-body.dark-theme .filter-toggle-button {
+body .filter-toggle-button {
     background: rgba(255, 255, 255, 0.05);
     color: rgba(255, 255, 255, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .filter-toggle-button:hover {
+body .filter-toggle-button:hover {
     background: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.9);
 }
 
-body.dark-theme .filter-toggle-button.active {
+body .filter-toggle-button.active {
     background: rgba(96, 165, 250, 0.1);
     color: #1e40af;
     border-color: rgba(96, 165, 250, 0.2);
 }
 
 /* Dark theme for filters section */
-body.dark-theme .filters-section {
+body .filters-section {
     background: rgba(255, 255, 255, 0.02);
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* Theme Toggle Button */
-.theme-toggle-button {
-    background: rgba(255, 255, 255, 0.1);
-    color: #495057;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.theme-toggle-button:hover {
-    background: rgba(255, 255, 255, 0.15);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.theme-toggle-button:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* Dark theme for theme toggle button */
-body.dark-theme .theme-toggle-button {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e0e0e0;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-body.dark-theme .theme-toggle-button:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #e0e0e0;
-}
+/* Theme toggle button removed - dark theme is now permanent */
 
 /* Header Controls */
 .header-controls {
@@ -4660,113 +4622,113 @@ body.dark-theme .theme-toggle-button:hover {
 }
 
 /* Dark theme for minimalistic design */
-body.dark-theme .page-header {
+body .page-header {
     border-bottom-color: #374151;
 }
 
-body.dark-theme .page-title h1 {
+body .page-title h1 {
     color: #f9fafb;
 }
 
-body.dark-theme .trades-count {
+body .trades-count {
     background: #374151;
     color: #d1d5db;
 }
 
-body.dark-theme .action-button {
+body .action-button {
     background: #1f2937;
     border-color: #374151;
     color: #d1d5db;
 }
 
-body.dark-theme .action-button:hover {
+body .action-button:hover {
     background: #374151;
     border-color: #4b5563;
 }
 
-body.dark-theme .filter-button.active {
+body .filter-button.active {
     background: #3b82f6;
     border-color: #3b82f6;
     color: white;
 }
 
-body.dark-theme .refresh-button {
+body .refresh-button {
     background: #374151;
     border-color: #4b5563;
     color: #d1d5db;
 }
 
-body.dark-theme .refresh-button:hover {
+body .refresh-button:hover {
     background: #10b981;
     border-color: #10b981;
     color: white;
 }
 
-body.dark-theme .network-dropdown option {
+body .network-dropdown option {
     background: #1f2937;
     color: white;
 }
 
-body.dark-theme .network-dropdown option:hover {
+body .network-dropdown option:hover {
     background: #374151;
     color: white;
 }
 
-body.dark-theme .network-dropdown option:checked {
+body .network-dropdown option:checked {
     background: #4ade80;
     color: #1f2937;
 }
 
-body.dark-theme .trades-container {
+body .trades-container {
     background: #1f2937;
     border-color: #374151;
 }
 
-body.dark-theme .trades-table {
+body .trades-table {
     background: #1f2937;
 }
 
-body.dark-theme .trades-table thead {
+body .trades-table thead {
     background: #111827;
 }
 
-body.dark-theme .trades-table th {
+body .trades-table th {
     color: #9ca3af;
     border-bottom-color: #374151;
 }
 
-body.dark-theme .trades-table td {
+body .trades-table td {
     color: #d1d5db;
     border-bottom-color: #374151;
 }
 
-body.dark-theme .trades-table tbody tr:hover {
+body .trades-table tbody tr:hover {
     background: #374151;
 }
 
-body.dark-theme .filters-section {
+body .filters-section {
     background: #1f2937;
     border-color: #374151;
 }
 
 /* Dark theme for network selector */
-body.dark-theme .network-dropdown {
+body .network-dropdown {
     background: rgba(255, 255, 255, 0.1);
     color: white;
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-body.dark-theme .network-dropdown:hover {
+body .network-dropdown:hover {
     background-color: rgba(255, 255, 255, 0.15);
     border-color: rgba(255, 255, 255, 0.5);
 }
 
-body.dark-theme .network-dropdown:focus {
+body .network-dropdown:focus {
     border-color: #4ade80;
     box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.2);
 }
 
-body.dark-theme .network-dropdown option {
+body .network-dropdown option {
     background: #1f2937;
     color: white;
 }
@@ -4936,562 +4898,562 @@ body.dark-theme .network-dropdown option {
 }
 
 /* Dark theme for order competition */
-body.dark-theme .order-competition-section {
+body .order-competition-section {
     background: #1f2937;
     border-color: #374151;
 }
 
-body.dark-theme .order-competition-header h3 {
+body .order-competition-header h3 {
     color: #f9fafb;
 }
 
-body.dark-theme .order-competition-header p {
+body .order-competition-header p {
     color: #9ca3af;
 }
 
-body.dark-theme .order-solver-card {
+body .order-solver-card {
     background: #111827;
     border-color: #374151;
 }
 
-body.dark-theme .order-solver-card:hover {
+body .order-solver-card:hover {
     border-color: #4b5563;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-body.dark-theme .order-competition-summary {
+body .order-competition-summary {
     background: #374151;
     border-color: #4b5563;
 }
 
-body.dark-theme .common-sell-amount .amount-label {
+body .common-sell-amount .amount-label {
     color: #9ca3af;
 }
 
-body.dark-theme .common-sell-amount .amount-value {
+body .common-sell-amount .amount-value {
     color: #f9fafb;
 }
 
-body.dark-theme .solver-label {
+body .solver-label {
     color: #9ca3af;
 }
 
-body.dark-theme .solver-value {
+body .solver-value {
     color: #f9fafb;
 }
 
-body.dark-theme .amount-label {
+body .amount-label {
     color: #9ca3af;
 }
 
-body.dark-theme .amount-value {
+body .amount-value {
     color: #f9fafb;
 }
 
-body.dark-theme .order-competition-error {
+body .order-competition-error {
     background: #7f1d1d;
     border-color: #991b1b;
     color: #fca5a5;
 }
 
 /* Dark theme for solution summary cards */
-body.dark-theme .solution-summary-card {
+body .solution-summary-card {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .solution-summary-card:hover {
+body .solution-summary-card:hover {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-body.dark-theme .solution-summary-card.winner {
+body .solution-summary-card.winner {
     border-color: #4ade80;
     background: rgba(34, 197, 94, 0.1);
     box-shadow: 0 2px 8px rgba(34, 197, 94, 0.2);
 }
 
-body.dark-theme .winner-section {
+body .winner-section {
     background: rgba(34, 197, 94, 0.15);
     border-color: rgba(34, 197, 94, 0.3);
 }
 
-body.dark-theme .other-solutions-section {
+body .other-solutions-section {
     background: rgba(31, 41, 55, 0.5);
     border-color: rgba(75, 85, 99, 0.3);
 }
 
-body.dark-theme .section-title {
+body .section-title {
     color: #e5e7eb;
     border-bottom-color: rgba(75, 85, 99, 0.5);
 }
 
-body.dark-theme .solution-header {
+body .solution-header {
     color: #e0e0e0;
 }
 
-body.dark-theme .solution-rank {
+body .solution-rank {
     color: #e0e0e0;
 }
 
-body.dark-theme .rank-number {
+body .rank-number {
     color: #60a5fa;
 }
 
-body.dark-theme .winner-badge {
+body .winner-badge {
     background: #4ade80;
     color: #1f2937;
 }
 
-body.dark-theme .solution-stats {
+body .solution-stats {
     color: #d1d5db;
 }
 
-body.dark-theme .stat-label {
+body .stat-label {
     color: #9ca3af;
 }
 
-body.dark-theme .stat-value {
+body .stat-value {
     color: #e0e0e0;
 }
 
-body.dark-theme .stat-value.winner {
+body .stat-value.winner {
     color: #4ade80;
 }
 
-body.dark-theme .solution-orders {
+body .solution-orders {
     color: #d1d5db;
 }
 
-body.dark-theme .orders-count {
+body .orders-count {
     color: #9ca3af;
 }
 
-body.dark-theme .orders-list {
+body .orders-list {
     color: #e0e0e0;
 }
 
-body.dark-theme .order-item {
+body .order-item {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .order-token {
+body .order-token {
     color: #d1d5db;
 }
 
-body.dark-theme .token-label {
+body .token-label {
     color: #9ca3af;
 }
 
-body.dark-theme .token-address {
+body .token-address {
     color: #60a5fa;
 }
 
-body.dark-theme .token-amount {
+body .token-amount {
     color: #e0e0e0;
 }
 
 /* Dark theme for competition content */
-body.dark-theme .competition-content {
+body .competition-content {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .loading-competition {
+body .loading-competition {
     color: #9ca3af;
 }
 
-body.dark-theme .loading-competition i {
+body .loading-competition i {
     color: #60a5fa;
 }
 
-body.dark-theme .competition-error {
+body .competition-error {
     background: rgba(239, 68, 68, 0.1);
     border-color: rgba(239, 68, 68, 0.2);
     color: #f87171;
 }
 
-body.dark-theme .competition-error i {
+body .competition-error i {
     color: #f87171;
 }
 
-body.dark-theme .competition-error small {
+body .competition-error small {
     color: #fca5a5;
 }
 
 /* Dark theme for info sections */
-body.dark-theme .trade-info-frame {
+body .trade-info-frame {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .info-section {
+body .info-section {
     background: rgba(255, 255, 255, 0.05) !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .info-section-title {
+body .info-section-title {
     color: #e0e0e0 !important;
     background: transparent !important;
     border-bottom: 2px solid rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .info-section-title i {
+body .info-section-title i {
     color: #60a5fa !important;
 }
 
-body.dark-theme .info-section-content {
+body .info-section-content {
     color: #d1d5db !important;
 }
 
-body.dark-theme .info-frame-content {
+body .info-frame-content {
     background: rgba(255, 255, 255, 0.05) !important;
 }
 
-body.dark-theme .info-item {
+body .info-item {
     color: #d1d5db !important;
 }
 
-body.dark-theme .info-label {
+body .info-label {
     color: #9ca3af !important;
 }
 
-body.dark-theme .info-value {
+body .info-value {
     color: #e0e0e0 !important;
 }
 
-body.dark-theme .info-value.status-success {
+body .info-value.status-success {
     color: #4ade80 !important;
 }
 
-body.dark-theme .info-value.status-failed {
+body .info-value.status-failed {
     color: #f87171 !important;
 }
 
-body.dark-theme .info-value.status-pending {
+body .info-value.status-pending {
     color: #fbbf24 !important;
 }
 
-body.dark-theme .info-value.status-unknown {
+body .info-value.status-unknown {
     color: #9ca3af !important;
 }
 
-body.dark-theme .info-value.positive-difference {
+body .info-value.positive-difference {
     color: #4ade80 !important;
 }
 
-body.dark-theme .info-value.negative-difference {
+body .info-value.negative-difference {
     color: #f87171 !important;
 }
 
-body.dark-theme .info-value.no-price-available {
+body .info-value.no-price-available {
     color: #9ca3af !important;
 }
 
-body.dark-theme .token-addresses {
+body .token-addresses {
     color: #d1d5db !important;
     background: rgba(255, 255, 255, 0.05) !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .token-address-item {
+body .token-address-item {
     color: #d1d5db !important;
 }
 
-body.dark-theme .token-label {
+body .token-label {
     color: #9ca3af !important;
 }
 
-body.dark-theme .trade-section {
+body .trade-section {
     background: rgba(255, 255, 255, 0.05) !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .trade-section-header {
+body .trade-section-header {
     color: white !important;
 }
 
-body.dark-theme .trade-section-header i {
+body .trade-section-header i {
     color: white !important;
 }
 
-body.dark-theme .trade-section-content {
+body .trade-section-content {
     color: #d1d5db !important;
     background: rgba(255, 255, 255, 0.05) !important;
 }
 
-body.dark-theme .amount-label {
+body .amount-label {
     color: #9ca3af;
 }
 
-body.dark-theme .amount-value.expected {
+body .amount-value.expected {
     background: rgba(59, 130, 246, 0.1);
     color: #60a5fa;
     border-color: rgba(59, 130, 246, 0.2);
 }
 
-body.dark-theme .amount-value.actual {
+body .amount-value.actual {
     background: rgba(139, 92, 246, 0.1);
     color: #a78bfa;
     border-color: rgba(139, 92, 246, 0.2);
 }
 
-body.dark-theme .trade-difference {
+body .trade-difference {
     color: #d1d5db;
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .difference-label {
+body .difference-label {
     color: #9ca3af;
 }
 
-body.dark-theme .difference-value {
+body .difference-value {
     color: #e0e0e0;
 }
 
 /* Dark theme for remaining UI elements */
-body.dark-theme .close-button {
+body .close-button {
     background: rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.8);
     border-color: rgba(255, 255, 255, 0.2);
 }
 
-body.dark-theme .close-button:hover {
+body .close-button:hover {
     background: rgba(255, 255, 255, 0.2);
     color: white;
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-body.dark-theme .no-competition-data {
+body .no-competition-data {
     color: #9ca3af;
 }
 
-body.dark-theme .no-competition-data i {
+body .no-competition-data i {
     color: #60a5fa;
 }
 
 /* Dark theme for trade info overlay and modal */
-body.dark-theme .trade-info-overlay {
+body .trade-info-overlay {
     background: rgba(0, 0, 0, 0.8);
 }
 
-body.dark-theme .overlay-backdrop {
+body .overlay-backdrop {
     background: rgba(0, 0, 0, 0.8);
 }
 
-body.dark-theme .info-frame {
+body .info-frame {
     background: rgba(255, 255, 255, 0.05) !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5) !important;
 }
 
-body.dark-theme .info-frame-title {
+body .info-frame-title {
     color: #e0e0e0;
 }
 
-body.dark-theme .info-frame-subtitle {
+body .info-frame-subtitle {
     color: #d1d5db;
 }
 
-body.dark-theme .info-frame-header {
+body .info-frame-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
 }
 
-body.dark-theme .info-frame-header h2 {
+body .info-frame-header h2 {
     color: white;
 }
 
-body.dark-theme .info-frame-header .trade-hash {
+body .info-frame-header .trade-hash {
     color: rgba(255, 255, 255, 0.9);
 }
 
-body.dark-theme .info-frame-header .close-button {
+body .info-frame-header .close-button {
     background: rgba(255, 255, 255, 0.1);
     color: white;
     border-color: rgba(255, 255, 255, 0.2);
 }
 
-body.dark-theme .info-frame-header .close-button:hover {
+body .info-frame-header .close-button:hover {
     background: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Dark theme for modal content elements */
-body.dark-theme .transaction-summary,
-body.dark-theme .trade-summary,
-body.dark-theme .token-details,
-body.dark-theme .amount-details {
+body .transaction-summary,
+body .trade-summary,
+body .token-details,
+body .amount-details {
     background: rgba(255, 255, 255, 0.05) !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .amount-details-section {
+body .amount-details-section {
     background: rgba(255, 255, 255, 0.05) !important;
 }
 
-body.dark-theme .amount-details-table {
+body .amount-details-table {
     background: rgba(255, 255, 255, 0.05) !important;
 }
 
-body.dark-theme .amount-details-table th {
+body .amount-details-table th {
     background: rgba(255, 255, 255, 0.1) !important;
     color: #d1d5db !important;
     border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .amount-details-table td {
+body .amount-details-table td {
     color: #e0e0e0 !important;
     border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .amount-details-table tbody tr:hover {
+body .amount-details-table tbody tr:hover {
     background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .trade-section-content {
+body .trade-section-content {
     background: rgba(255, 255, 255, 0.05) !important;
 }
 
-body.dark-theme .trade-summary-table {
+body .trade-summary-table {
     background: rgba(255, 255, 255, 0.05) !important;
     border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .trade-summary-table td {
+body .trade-summary-table td {
     color: #e0e0e0 !important;
     border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .trade-summary-table tbody tr:hover {
+body .trade-summary-table tbody tr:hover {
     background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-body.dark-theme .amount-cell {
+body .amount-cell {
     color: #d1d5db;
 }
 
-body.dark-theme .amount-value {
+body .amount-value {
     color: #e0e0e0;
 }
 
-body.dark-theme .amount-token {
+body .amount-token {
     color: #9ca3af;
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .difference-cell {
+body .difference-cell {
     color: #d1d5db;
 }
 
-body.dark-theme .difference-value.positive-difference {
+body .difference-value.positive-difference {
     color: #4ade80;
     background: rgba(34, 197, 94, 0.1);
     border-color: rgba(34, 197, 94, 0.2);
 }
 
-body.dark-theme .difference-value.negative-difference {
+body .difference-value.negative-difference {
     color: #f87171;
     background: rgba(239, 68, 68, 0.1);
     border-color: rgba(239, 68, 68, 0.2);
 }
 
-body.dark-theme .summary-item,
-body.dark-theme .detail-item {
+body .summary-item,
+body .detail-item {
     color: #d1d5db;
 }
 
-body.dark-theme .summary-label,
-body.dark-theme .detail-label {
+body .summary-label,
+body .detail-label {
     color: #9ca3af;
 }
 
-body.dark-theme .summary-value,
-body.dark-theme .detail-value {
+body .summary-value,
+body .detail-value {
     color: #e0e0e0;
 }
 
-body.dark-theme .status-badge.success {
+body .status-badge.success {
     background: rgba(34, 197, 94, 0.2);
     color: #4ade80;
 }
 
-body.dark-theme .status-badge.failed {
+body .status-badge.failed {
     background: rgba(239, 68, 68, 0.2);
     color: #f87171;
 }
 
-body.dark-theme .status-badge.pending {
+body .status-badge.pending {
     background: rgba(245, 158, 11, 0.2);
     color: #fbbf24;
 }
 
-body.dark-theme .address-link {
+body .address-link {
     color: #60a5fa;
 }
 
-body.dark-theme .address-link:hover {
+body .address-link:hover {
     color: #93c5fd;
 }
 
-body.dark-theme .expand-button {
+body .expand-button {
     background: rgba(255, 255, 255, 0.1);
     color: #e0e0e0;
     border-color: rgba(255, 255, 255, 0.2);
 }
 
-body.dark-theme .expand-button:hover {
+body .expand-button:hover {
     background: rgba(255, 255, 255, 0.2);
     border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Dark theme for pivot details section */
-body.dark-theme .pivot-details-section {
+body .pivot-details-section {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .pivot-details-header {
+body .pivot-details-header {
     color: #e0e0e0;
 }
 
-body.dark-theme .pivot-details-header i {
+body .pivot-details-header i {
     color: #fbbf24;
 }
 
-body.dark-theme .pivot-details-content {
+body .pivot-details-content {
     color: #d1d5db;
 }
 
-body.dark-theme .pivot-step {
+body .pivot-step {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-body.dark-theme .pivot-step-header {
+body .pivot-step-header {
     color: #e0e0e0;
 }
 
-body.dark-theme .pivot-step-number {
+body .pivot-step-number {
     color: #9ca3af;
     background: rgba(255, 255, 255, 0.1);
 }
 
-body.dark-theme .pivot-direction {
+body .pivot-direction {
     color: #fbbf24;
 }
 
-body.dark-theme .pivot-pair-info {
+body .pivot-pair-info {
     color: #d1d5db;
 }
 
-body.dark-theme .pivot-symbol {
+body .pivot-symbol {
     color: #e0e0e0;
 }
 
-body.dark-theme .pivot-price {
+body .pivot-price {
     color: #d1d5db;
 }
