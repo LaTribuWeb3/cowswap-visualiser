@@ -15,7 +15,9 @@
     "sync:historical": "ts-node src/scripts/sync-historical-trades.ts",
     "sync:realtime": "ts-node src/scripts/realtime-settlement-sync.ts",
     "db:list": "ts-node src/scripts/list-database-contents.ts",
-    "cleanup:database": "ts-node src/scripts/cleanup-database.ts --live"
+    "cleanup:database": "ts-node src/scripts/cleanup-database.ts --live",
+    "fetch:trades": "ts-node src/scripts/fetch-all-trades.ts",
+    "test:trades": "ts-node src/scripts/test-trades-fetch.ts"
   },
   "keywords": [
     "cow-protocol",
