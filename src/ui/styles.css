@@ -3834,9 +3834,9 @@ body {
 }
 
 .competition-summary {
-  background: #f8fafc;
+  background: #1a1a1a;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #333;
   overflow: hidden;
 }
 
@@ -3845,7 +3845,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 100%);
   color: white;
   flex-wrap: wrap;
   gap: 12px;
@@ -3889,51 +3889,53 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  background: #1a1a1a;
 }
 
 .solution-summary-card {
-  background: white;
-  border: 1px solid #e2e8f0;
+  background: #2d2d2d;
+  border: 1px solid #444;
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s ease;
 }
 
 .solution-summary-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   transform: translateY(-1px);
+  background: #333;
 }
 
 .solution-summary-card.winner {
-  border-color: #48bb78;
-  background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
-  box-shadow: 0 2px 8px rgba(72, 187, 120, 0.2);
+  border-color: #10b981;
+  background: #064e3b;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
 /* Winner and other solutions sections */
 .winner-section {
   margin-top: 20px;
   padding: 16px;
-  background: linear-gradient(135deg, rgba(212, 237, 218, 0.3) 0%, rgba(195, 230, 203, 0.3) 100%);
+  background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
   border-radius: 12px;
-  border: 1px solid rgba(40, 167, 69, 0.2);
+  border: 1px solid #10b981;
 }
 
 .other-solutions-section {
   margin-top: 20px;
   padding: 16px;
-  background: rgba(248, 249, 250, 0.5);
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
   border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid #475569;
 }
 
 .section-title {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #333;
+  color: #ffffff;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
 }
 
 .solution-header {
@@ -3953,12 +3955,12 @@ body {
 
 .rank-number {
   font-weight: 600;
-  color: #667eea;
+  color: #60a5fa;
   font-size: 16px;
 }
 
 .winner-badge {
-  background: #48bb78;
+  background: #10b981;
   color: white;
   padding: 2px 8px;
   border-radius: 12px;
@@ -3971,10 +3973,20 @@ body {
 .solution-address {
   font-family: 'Courier New', monospace;
   font-size: 12px;
-  color: #718096;
-  background: #f7fafc;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.2);
   padding: 4px 8px;
   border-radius: 4px;
+}
+
+.solution-address .address-link {
+  color: #60a5fa;
+  text-decoration: none;
+}
+
+.solution-address .address-link:hover {
+  color: #93c5fd;
+  text-decoration: underline;
 }
 
 .solution-metrics {
@@ -3989,13 +4001,13 @@ body {
   align-items: center;
   text-align: center;
   padding: 8px;
-  background: #f7fafc;
+  background: rgba(0, 0, 0, 0.4);
   border-radius: 6px;
 }
 
 .metric-label {
   font-size: 11px;
-  color: #718096;
+  color: #d1d5db;
   margin-bottom: 4px;
   font-weight: 500;
   text-transform: uppercase;
@@ -4005,15 +4017,15 @@ body {
 .metric-value {
   font-size: 13px;
   font-weight: 600;
-  color: #2d3748;
+  color: #ffffff;
 }
 
 .metric-value.filtered {
-  color: #e53e3e;
+  color: #f87171;
 }
 
 .metric-value.active {
-  color: #48bb78;
+  color: #34d399;
 }
 
 
